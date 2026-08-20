@@ -144,9 +144,15 @@ importers:
       '@deepseek-ai/dsh-agent-instructions':
         specifier: workspace:^
         version: link:../../packages/context/agent-instructions
+      '@deepseek-ai/dsh-agent-presets':
+        specifier: workspace:^
+        version: link:../../packages/preset/agent-presets
       '@deepseek-ai/dsh-agent-tool-presentation':
         specifier: workspace:^
         version: link:../../packages/core/agent-tool-presentation
+      '@deepseek-ai/dsh-analyst-tools':
+        specifier: workspace:^
+        version: link:../../packages/analyst/analyst-tools
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:^
         version: link:../../packages/boot/app-boot
@@ -192,6 +198,9 @@ importers:
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
         version: link:../../packages/util/home-paths
+      '@deepseek-ai/dsh-investigation':
+        specifier: workspace:^
+        version: link:../../packages/analyst/investigation
       '@deepseek-ai/dsh-jobs-local':
         specifier: workspace:^
         version: link:../../packages/jobs/jobs-local
@@ -439,9 +448,15 @@ importers:
       '@deepseek-ai/dsh-agent-loop':
         specifier: workspace:*
         version: link:../packages/core/agent-loop
+      '@deepseek-ai/dsh-agent-presets':
+        specifier: workspace:*
+        version: link:../packages/preset/agent-presets
       '@deepseek-ai/dsh-agent-spine-demo':
         specifier: workspace:*
         version: link:../packages/examples/agent-spine-demo
+      '@deepseek-ai/dsh-analyst-tools':
+        specifier: workspace:*
+        version: link:../packages/analyst/analyst-tools
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:*
         version: link:../packages/boot/app-boot
@@ -517,6 +532,9 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:*
         version: link:../packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-investigation':
+        specifier: workspace:*
+        version: link:../packages/analyst/investigation
       '@deepseek-ai/dsh-jobs-local':
         specifier: workspace:*
         version: link:../packages/jobs/jobs-local
@@ -816,6 +834,77 @@ importers:
       '@deepseek-ai/dsh-user-approval':
         specifier: workspace:^
         version: link:../../interaction/user-approval
+
+  packages/analyst/analyst-tools:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-investigation':
+        specifier: workspace:^
+        version: link:../investigation
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+
+  packages/analyst/investigation:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
 
   packages/api/gateway:
     dependencies:
@@ -1263,6 +1352,9 @@ importers:
       '@deepseek-ai/dsh-agent-default-model':
         specifier: workspace:^
         version: link:../../core/agent-default-model
+      '@deepseek-ai/dsh-agent-presets':
+        specifier: workspace:^
+        version: link:../../preset/agent-presets
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -8687,6 +8779,9 @@ importers:
       '@deepseek-ai/dsh-agent-tool-presentation':
         specifier: workspace:^
         version: link:../../packages/core/agent-tool-presentation
+      '@deepseek-ai/dsh-analyst-tools':
+        specifier: workspace:^
+        version: link:../../packages/analyst/analyst-tools
       '@deepseek-ai/dsh-anonymous-user-id':
         specifier: workspace:^
         version: link:../../packages/identity/anonymous-user-id
@@ -8765,6 +8860,9 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-investigation':
+        specifier: workspace:^
+        version: link:../../packages/analyst/investigation
       '@deepseek-ai/dsh-jobs':
         specifier: workspace:^
         version: link:../../packages/jobs/jobs

@@ -1,0 +1,3 @@
+name: 调查分析
+description: 面向 SOC/NSM 的调查 Agent：DINQ、5W1H、只读证据、pcap/日志工具与身份收割，而不是编码 Agent。
+order: 5

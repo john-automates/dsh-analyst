@@ -25,7 +25,7 @@ The only faithful source of truth is the schema the registry actually holds afte
 
 ### Restoring "nothing silently omitted"
 
-Booting has a cost the AST pass did not: there is no source declaration set to enumerate, so a new tool package could simply be forgotten. A **completeness guard** restores the guarantee — `assertManifestComplete` globs every `tool-*` package under `packages/` and hard-errors if any is absent from the generator's boot manifest. A new tool package fails the generator, and therefore `doc-sync`, until it is registered. This is the same structural property the cordis generator gets for free from enumerating source, re-created for a boot-based generator.
+Booting has a cost the AST pass did not: there is no source declaration set to enumerate, so a new tool package could simply be forgotten. A **completeness guard** restores the guarantee — `assertManifestComplete` globs every `tool-*` package under `packages/` plus `packages/analyst/analyst-tools` and hard-errors if any is absent from the generator's boot manifest. A new tool package fails the generator, and therefore `doc-sync`, until it is registered. This is the same structural property the cordis generator gets for free from enumerating source, re-created for a boot-based generator.
 
 ### A hand-maintained boot manifest is the irreducible policy
 
@@ -33,7 +33,7 @@ The filesystem discovers the tool-package inventory and the completeness guard r
 
 ### Scope
 
-Shipped product tool packages under `packages/*/tool-*`, each booted with its default config, including `dsh-tool-bash` (`bash`), `dsh-tool-jobs` (`job_output`, `job_list`, `job_kill`), and `dsh-tool-subagent` (`subagent`). Example-only tools are excluded.
+Shipped product tool packages under `packages/*/tool-*` plus `packages/analyst/analyst-tools`, each booted with its default config, including `dsh-tool-bash` (`bash`), `dsh-tool-jobs` (`job_output`, `job_list`, `job_kill`), `dsh-tool-subagent` (`subagent`), and `dsh-analyst-tools` (`pcap_info`, `pcap_filter`, `logs`, `case_report`). Example-only tools are excluded.
 
 The catalog unit is a package, not every configured tool instance. Each package boots once with default config; load-time aliases such as `subagent_fork` are noted without enumerating every deployment permutation. A deployment inventory is a separate, unbounded surface.
 

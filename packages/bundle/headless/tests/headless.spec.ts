@@ -249,4 +249,20 @@ describe('headless runner', () => {
     expect(() => new Config({} as never)).toThrow()
     expect(new Config({ task: 'x' })).toEqual({ task: 'x' })
   })
+
+  it('joins the default agent preset when a roster is composed', async () => {
+    const mounted: unknown[] = []
+    const test = await bench({
+      afterPrompt(session, message) { appendTurn(session, 1, message, 'preset-joined', true) },
+    })
+    test.ctx.provide('agentPresets', {
+      mount: (agentCtx: unknown) => {
+        mounted.push(agentCtx)
+        return Promise.resolve({ id: 'analyst' })
+      },
+    } as never)
+    expect(await test.run()).toMatchObject({ code: 0, out: 'preset-joined\n' })
+    expect(mounted).toHaveLength(1)
+    await test.ctx.fiber.dispose()
+  })
 })

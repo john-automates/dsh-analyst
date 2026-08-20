@@ -115,6 +115,31 @@ Each switch belongs to the protocols that declare it, so a switch valid on one `
 
 Every switch, its accepted values, and the protocols that take it are listed under `PiAiCompatProfile` in the [generated `dsh-llm-pi-ai` configuration reference](../../config-catalog.md#deepseek-aidsh-llm-pi-ai) — which is derived from the source, so it cannot fall behind what the adapter accepts.
 
+<a id="qwen-openai-compatible"></a>
+
+## Qwen (OpenAI-compatible)
+
+Qwen is a first-class custom provider on the existing OpenAI-completions adapter. A DeepSeek API key is not required. Add a custom provider with `api: openai-completions` and set the route `compat` so the request matches Qwen gateways:
+
+```yaml
+llm-pi-ai:
+  providers:
+    qwen:
+      apiKeyEnv: OPENAI_API_KEY
+      api: openai-completions
+      baseURL: https://your-qwen-gateway.example/v1
+      compat:
+        supportsDeveloperRole: false
+        maxTokensField: max_tokens
+      models:
+        - id: qwen3-coder
+        - id: qwen2.5-32b-instruct
+```
+
+Bedrock Qwen3 Coder uses the catalog Bedrock route (`amazon-bedrock` / `bedrock-converse-stream`) with AWS credentials and a region; filling only an API-key field does not configure Bedrock. A local 35B (vLLM, Ollama, or another OpenAI-completions server) is the same custom-provider shape with `baseURL` pointed at the local server.
+
+The [analyst guide](./analyst.md) uses this route for headless pcap cases.
+
 ## Select a model
 
 Configured providers appear in the model picker. Selecting a model also makes it the default for new sessions. A session that has already sent a request retains the model recorded in its own log.

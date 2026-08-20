@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_pcap_filter", "name": "pcap_filter", "argumentsDelta": "{\"path\":\"evidence/a.pcap\",\"display_filter\":\"kerberos.CNameString\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_pcap_filter", "name": "pcap_filter", "arguments": "{\"path\":\"evidence/a.pcap\",\"display_filter\":\"kerberos.CNameString\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 20, "outputTokens": 8 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_case_report", "name": "case_report", "argumentsDelta": "{\"who\":\"brolf\",\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"where\":\"lab pcap\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_case_report", "name": "case_report", "arguments": "{\"who\":\"brolf\",\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"where\":\"lab pcap\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 40, "outputTokens": 12 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "text" },
+      { "type": "text-delta", "index": 0, "text": "CASE CLOSED" },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "CASE CLOSED" } },
+      { "type": "usage", "usage": { "inputTokens": 50, "outputTokens": 2 } },
+      { "type": "finish", "reason": { "kind": "stop" } }
+    ]
+  }
+]

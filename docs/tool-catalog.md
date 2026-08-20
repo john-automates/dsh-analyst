@@ -5,9 +5,9 @@
 
 Every model-facing tool a shipped plugin contributes to `ctx.tools`: the `name`, `description`, and JSON-Schema `parameters` the model receives via the system-prompt assembly. It complements the [subsystem pages](subsystems/core.md) (the types plus each page's generated Cordis API region) — this page is the *tools* the agent is offered.
 
-This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator's boot manifest, so a new tool cannot be silently undocumented. See [the tool-schema-catalog Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md).
+This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and `packages/analyst/analyst-tools` and fails if any package is missing from the generator's boot manifest, so a new tool cannot be silently undocumented. See [the tool-schema-catalog Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md).
 
-Scope: shipped product tools under `packages/*/tool-*`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog's packages-only scope.
+Scope: shipped product tools under `packages/*/tool-*` plus `packages/analyst/analyst-tools`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog's packages-only scope.
 
 ## Tool Package Map
 
@@ -41,6 +41,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+| `@deepseek-ai/dsh-analyst-tools` | `case_report`, `logs`, `pcap_filter`, `pcap_info` | `ctx.tools`, `ctx.investigation` | `tool/call`, `tool/result`, `investigation/report via case_report` | - | SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2219,3 +2220,137 @@ Search the web for current information. Provide 1–4 queries in the required qu
 Source: [`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.
+
+<a id="deepseek-aidsh-analyst-tools"></a>
+
+## `@deepseek-ai/dsh-analyst-tools`
+
+### `case_report`
+
+Close the investigation with a 5W1H packet. Send evidenced claims only. This replaces any previous case_report on the session log.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "who": {
+      "type": "string",
+      "description": "Who was involved."
+    },
+    "what": {
+      "type": "string",
+      "description": "What happened."
+    },
+    "when": {
+      "type": "string",
+      "description": "When it happened."
+    },
+    "where": {
+      "type": "string",
+      "description": "Where it happened."
+    },
+    "why": {
+      "type": "string",
+      "description": "Why it happened, as evidenced."
+    },
+    "how": {
+      "type": "string",
+      "description": "How it happened, as evidenced."
+    }
+  },
+  "required": [
+    "who",
+    "what",
+    "when",
+    "where",
+    "why",
+    "how"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `logs`
+
+Read a log or text file in the case directory. The file stays read-only.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the log file."
+    },
+    "start_line": {
+      "type": "integer",
+      "description": "1-based first line to return. Defaults to 1."
+    },
+    "max_lines": {
+      "type": "integer",
+      "description": "Maximum lines to return. Defaults to the rest of the file, still clipped by maxOutputChars."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `pcap_filter`
+
+Filter a pcap/pcapng in the case directory with tshark. Use display_filter for Wireshark display filters and fields for `-e` field names. Valid tshark 4.4.16 identity fields include kerberos.CNameString, samr.samr_UserInfo21.account_name, and samr.samr_UserInfo21.full_name. Invalid fields (rejected): ldap.sAMAccountName, ldap.displayName, kerberos.username, samr.full_name. After a hostname or IP, hunt kerberos.CNameString, then SAMR QueryUserInfo for the display name. SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not LDAP displayName.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the capture file."
+    },
+    "display_filter": {
+      "type": "string",
+      "description": "Wireshark display filter, for example kerberos.CNameString."
+    },
+    "fields": {
+      "type": "array",
+      "description": "tshark `-e` field names. Invalid tshark 4.4.16 fields are rejected before spawn.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `pcap_info`
+
+Summarize a pcap/pcapng in the case directory with capinfos (or tshark if capinfos is missing). The file stays read-only.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the capture file."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn.

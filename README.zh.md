@@ -36,6 +36,19 @@ pnpm dsh web
 
 `pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
 
+## 调查 pcap 案件
+
+本 fork 在标准、极简、Code 与创造模式之外提供 `analyst` 调查预设。它不是编码 Agent 换皮：DINQ、5W1H、只读证据、pcap/日志工具、身份收割，以及先 Kerberos 后 SAMR 的 hunt。不需要 DeepSeek API 密钥；配置 Qwen 或其他 OpenAI 兼容路由（[配置模型](docs/user/guide/providers.md#qwen-openai-compatible)）。
+
+```sh
+cd /path/to/case
+export DSH_CASE_DIR="$PWD"
+pnpm dsh --profile headless --patch examples/analyst/headless.cordis.yml \
+  "Define the Investigation Question, then hunt Kerberos CNameString in evidence/"
+```
+
+见[调查 pcap 案件](docs/user/guide/analyst.md)。
+
 ## 社区与支持
 
 - 欢迎通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。

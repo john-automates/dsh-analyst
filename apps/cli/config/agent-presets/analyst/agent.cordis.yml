@@ -1,0 +1,104 @@
+# The `analyst` agent preset: an investigation agent, not a coding-agent skin.
+#
+# Standard, code, minimal, and cordis stay shipped. This composition adds a
+# fifth preset. Service rows sit in isolate groups so the standing mount does
+# not publish into the process-global realm.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are an investigation analyst powered by the {{model}} model, not a
+      coding agent. Your case directory is {{cwd}}. Define the Investigation
+      Question before collecting more evidence.
+
+- id: investigation-stack
+  name: cordis:group
+  group: true
+  isolate:
+    investigation: true
+  config:
+    - id: investigation
+      name: '@deepseek-ai/dsh-investigation'
+      config:
+        caseDir: !!js process.env.DSH_CASE_DIR ?? process.env.DSH_CWD ?? process.cwd()
+        evidenceReadOnly: true
+        autoHunt: true
+
+    - id: analyst-tools
+      name: '@deepseek-ai/dsh-analyst-tools'
+      config:
+        maxOutputChars: 32000
+        commandTimeoutMs: 60000
+        tsharkBin: tshark
+        capinfosBin: capinfos
+
+# Persistent shell scoped to the case directory through the session cwd.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell whose working directory is the case directory.
+          Evidence under evidence/ and capture files stay read-only. Do not execute
+          malware or operate on paths outside the case directory. Prefer pcap_filter,
+          pcap_info, and logs for packet and log work.
+
+    - id: terminal-pwsh
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        shellDialect: pwsh
+        timeoutMs: 300000
+
+    - id: persistent-pwsh
+      name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a PowerShell shell whose working directory is the case directory.
+          Evidence and capture files stay read-only. Do not execute malware or operate
+          on paths outside the case directory.
+
+# Bare local filesystem for this case. Writes to evidence are still denied by
+# the investigation pre-execute policy.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CASE_DIR ?? process.env.DSH_CWD ?? process.cwd()
+
+    - id: tool-fs
+      name: '@deepseek-ai/dsh-tool-fs'
+
+    - id: tool-fs-search
+      name: '@deepseek-ai/dsh-tool-fs-search'
+      config:
+        sampleOverCapGlobResults: false
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: false

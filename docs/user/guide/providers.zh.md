@@ -115,6 +115,31 @@ llm-pi-ai:
 
 全部开关、各自接受的取值，以及接受它们的协议，都列在[生成的 `dsh-llm-pi-ai` 配置参考](../../config-catalog.md#deepseek-aidsh-llm-pi-ai)的 `PiAiCompatProfile` 之下——该参考派生自源码，因此不会落后于适配器实际接受的内容。
 
+<a id="qwen-openai-compatible"></a>
+
+## Qwen（OpenAI 兼容）
+
+Qwen 是现有 OpenAI-completions 适配器上的一等自定义提供方。不需要 DeepSeek API 密钥。添加一个 `api: openai-completions` 的自定义提供方，并设置路由 `compat`，使请求匹配 Qwen 网关：
+
+```yaml
+llm-pi-ai:
+  providers:
+    qwen:
+      apiKeyEnv: OPENAI_API_KEY
+      api: openai-completions
+      baseURL: https://your-qwen-gateway.example/v1
+      compat:
+        supportsDeveloperRole: false
+        maxTokensField: max_tokens
+      models:
+        - id: qwen3-coder
+        - id: qwen2.5-32b-instruct
+```
+
+Bedrock Qwen3 Coder 使用 catalog 中的 Bedrock 路由（`amazon-bedrock` / `bedrock-converse-stream`），需要 AWS 凭据和区域；只填 API key 字段并不能配置 Bedrock。本地 35B（vLLM、Ollama 或其他 OpenAI-completions 服务）使用同样的自定义提供方形态，把 `baseURL` 指到本地服务器即可。
+
+[调查指南](./analyst.md)在 headless pcap 案件中使用这条路由。
+
 ## 选择模型
 
 已配置的提供方会出现在模型选择器中。选择模型也会将其设为新会话的默认值。已发送过请求的会话会保留自身日志中记录的模型。

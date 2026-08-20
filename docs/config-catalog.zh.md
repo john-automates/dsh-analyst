@@ -320,6 +320,28 @@ export interface Config {
 
 来源：[`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
 
+<a id="deepseek-aidsh-analyst-tools"></a>
+
+## `@deepseek-ai/dsh-analyst-tools`
+
+需要：`tools` · `investigation`
+
+```ts config-catalog
+/** Deployment-owned binaries, output cap, and command deadline. */
+export interface Config {
+  /** Maximum characters returned from a pcap or log tool. Defaults to 32000. */
+  maxOutputChars?: number
+  /** Deadline in milliseconds for one tshark or capinfos process. Defaults to 60000. */
+  commandTimeoutMs?: number
+  /** `tshark` executable used by `pcap_filter` and as a `pcap_info` fallback. */
+  tsharkBin?: string
+  /** `capinfos` executable used by `pcap_info`. */
+  capinfosBin?: string
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts:24`](../packages/analyst/analyst-tools/src/index.ts)
+
 <a id="deepseek-aidsh-attachment-local"></a>
 
 ## `@deepseek-ai/dsh-attachment-local`
@@ -884,6 +906,29 @@ export interface Config {
 ```
 
 来源：[`packages/runtime-diagnostics/invariants/src/index.ts:15`](../packages/runtime-diagnostics/invariants/src/index.ts)
+
+<a id="deepseek-aidsh-investigation"></a>
+
+## `@deepseek-ai/dsh-investigation`
+
+需要：`tools` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config: one case directory and the two enforcement switches. */
+export interface Config {
+  /** Absolute directory that owns this case's evidence, notes, and report. */
+  caseDir: string
+  /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
+  evidenceReadOnly?: boolean
+  /**
+   * When true, a new IP or hostname issues Kerberos CNameString and SAMR QueryUserInfo hunts;
+   * a new user issues SAMR QueryUserInfo. Defaults to true.
+   */
+  autoHunt?: boolean
+}
+```
+
+来源：[`packages/analyst/investigation/src/index.ts:55`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 

@@ -61,6 +61,8 @@ import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import type TeamService from '@deepseek-ai/dsh-experimental-agent-team'
 import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
+import Investigation from '@deepseek-ai/dsh-investigation'
+import * as AnalystTools from '@deepseek-ai/dsh-analyst-tools'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
@@ -181,9 +183,9 @@ export interface ToolPackage {
 }
 
 /**
- * The boot manifest: every shipped tool package (a `tool-*` leaf under
- * `packages/`). Ordered by package name (the render order); the completeness
- * guard proves it is exhaustive against the on-disk glob.
+ * The boot manifest: every shipped tool package (`tool-*` leaves plus
+ * `analyst-tools`). Ordered by package name (the render order); the
+ * completeness guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
   {
@@ -606,6 +608,19 @@ const TOOL_PACKAGES: ToolPackage[] = [
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
   },
+  {
+    pkg: '@deepseek-ai/dsh-analyst-tools',
+    dir: 'analyst-tools',
+    source: 'packages/analyst/analyst-tools/src/index.ts',
+    requires: ['ctx.tools', 'ctx.investigation'],
+    writes: ['tool/call', 'tool/result', 'investigation/report via case_report'],
+    async mount(ctx) {
+      await ctx.plugin(Investigation, { caseDir: resolve(root, '.tmp/tool-catalog/case') })
+      await ctx.plugin(AnalystTools)
+    },
+    note:
+      'SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn.',
+  },
 ]
 
 /** One package's contribution to the catalog: its schemas plus attribution. */
@@ -624,8 +639,8 @@ interface CatalogPackage {
 export type ToolCatalog = CatalogPackage[]
 
 /**
- * Assert the boot manifest covers every shipped tool package on disk (a
- * `tool-*` leaf under `packages/`).
+ * Assert the boot manifest covers every shipped tool package on disk
+ * (`tool-*` leaves plus `analyst-tools`).
  * Booting has no source declaration to enumerate, so this glob restores the
  * "a new tool cannot be silently undocumented" guarantee: an unlisted package
  * fails the generator (and the freshness gate) until it is added to
@@ -634,7 +649,10 @@ export type ToolCatalog = CatalogPackage[]
  * `scanRoot` defaults to the repo root; a test may point it at a fixture tree.
  */
 export function assertManifestComplete(packages: ToolPackage[] = TOOL_PACKAGES, scanRoot: string = root): void {
-  const onDisk = globSync('packages/*/tool-*', { cwd: scanRoot }).map(p => basename(p)).sort()
+  const onDisk = [
+    ...globSync('packages/*/tool-*', { cwd: scanRoot }),
+    ...globSync('packages/analyst/analyst-tools', { cwd: scanRoot }),
+  ].map(p => basename(p)).sort()
   const listed = new Set(packages.map(p => p.dir))
   const missing = onDisk.filter(dir => !listed.has(dir))
   if (missing.length > 0) {
@@ -746,9 +764,9 @@ export function render(catalog: ToolCatalog): string {
     '',
     'Every model-facing tool a shipped plugin contributes to `ctx.tools`: the `name`, `description`, and JSON-Schema `parameters` the model receives via the system-prompt assembly. It complements the [subsystem pages](subsystems/core.md) (the types plus each page\'s generated Cordis API region) — this page is the *tools* the agent is offered.',
     '',
-    'This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator\'s boot manifest, so a new tool cannot be silently undocumented. See [the tool-schema-catalog Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md).',
+    'This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and `packages/analyst/analyst-tools` and fails if any package is missing from the generator\'s boot manifest, so a new tool cannot be silently undocumented. See [the tool-schema-catalog Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md).',
     '',
-    'Scope: shipped product tools under `packages/*/tool-*`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`\'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog\'s packages-only scope.',
+    'Scope: shipped product tools under `packages/*/tool-*` plus `packages/analyst/analyst-tools`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`\'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog\'s packages-only scope.',
     '',
     '## Tool Package Map',
     '',

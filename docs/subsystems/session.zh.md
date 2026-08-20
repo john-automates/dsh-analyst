@@ -130,6 +130,8 @@ interface SessionEventMap {
 
 `UserMessage` 是普通提示词、注入上下文、steering（中途引导）与实时收件箱事件共享的带标识且冻结的 user-role 值。事件包装层只会增加事件本地的位置或结果事实；条目待处理期间，loop 只额外附加驱动器自有的路由状态。
 
+`investigation/identity`、`investigation/hunt` 和 `investigation/report` 由 [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md) 合并进 `SessionEventMap`。它们是只记入日志的账本事件：唯一的带标签身份、自动下发的 hunt，以及最后一份 5W1H 结案包。
+
 ### `TodoItem`：一条待办项
 
 这是 `todo/write` 事件全量列表快照中的单元。它有意保持精简：一行 `content` 加一个三态 `status`（没有 id、优先级或 `activeForm`）；列表在每次写入时整体替换，因此条目无需稳定标识。见 [todo_write Agent Note](../../.agents/notes/implemented/feature/2026-06-29-todo-write-tool.md)。
@@ -617,6 +619,88 @@ interface TurnEndReasonMap {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxinvestigation--investigation"></a>
+
+### `ctx.investigation` — `Investigation`
+
+`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.
+
+```ts cordis-catalog
+/**
+ * Identities already on a session log.
+ * @param session - session whose log is folded.
+ * @returns unique identities in first-seen order.
+ */
+identities(session: Session): Identity[]
+
+/**
+ * Hunts already on a session log.
+ * @param session - session whose log is folded.
+ * @returns unique hunts in first-seen order.
+ */
+hunts(session: Session): Hunt[]
+
+/**
+ * Latest 5W1H report on a session log.
+ * @param session - session whose log is folded.
+ * @returns the last report, or undefined.
+ */
+report(session: Session): CaseReport | undefined
+
+/**
+ * Append one identity when kind+value is new.
+ * @param session - session to append to.
+ * @param identity - identity to record.
+ * @returns true when a new event was appended.
+ */
+recordIdentity(session: Session, identity: Identity): boolean
+
+/**
+ * Append one hunt when kind+subject is new.
+ * @param session - session to append to.
+ * @param hunt - hunt to record.
+ * @returns true when a new event was appended.
+ */
+recordHunt(session: Session, hunt: Hunt): boolean
+
+/**
+ * Append a whole-value 5W1H close packet.
+ * @param session - session to append to.
+ * @param report - 5W1H fields.
+ */
+recordReport(session: Session, report: CaseReport): void
+
+/**
+ * Resolve a path and require it to stay inside the case directory.
+ * @param target - absolute or case-relative path.
+ * @returns the resolved absolute path.
+ */
+resolveInsideCase(target: string): string
+
+/**
+ * Whether a path is read-only evidence.
+ * @param target - absolute or case-relative path.
+ * @returns true when writes must be denied.
+ */
+isEvidence(target: string): boolean
+
+/**
+ * Whether a path may be written while evidence stays read-only.
+ * @param target - absolute or case-relative path.
+ * @returns true for `notes/` descendants and case-root `report.md`.
+ */
+isWritable(target: string): boolean
+
+/**
+ * Whether a path stays inside the case directory.
+ * @param target - absolute or case-relative path.
+ * @returns true when the resolved path is the case root or a descendant.
+ */
+contains(target: string): boolean
+```
+
+Source: [`packages/analyst/investigation/src/index.ts:164`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

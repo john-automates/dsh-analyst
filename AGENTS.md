@@ -30,6 +30,7 @@ packages/    @deepseek-ai/dsh-<pkg> workspaces at packages/<group>/<pkg>/
   workflow/    workflow capability + worker-thread provider + tool Consumer
   todo/        todo_write tool
   plan/        plan mode as logged state
+  analyst/     investigation analyst: case ledger, pcap/log tools, identity harvest
   preset/      per-session agent composition from preset cordis.yml files
   guard/       loop-hygiene + tool-timeout plugins
   self-modification/  the agent inspects/mounts its own plugins

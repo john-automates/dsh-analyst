@@ -20,6 +20,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 // and the cmdline Context merge for the appExit host value.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
+import type {} from '@deepseek-ai/dsh-agent-presets'
 
 /** Stable Cordis plugin name. */
 export const name = 'headless-runner'
@@ -104,17 +105,19 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   if (agents === undefined || defaultModel === undefined || sessions === undefined) return
 
   const selection = defaultModel.currentSelection()
-  // This bundle composes no preset roster, so the model-facing rows sit in the
-  // host plane and the agent reads them from the global layer. A deployment
-  // that DOES configure one has to join it here first
-  // (@deepseek-ai/dsh-agent-presets README, "Composing a child agent").
+  // This bundle composes no preset roster by default, so the model-facing rows
+  // sit in the host plane and the agent reads them from the global layer. When
+  // a deployment inserts `agent-presets` (the analyst headless overlay), join
+  // the default preset here before the agent is published.
   const { agent } = await agents.create({
     sessionId: SessionId(`session-${randomUUID()}`),
     meta: { cwd: process.cwd() },
     agentOptions: { provider: selection.provider, model: selection.model },
-    setup: (agentCtx) => {
+    setup: async (agentCtx) => {
       const selected: ModelSelectionRef = { current: selection, assembled: undefined }
       installModelSelection(agentCtx, selected)
+      const presets = ctx.get('agentPresets')
+      if (presets !== undefined) await presets.mount(agentCtx)
     },
   })
   await agent.whenIdle()
