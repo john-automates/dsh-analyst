@@ -6,11 +6,11 @@
 import type { Identity, IdentityKind } from './types.ts'
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
-const MAC = /\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b/g
+const MAC = /(?<![0-9a-fA-F]:)(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}(?![:-][0-9a-fA-F]{2})/g
 const SKIP_IPS = new Set(['0.0.0.0', '255.255.255.255'])
 
 const HOST_LABEL = /(?:^|[\s,;|])(?:hostname|host|nbns\.name|dns\.qry\.name)\s*[:=]\s*(\w[\w.-]{0,253})/gi
-const USER_LABEL = /(?:^|[\s,;|])(?:user|username|account_name|kerberos\.CNameString|CNameString|cname)\s*[:=]\s*([^\s,;|]+)/gi
+const USER_LABEL = /(?:^|[\s,;|])(?:user|username|account_name|kerberos\.CNameString|CNameString|cname)\s*[:=]\s*([^\s,;|]*)/gi
 const NAME_LABEL = /(?:^|[\s,;|])(?:full_name|full name|samr\.samr_UserInfo21\.full_name)\s*[:=]\s*(.+)$/gim
 
 /** Display labels for each identity kind. */
@@ -86,21 +86,19 @@ export function harvestIdentities(text: string): Identity[] {
   for (const match of text.matchAll(MAC)) add('mac', match[0])
 
   for (const match of text.matchAll(HOST_LABEL)) {
-    const host = match[1]
-    if (host !== undefined && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) add('hostname', host)
+    const host = regexCapture(match)
+    if (host !== '' && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) add('hostname', host)
   }
   for (const match of text.matchAll(USER_LABEL)) {
-    const user = match[1]
-    if (user !== undefined) add('user', user)
+    add('user', regexCapture(match))
   }
   for (const match of text.matchAll(NAME_LABEL)) {
-    const raw = match[1]
-    if (raw === undefined) continue
+    const raw = regexCapture(match)
     add('full_name', decodeUtf16LeHex(raw) ?? raw)
   }
 
   for (const match of text.matchAll(/\b((?:[0-9a-fA-F]{2}:){7,}[0-9a-fA-F]{2})\b/g)) {
-    const decoded = decodeUtf16LeHex(match[1] ?? '')
+    const decoded = decodeUtf16LeHex(regexCapture(match))
     if (decoded !== undefined) add('full_name', decoded)
   }
   return out
@@ -113,4 +111,14 @@ export function harvestIdentities(text: string): Identity[] {
  */
 export function identityKey(identity: Identity): string {
   return `${identity.kind}\0${identity.value}`
+}
+
+/**
+ * Read a regex capture group, treating a missing group as empty.
+ * @param match - a successful match.
+ * @param index - capture index, default 1.
+ * @returns the captured string, or an empty string.
+ */
+export function regexCapture(match: RegExpMatchArray, index = 1): string {
+  return match[index] ?? ''
 }

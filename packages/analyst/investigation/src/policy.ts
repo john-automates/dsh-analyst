@@ -34,7 +34,7 @@ export function tokenizeCommand(command: string): string[] {
   const matcher = /"([^"]*)"|'([^']*)'|(\S+)/g
   let match = matcher.exec(command)
   while (match !== null) {
-    tokens.push(match[1] ?? match[2] ?? match[3] ?? '')
+    tokens.push(firstDefined(match[1], match[2], match[3]) as string)
     match = matcher.exec(command)
   }
   return tokens
@@ -103,18 +103,19 @@ export function denyCommand(
   evidenceReadOnly: boolean,
 ): string | undefined {
   const tokens = tokenizeCommand(command)
-  if (tokens.length === 0) return undefined
-  const program = basenameToken(tokens[0] ?? '')
+  const head = tokens[0]
+  if (head === undefined) return undefined
+  const program = basenameToken(head)
   if (MALWARE_RUNNERS.test(program)) {
     return `refusing shell: ${program} would execute or emulate a binary; evidence stays read-only`
+  }
+  if (program === 'chmod' && tokens.includes('+x') && tokens.some(token => refersToEvidence(token, caseDir))) {
+    return 'refusing shell: do not make evidence files executable'
   }
   for (const token of tokens) {
     if (EXECUTABLE_EVIDENCE.test(token) && refersToEvidence(token, caseDir)) {
       return `refusing shell: do not execute captured binaries (${token})`
     }
-  }
-  if (program === 'chmod' && tokens.includes('+x') && tokens.some(token => refersToEvidence(token, caseDir))) {
-    return 'refusing shell: do not make evidence files executable'
   }
   if (evidenceReadOnly && commandWritesEvidence(command, tokens, caseDir)) {
     return 'refusing shell: evidence and capture files are read-only'
@@ -129,10 +130,19 @@ export function denyCommand(
   return undefined
 }
 
+/**
+ * First defined string among candidates, or undefined when all are missing.
+ * @param values - capture groups or other optional strings.
+ * @returns the first defined value.
+ */
+export function firstDefined(...values: Array<string | undefined>): string | undefined {
+  return values.find((value): value is string => value !== undefined)
+}
+
 /** Last path segment of a program token, ignoring a Windows drive prefix. */
 function basenameToken(token: string): string {
-  const parts = token.split(/[/\\]/)
-  return parts[parts.length - 1] ?? token
+  const slash = Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\'))
+  return slash === -1 ? token : token.slice(slash + 1)
 }
 
 /** Whether a token names a system executable rather than a case file. */

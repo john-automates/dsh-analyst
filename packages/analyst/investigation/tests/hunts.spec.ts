@@ -27,5 +27,7 @@ describe('auto-issued hunts', () => {
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Identities:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Hunts:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('case_report')
+    expect(formatLedger([], [kerberos], undefined)).toContain('Hunts:')
+    expect(formatLedger([], [], { who: 'x' })).toContain('case_report')
   })
 })

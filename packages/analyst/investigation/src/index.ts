@@ -326,7 +326,8 @@ export class Investigation extends Service {
     const lines = added.map(identity => `New identity: ${identity.label} ${identity.value}.`)
     if (this.autoHunt) {
       for (const hunt of huntsForNewIdentities(added, foldHunts(session.events))) {
-        if (this.recordHunt(session, hunt)) lines.push(huntNotice(hunt))
+        this.recordHunt(session, hunt)
+        lines.push(huntNotice(hunt))
       }
     }
     const text = lines.join('\n')

@@ -53,6 +53,17 @@ const PCAP_FILTER_DESCRIPTION = [
 ].join(' ')
 
 /**
+ * Join stdout/stderr from a failed helper. Missing streams become empty.
+ * @param failure - execFile error that may carry captured streams.
+ * @returns trimmed combined text.
+ */
+export function helperFailureText(failure: { stdout?: unknown; stderr?: unknown }): string {
+  const stdout = typeof failure.stdout === 'string' ? failure.stdout : ''
+  const stderr = typeof failure.stderr === 'string' ? failure.stderr : ''
+  return stderr === '' ? stdout : `${stdout}\n${stderr}`.trim()
+}
+
+/**
  * Clip tool output to the configured character budget.
  * @param text - complete command or file text.
  * @param maxOutputChars - inclusive character cap.
@@ -82,6 +93,7 @@ export function formatFieldRows(fields: readonly string[], stdout: string): stri
 interface ExecFileError extends Error {
   code?: string | number
   killed?: boolean
+  signal?: NodeJS.Signals | number
   stdout?: string
   stderr?: string
 }
@@ -120,9 +132,8 @@ export async function runHelper(
     if (failure.killed === true || failure.code === 'ETIMEDOUT') {
       throw new Error(`${bin} exceeded commandTimeoutMs (${options.timeoutMs})`)
     }
-    if (typeof failure.stdout === 'string' || typeof failure.stderr === 'string') {
-      return clipOutput(`${failure.stdout ?? ''}\n${failure.stderr ?? ''}`.trim(), options.maxOutputChars)
-    }
+    const combined = helperFailureText(failure)
+    if (combined !== '') return clipOutput(combined, options.maxOutputChars)
     throw new Error(`${bin} failed: ${failure.message}`)
   }
 }

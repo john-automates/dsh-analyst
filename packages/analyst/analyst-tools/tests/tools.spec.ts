@@ -11,7 +11,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import Investigation from '@deepseek-ai/dsh-investigation'
 import * as tools from '../src/index.ts'
-import { clipOutput, formatFieldRows, runHelper } from '../src/index.ts'
+import { clipOutput, formatFieldRows, helperFailureText, runHelper } from '../src/index.ts'
 
 const signal = new AbortController().signal
 let root: string | undefined
@@ -37,6 +37,7 @@ async function setup(over: Partial<tools.Config> = {}): Promise<{
   ctx: Context
   caseDir: string
   owner: Agent
+  toolsFiber: { dispose: () => Promise<void> }
 }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-analyst-tools-'))
   const caseDir = join(root, 'case')
@@ -44,7 +45,7 @@ async function setup(over: Partial<tools.Config> = {}): Promise<{
   await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
   await writeFile(join(caseDir, 'auth.log'), 'line1\nline2\nline3\n')
   const tsharkBin = await script(root, 'tshark', [
-    'if [ "$1" = "-q" ]; then echo "tshark-info"; exit 0; fi',
+    'for arg in "$@"; do if [ "$arg" = "-q" ]; then echo "tshark-info"; exit 0; fi; done',
     'echo "alice\tbob"',
   ].join('\n'))
   const capinfosBin = await script(root, 'capinfos', 'echo "capinfos-ok"')
@@ -52,14 +53,14 @@ async function setup(over: Partial<tools.Config> = {}): Promise<{
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(Investigation, { caseDir })
-  await ctx.plugin(tools, {
+  const toolsFiber = await ctx.plugin(tools, {
     maxOutputChars: 32_000,
     commandTimeoutMs: 5_000,
     tsharkBin,
     capinfosBin,
     ...over,
   })
-  return { ctx, caseDir, owner: agent() }
+  return { ctx, caseDir, owner: agent(), toolsFiber }
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -87,6 +88,10 @@ describe('analyst tools', () => {
     expect(formatFieldRows(['kerberos.CNameString', 'other'], 'alice\n')).toBe(
       'kerberos.CNameString: alice\tother: ',
     )
+    expect(helperFailureText({})).toBe('')
+    expect(helperFailureText({ stdout: 1, stderr: 2 })).toBe('')
+    expect(helperFailureText({ stdout: 'out' })).toBe('out')
+    expect(helperFailureText({ stdout: 'out', stderr: 'err' })).toBe('out\nerr')
     expect(new tools.Config({})).toMatchObject({
       maxOutputChars: 32_000,
       commandTimeoutMs: 60_000,
@@ -194,16 +199,28 @@ describe('analyst tools', () => {
   })
 
   it('presents calls and unregisters tools on fiber dispose (HMR-safety)', async () => {
-    const { ctx } = await setup()
+    const { ctx, toolsFiber } = await setup()
     expect(ctx.tools.get('pcap_info')?.presentCall?.({ path: 'a.pcap' })?.title).toBe('pcap info')
     expect(ctx.tools.get('pcap_filter')?.presentCall?.({ path: 'a.pcap' })?.title).toBe('pcap filter')
     expect(ctx.tools.get('logs')?.presentCall?.({ path: 'a.log' })?.title).toBe('logs')
     expect(ctx.tools.get('case_report')?.presentCall?.({
       who: 'a', what: 'b', when: 'c', where: 'd', why: 'e', how: 'f',
     })?.title).toBe('Case report')
+    expect(ctx.tools.get('pcap_info')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
+    expect(ctx.tools.get('pcap_filter')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
+    expect(ctx.tools.get('logs')?.isConcurrencySafe?.({ path: 'a.log' })).toBe(true)
+    expect(ctx.tools.get('pcap_info')?.output.render({}, { text: 'meta' })).toEqual([
+      { type: 'text', text: 'meta' },
+    ])
+    expect(ctx.tools.get('pcap_filter')?.output.render({}, { text: 'rows' })).toEqual([
+      { type: 'text', text: 'rows' },
+    ])
+    expect(ctx.tools.get('logs')?.output.render({}, { text: 'log' })).toEqual([
+      { type: 'text', text: 'log' },
+    ])
     const names = ctx.tools.schemas().map(schema => schema.name)
     expect(names).toEqual(expect.arrayContaining(['pcap_info', 'pcap_filter', 'logs', 'case_report']))
-    await ctx.fiber.dispose()
+    await toolsFiber.dispose()
     expect(ctx.tools.schemas().some(schema => schema.name === 'pcap_filter')).toBe(false)
   })
 

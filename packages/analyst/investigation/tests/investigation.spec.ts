@@ -91,16 +91,25 @@ describe('investigation service', () => {
     expect(foldIdentities(owner.session.events)).toHaveLength(1)
     expect(foldHunts(owner.session.events)).toHaveLength(1)
     expect(foldReport(owner.session.events)?.how).toBe('samr')
+    const identityEvent = owner.session.events.find(event => event.type === 'investigation/identity')
+    const huntEvent = owner.session.events.find(event => event.type === 'investigation/hunt')
+    const reports = owner.session.events.filter(event => event.type === 'investigation/report')
+    const lastReport = reports[reports.length - 1]
+    if (identityEvent === undefined || huntEvent === undefined || lastReport === undefined) {
+      throw new Error('expected recorded investigation events')
+    }
     const mixed = [
       { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
-      owner.session.events.find(event => event.type === 'investigation/identity')!,
+      identityEvent,
       { type: 'step/start', seq: 2, time: 0, data: { turn: 1, step: 1 } },
-      owner.session.events.find(event => event.type === 'investigation/hunt')!,
-      owner.session.events.find(event => event.type === 'investigation/report')!,
+      huntEvent,
+      lastReport,
     ] as const
     expect(foldIdentities(mixed)).toHaveLength(1)
     expect(foldHunts(mixed)).toHaveLength(1)
     expect(foldReport(mixed)?.how).toBe('samr')
+    expect(foldIdentities([identityEvent, identityEvent])).toHaveLength(1)
+    expect(foldHunts([huntEvent, huntEvent])).toHaveLength(1)
   })
 
   it('harvests identities and auto-issues hunts as post-execute notices', async () => {
@@ -166,7 +175,9 @@ describe('investigation service', () => {
       arguments: { text: 'hostname: WORKSTATION1' },
       agent: owner,
     })
-    expect(again.additionalContexts).toBeUndefined()
+    expect(again.additionalContexts?.map(context => context.source)).toEqual([
+      expect.objectContaining({ plugin: 'other' }),
+    ])
   })
 
   it('skips harvest without an agent or when autoHunt is off, and skips errors', async () => {

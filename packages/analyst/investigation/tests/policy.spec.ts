@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { denyCommand, denyReason, stringArg, tokenizeCommand } from '../src/policy.ts'
+import { denyCommand, denyReason, firstDefined, stringArg, tokenizeCommand } from '../src/policy.ts'
 
 const CASE = '/cases/alpha'
 
@@ -66,5 +66,12 @@ describe('investigation policy', () => {
     expect(denyCommand('', CASE, true)).toBeUndefined()
     expect(denyCommand('tee evidence/out.pcap', CASE, true)).toContain('read-only')
     expect(denyCommand('cat a > /tmp/out', CASE, true)).toContain('outside')
+    expect(denyCommand('echo hi > notes/ok.md', CASE, true)).toBeUndefined()
+    expect(denyCommand('echo hi > captured.pcap', CASE, true)).toContain('read-only')
+    expect(denyCommand('cat ../tmp/dropper.exe', CASE, true)).toContain('captured binaries')
+    expect(denyCommand('C:\\\\Windows\\\\wine64 evidence/malware.exe', CASE, true)).toContain('execute or emulate')
+    expect(denyCommand('env /usr/bin/tshark -r evidence/a.pcap', CASE, true)).toBeUndefined()
+    expect(firstDefined(undefined, undefined)).toBeUndefined()
+    expect(firstDefined(undefined, 'kept')).toBe('kept')
   })
 })

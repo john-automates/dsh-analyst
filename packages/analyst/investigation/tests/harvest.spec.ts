@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
+  regexCapture,
 } from '../src/harvest.ts'
 
 const BECKA_HEX = '42:00:65:00:63:00:6b:00:61:00:20:00:52:00:6f:00:6c:00:66:00'
@@ -63,5 +64,9 @@ describe('identity harvest', () => {
     expect(identities.filter(item => item.kind === 'user')).toHaveLength(1)
     expect(identities.some(item => item.value === 'Becka Rolf')).toBe(true)
     expect(identities.some(item => item.value === 'Already Name')).toBe(true)
+    expect(harvestIdentities('user:').filter(item => item.kind === 'user')).toEqual([])
+    expect(harvestIdentities('00:01:02:03:04:05:06:07').some(item => item.kind === 'full_name')).toBe(false)
+    expect(regexCapture(['all'] as unknown as RegExpMatchArray)).toBe('')
+    expect(regexCapture(['all', 'kept'] as unknown as RegExpMatchArray)).toBe('kept')
   })
 })
