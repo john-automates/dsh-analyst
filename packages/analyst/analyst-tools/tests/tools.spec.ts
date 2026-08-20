@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -164,6 +164,42 @@ describe('analyst tools', () => {
     })
     expect(outside.isError).toBe(true)
     expect(text(outside)).toContain('outside the case directory')
+  })
+
+  it('spawns tshark -e when fields is the string kerberos.CNameString', async () => {
+    const binDir = await mkdtemp(join(tmpdir(), 'dsh-tshark-argv-'))
+    const tsharkBin = await script(binDir, 'tshark', [
+      'printf "%s\\n" "$@" > argv.log',
+      'echo brolf',
+    ].join('\n'))
+    const { ctx, owner, caseDir } = await setup({ tsharkBin })
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('cname-string'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: 'kerberos.CNameString',
+        fields: 'kerberos.CNameString',
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('kerberos.CNameString: brolf')
+    const argv = (await readFile(join(caseDir, 'argv.log'), 'utf8')).trim().split('\n')
+    expect(argv).toContain('-e')
+    expect(argv[argv.indexOf('-e') + 1]).toBe('kerberos.CNameString')
+    const invalid = await ctx.tools.execute({
+      signal,
+      callId: CallId('cname-invalid'),
+      name: 'pcap_filter',
+      arguments: { path: 'evidence/a.pcap', fields: 'ldap.sAMAccountName' },
+      agent: owner,
+    })
+    expect(invalid.isError).toBe(true)
+    expect(text(invalid)).toContain('ldap.sAMAccountName')
+    expect(text(invalid)).not.toMatch(/INVALID_ARGS|invalid arguments/i)
+    await rm(binDir, { recursive: true, force: true })
   })
 
   it('records a 5W1H case_report and rejects a non-agent caller or blank field', async () => {

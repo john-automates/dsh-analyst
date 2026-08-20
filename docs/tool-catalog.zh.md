@@ -2321,11 +2321,18 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
       "description": "Wireshark display filter, for example kerberos.CNameString."
     },
     "fields": {
-      "type": "array",
-      "description": "tshark `-e` field names. Invalid tshark 4.4.16 fields are rejected before spawn.",
-      "items": {
-        "type": "string"
-      }
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ],
+      "description": "tshark `-e` field names. A string is one field or a comma/space-separated list. Invalid tshark 4.4.16 fields are rejected before spawn."
     }
   },
   "required": [
