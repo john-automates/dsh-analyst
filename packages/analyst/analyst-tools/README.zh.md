@@ -6,7 +6,7 @@
 
 ## 工具
 
-`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 向调用会话追加 5W1H 结案包。
+`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 向调用会话追加 5W1H 结案包。
 
 辅助进程用 `execFile` 启动（不经过 shell），`cwd` 为案件目录，并遵守工具的 `signal`。
 
@@ -48,7 +48,7 @@
 
 #### 模型看到什么
 
-成功调用返回截断后的文本。带 `fields` 的 `pcap_filter` 将每列标为 `field: value`，以便收割记录身份。无效字段在 tshark 启动前失败。
+成功调用返回截断后的文本。带 `fields` 的 `pcap_filter` 将每列标为 `field: value`，以便收割记录身份。字符串 `kerberos.CNameString` 会变成 `-e kerberos.CNameString`。无效字段在 tshark 启动前失败。
 
 #### Token 影响
 

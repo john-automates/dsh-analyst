@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-investigation'
-import { rejectInvalidTsharkFields } from './fields.ts'
+import { coercePcapFilterFields, rejectInvalidTsharkFields } from './fields.ts'
 
 export { INVALID_TSHARK_FIELDS, RECOMMENDED_TSHARK_FIELDS, rejectInvalidTsharkFields } from './fields.ts'
 
@@ -185,9 +185,11 @@ export function apply(ctx: Context, config: Config): void {
       path: { type: 'string', required: true, description: 'Case-relative or absolute path of the capture file.' },
       display_filter: { type: 'string', description: 'Wireshark display filter, for example kerberos.CNameString.' },
       fields: {
-        type: 'array',
-        description: 'tshark `-e` field names. Invalid tshark 4.4.16 fields are rejected before spawn.',
-        items: { type: 'string' },
+        description: 'tshark `-e` field names. A string is one field or a comma/space-separated list. Invalid tshark 4.4.16 fields are rejected before spawn.',
+        oneOf: [
+          { type: 'string' },
+          { type: 'array', items: { type: 'string' } },
+        ],
       },
     },
     output: {
@@ -197,7 +199,7 @@ export function apply(ctx: Context, config: Config): void {
     isConcurrencySafe: () => true,
     execute: async (args, exec) => {
       const file = await existingFile(investigation.resolveInsideCase(args.path))
-      const fields = rejectInvalidTsharkFields(args.fields ?? [])
+      const fields = rejectInvalidTsharkFields(coercePcapFilterFields(args.fields))
       const argv = ['-r', file]
       if (args.display_filter !== undefined && args.display_filter.trim() !== '') {
         argv.push('-Y', args.display_filter)

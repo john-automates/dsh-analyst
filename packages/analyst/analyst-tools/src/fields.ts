@@ -21,6 +21,21 @@ export const RECOMMENDED_TSHARK_FIELDS = [
 
 const INVALID = new Set(INVALID_TSHARK_FIELDS.map(field => field.toLowerCase()))
 
+/** Comma or whitespace between tshark `-e` names in a model-supplied string. */
+const FIELD_SEPARATOR = /[,\s]+/
+
+/**
+ * Normalize `pcap_filter` `fields` to `-e` names before invalid-field rejection.
+ * A string is one field or a comma/space-separated list. An array is used as given.
+ * @param fields - schema-accepted string, string array, or omitted.
+ * @returns trimmed non-empty field names, or an empty list when omitted.
+ */
+export function coercePcapFilterFields(fields: string | readonly string[] | undefined): string[] {
+  if (fields === undefined) return []
+  if (typeof fields !== 'string') return [...fields]
+  return fields.split(FIELD_SEPARATOR).map(field => field.trim()).filter(field => field !== '')
+}
+
 /**
  * Reject tshark display-filter field names that are invalid on tshark 4.4.16.
  * @param fields - model-supplied `-e` field names.
