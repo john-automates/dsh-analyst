@@ -152,6 +152,7 @@ Bedrock Qwen3 Coder 使用 catalog 中的 Bedrock 路由（`amazon-bedrock` / `b
 - **`UNKNOWN_MODEL`**：选择已配置的模型，或向自定义提供方添加缺失的模型。
 - **获取可用模型返回 401**：检查密钥。模型发现会调用 OpenAI 兼容的 `GET /models` 端点；对于不提供该端点的服务，请手动输入模型。
 - **密钥与地址都正确，网关却拒绝每一个请求**：它的请求形状与 OpenAI 不同。先在路由上设 `compat.supportsDeveloperRole: false` 与 `compat.maxTokensField: max_tokens`。
+- **模型打印了 `<function=read>`，运行却立即结束**：部分 Qwen 的 OpenAI 兼容路由会发出 Hermes XML，而不是原生 `tool_calls`。针对已提供工具的格式完整转储会恢复成真实调用；格式不完整的转储仍是最终答案。
 - **只有推理模型失败**：pi-ai 把它们的系统提示词以 `developer` 角色发出，而网关拒绝该角色。设 `compat.supportsDeveloperRole: false`。
 - **某个 compat 开关因没有值而被拒绝**：冒号后什么都没写。给它一个值，或删掉该键以沿用已安装 catalog 的值。
 - **图片在发送前被拒绝**：该模型未声明图片模态。请给自定义提供方的模型加上 `input: [text, image]`；DeepSeek 自身的 chat-completions 路由是纯文本的，且无法通过配置改变。

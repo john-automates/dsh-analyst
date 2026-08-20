@@ -151,6 +151,7 @@ Durable content is the authoritative record; replay state only restores native f
 ## Vocabulary differences
 
 - pi-ai tool-call arguments are parsed objects; the harness stores raw JSON strings. The adapter parses input and re-stringifies output.
+- A completed `stop` whose assistant text contains a well-formed Hermes `<function=name>` / `<parameter=…>` dump for a tool offered on that request is rewritten into tool-call chunks and `finish {kind:'tool-calls'}`. Native `tool_calls`, auxiliary `purpose` calls, and dumps that name no offered tool stay text.
 - pi-ai reports failures as in-stream error events; these map to `finish {kind:'error'|'aborted', failure}` chunks. Provider-specific error text distinguishes terminal `QUOTA` from transient `RATE_LIMIT`, while text and usage signals evaluated against the resolved model's context window normalize overflow to `CONTEXT_WINDOW_EXCEEDED`. A terminal `stop` whose message carries no content blocks maps to a `finish {kind:'error'}` with code `EMPTY_RESPONSE` (retried by default policy) instead of a successful empty message.
 - pi-ai folds reasoning tokens into output usage; there is no separate reasoning count to map.
 - pi-ai's `off` thinking level crosses the Harness capability seam unchanged and becomes an omitted pi-ai common `reasoning` option at dispatch.
@@ -184,7 +185,7 @@ Conversion preserves logical request order without adding text, while the select
 
 #### What the model sees
 
-pi-ai events become harness reasoning, text, tool-call, usage, and finish chunks. The adapter passes parsed tool arguments to the harness as raw JSON strings.
+pi-ai events become harness reasoning, text, tool-call, usage, and finish chunks. The adapter passes parsed tool arguments to the harness as raw JSON strings. A well-formed Hermes XML function dump for an offered tool is recovered into a tool-call block so the next request sees the tool result instead of the dump as the final answer.
 
 #### Token effect
 

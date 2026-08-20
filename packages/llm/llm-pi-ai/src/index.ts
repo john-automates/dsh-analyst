@@ -65,6 +65,7 @@ import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
+import { recoverXmlToolCallStream } from './text-tool-calls.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -315,4 +316,9 @@ export function apply(ctx: Context, config: Config): void {
       }
     },
   })
+
+  // Qwen on openai-completions sometimes prints Hermes XML instead of native
+  // tool_calls. Recover a well-formed dump for an offered tool so the loop
+  // executes it instead of treating the text as the final answer.
+  ctx.on('llm/stream', (options, next) => recoverXmlToolCallStream(options, next()))
 }
