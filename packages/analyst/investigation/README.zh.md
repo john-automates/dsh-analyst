@@ -13,7 +13,7 @@
 - `recordReport` 以整值替换 5W1H 结案包。
 - `resolveInsideCase`、`isEvidence`、`isWritable` 和 `contains` 强制案件目录范围。
 
-`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）。新的 IP 或主机名对该主体下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。
+`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 或主机名对该主体下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。
 
 `investigation:policy` 章节陈述 DINQ、5W1H、证据优先工作，以及有效的 tshark 4.4.16 字段。`investigation:ledger` 是列出已记录身份与 hunt 的动态上下文。
 
@@ -99,5 +99,5 @@ You are a network-security investigation analyst, not a coding agent. Define the
 ## 已知限制与延后工作
 
 - Shell 策略按 token 扫描命令；精心构造的一行命令仍可能以扫描器错过的方式点名案件外路径。对证据优先使用 `pcap_filter` 和 `logs`，而不是自由 shell。
-- 收割基于文本。从未渲染为文本的结构化工具值不会被记录。
+- 收割基于文本。从未渲染为文本的结构化工具值不会被记录。来自 tshark 摘要的主机名限于 NBNS、BROWSER、SMB 和 LLMNR 的主机形式；已区分的工作组和域 token 会被省略。
 - 账本尚无 Web 投影卡片；UI 读取 `session/event` 或折叠日志。

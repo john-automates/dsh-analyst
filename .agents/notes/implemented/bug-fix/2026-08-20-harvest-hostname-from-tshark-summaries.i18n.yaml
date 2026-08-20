@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-harvest-hostname-from-tshark-summaries.md
+2026-08-20-harvest-hostname-from-tshark-summaries.md: 59fdca9495be24dbcb3b1bcbf2af79509bbe2898
+2026-08-20-harvest-hostname-from-tshark-summaries.zh.md: eb4dcbdafc868d21a2f4fd7977ed3bc99abb832a
