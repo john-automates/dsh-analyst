@@ -737,10 +737,15 @@ Requires: `agentDefaultModel` · `agents` · `sessions`
 export interface Config {
   /** The prompt text for the single run. */
   task: string
+  /**
+   * Absolute session workspace for glob, read, bash, and `{{cwd}}`.
+   * When omitted, `DSH_CASE_DIR`, then `DSH_CWD`, then `process.cwd()`.
+   */
+  cwd?: string
 }
 ```
 
-Source: [`packages/bundle/headless/src/index.ts:32`](../packages/bundle/headless/src/index.ts)
+Source: [`packages/bundle/headless/src/index.ts:33`](../packages/bundle/headless/src/index.ts)
 
 <a id="deepseek-aidsh-hooks-claude-code"></a>
 

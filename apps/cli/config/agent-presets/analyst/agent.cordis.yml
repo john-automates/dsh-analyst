@@ -77,8 +77,9 @@
           Evidence and capture files stay read-only. Do not execute malware or operate
           on paths outside the case directory.
 
-# Bare local filesystem for this case. Writes to evidence are still denied by
-# the investigation pre-execute policy.
+# Bare local filesystem for this case. Headless stamps DSH_CASE_DIR as the
+# session workspace so glob/read follow this cwd. Writes to evidence are still
+# denied by the investigation pre-execute policy.
 - id: filesystem
   name: cordis:group
   group: true

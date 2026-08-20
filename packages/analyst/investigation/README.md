@@ -28,7 +28,7 @@ The `investigation:policy` section states DINQ, 5W1H, evidence-first work, and t
     autoHunt: true
 ```
 
-Unknown keys fail at load. Relative `caseDir` fails at load.
+Unknown keys fail at load. Relative `caseDir` fails at load. Headless binds the same `DSH_CASE_DIR` chain as the session workspace, so glob, read, bash, and `{{cwd}}` see the case; `caseDir` still denies writes outside the case.
 
 Design: [analyst investigation preset](../../../.agents/notes/implemented/feature/2026-08-20-analyst-investigation-preset.md).
 

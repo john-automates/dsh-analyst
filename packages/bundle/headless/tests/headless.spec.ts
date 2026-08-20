@@ -8,7 +8,7 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
-import { apply, Config, internals } from '../src/index.ts'
+import { apply, Config, internals, resolveHeadlessCwd } from '../src/index.ts'
 
 const originalInternals = { ...internals }
 afterEach(() => { Object.assign(internals, originalInternals) })
@@ -248,6 +248,66 @@ describe('headless runner', () => {
   it('validates config: the task is required', () => {
     expect(() => new Config({} as never)).toThrow()
     expect(new Config({ task: 'x' })).toEqual({ task: 'x' })
+    expect(new Config({ task: 'x', cwd: '/cases/alpha' })).toEqual({ task: 'x', cwd: '/cases/alpha' })
+  })
+
+  it('resolves the session workspace from DSH_CASE_DIR before the process cwd', () => {
+    const previousCase = process.env.DSH_CASE_DIR
+    const previousCwd = process.env.DSH_CWD
+    try {
+      process.env.DSH_CASE_DIR = '/cases/from-env'
+      process.env.DSH_CWD = '/workspace/checkout'
+      expect(resolveHeadlessCwd()).toBe('/cases/from-env')
+      expect(resolveHeadlessCwd('/cases/explicit')).toBe('/cases/explicit')
+      expect(resolveHeadlessCwd('')).toBe('/cases/from-env')
+      process.env.DSH_CASE_DIR = '   '
+      expect(resolveHeadlessCwd()).toBe('/workspace/checkout')
+      delete process.env.DSH_CASE_DIR
+      expect(resolveHeadlessCwd()).toBe('/workspace/checkout')
+      delete process.env.DSH_CWD
+      expect(resolveHeadlessCwd()).toBe(process.cwd())
+      expect(() => resolveHeadlessCwd('relative/case')).toThrow('absolute path')
+    } finally {
+      if (previousCase === undefined) delete process.env.DSH_CASE_DIR
+      else process.env.DSH_CASE_DIR = previousCase
+      if (previousCwd === undefined) delete process.env.DSH_CWD
+      else process.env.DSH_CWD = previousCwd
+    }
+  })
+
+  it('stamps DSH_CASE_DIR on the session header, not the process cwd', async () => {
+    const previousCase = process.env.DSH_CASE_DIR
+    process.env.DSH_CASE_DIR = '/cases/easy-as-123'
+    try {
+      const test = await bench({
+        afterPrompt(session, message) { appendTurn(session, 1, message, 'bound', true) },
+      })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'bound\n' })
+      expect(test.ctx.sessions.list()).toHaveLength(1)
+      expect(test.ctx.sessions.list()[0]?.header.cwd).toBe('/cases/easy-as-123')
+      expect(test.ctx.sessions.list()[0]?.header.cwd).not.toBe(process.cwd())
+      await test.ctx.fiber.dispose()
+    } finally {
+      if (previousCase === undefined) delete process.env.DSH_CASE_DIR
+      else process.env.DSH_CASE_DIR = previousCase
+    }
+  })
+
+  it('rejects a relative workspace cwd during the run', async () => {
+    const ctx = new Context()
+    let err = ''
+    internals.stdout = { write: () => true }
+    internals.stderr = { write: (chunk: string) => { err += chunk; return true } }
+    const exited = new Promise<number>((resolve) => {
+      ctx.provide('appExit', resolve)
+    })
+    ctx.provide('agentDefaultModel', { currentSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    ctx.provide('sessions', { flush: () => Promise.resolve(true) } as never)
+    ctx.provide('agents', { create: () => Promise.reject(new Error('must not create')) } as never)
+    apply(ctx, { task: 't', cwd: 'relative/case' })
+    expect(await exited).toBe(1)
+    expect(err).toContain('absolute path')
+    await ctx.fiber.dispose()
   })
 
   it('joins the default agent preset when a roster is composed', async () => {

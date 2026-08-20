@@ -42,7 +42,11 @@ pnpm dsh web
 
 ```sh
 cd /path/to/case
-export DSH_CASE_DIR="$PWD"
+pnpm dsh --profile headless --patch examples/analyst/headless.cordis.yml \
+  "Define the Investigation Question, then hunt Kerberos CNameString in evidence/"
+
+# Or from the checkout:
+export DSH_CASE_DIR=/path/to/case
 pnpm dsh --profile headless --patch examples/analyst/headless.cordis.yml \
   "Define the Investigation Question, then hunt Kerberos CNameString in evidence/"
 ```
