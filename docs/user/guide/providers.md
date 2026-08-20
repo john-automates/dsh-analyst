@@ -115,6 +115,8 @@ Each switch belongs to the protocols that declare it, so a switch valid on one `
 
 Every switch, its accepted values, and the protocols that take it are listed under `PiAiCompatProfile` in the [generated `dsh-llm-pi-ai` configuration reference](../../config-catalog.md#deepseek-aidsh-llm-pi-ai) — which is derived from the source, so it cannot fall behind what the adapter accepts.
 
+<a id="qwen-openai-compatible"></a>
+
 ## Qwen (OpenAI-compatible)
 
 Qwen is a first-class custom provider on the existing OpenAI-completions adapter. A DeepSeek API key is not required. Add a custom provider with `api: openai-completions` and set the route `compat` so the request matches Qwen gateways:

@@ -115,6 +115,8 @@ llm-pi-ai:
 
 全部开关、各自接受的取值，以及接受它们的协议，都列在[生成的 `dsh-llm-pi-ai` 配置参考](../../config-catalog.md#deepseek-aidsh-llm-pi-ai)的 `PiAiCompatProfile` 之下——该参考派生自源码，因此不会落后于适配器实际接受的内容。
 
+<a id="qwen-openai-compatible"></a>
+
 ## Qwen（OpenAI 兼容）
 
 Qwen 是现有 OpenAI-completions 适配器上的一等自定义提供方。不需要 DeepSeek API 密钥。添加一个 `api: openai-completions` 的自定义提供方，并设置路由 `compat`，使请求匹配 Qwen 网关：

@@ -620,6 +620,88 @@ interface TurnEndReasonMap {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxinvestigation--investigation"></a>
+
+### `ctx.investigation` — `Investigation`
+
+`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.
+
+```ts cordis-catalog
+/**
+ * Identities already on a session log.
+ * @param session - session whose log is folded.
+ * @returns unique identities in first-seen order.
+ */
+identities(session: Session): Identity[]
+
+/**
+ * Hunts already on a session log.
+ * @param session - session whose log is folded.
+ * @returns unique hunts in first-seen order.
+ */
+hunts(session: Session): Hunt[]
+
+/**
+ * Latest 5W1H report on a session log.
+ * @param session - session whose log is folded.
+ * @returns the last report, or undefined.
+ */
+report(session: Session): CaseReport | undefined
+
+/**
+ * Append one identity when kind+value is new.
+ * @param session - session to append to.
+ * @param identity - identity to record.
+ * @returns true when a new event was appended.
+ */
+recordIdentity(session: Session, identity: Identity): boolean
+
+/**
+ * Append one hunt when kind+subject is new.
+ * @param session - session to append to.
+ * @param hunt - hunt to record.
+ * @returns true when a new event was appended.
+ */
+recordHunt(session: Session, hunt: Hunt): boolean
+
+/**
+ * Append a whole-value 5W1H close packet.
+ * @param session - session to append to.
+ * @param report - 5W1H fields.
+ */
+recordReport(session: Session, report: CaseReport): void
+
+/**
+ * Resolve a path and require it to stay inside the case directory.
+ * @param target - absolute or case-relative path.
+ * @returns the resolved absolute path.
+ */
+resolveInsideCase(target: string): string
+
+/**
+ * Whether a path is read-only evidence.
+ * @param target - absolute or case-relative path.
+ * @returns true when writes must be denied.
+ */
+isEvidence(target: string): boolean
+
+/**
+ * Whether a path may be written while evidence stays read-only.
+ * @param target - absolute or case-relative path.
+ * @returns true for `notes/` descendants and case-root `report.md`.
+ */
+isWritable(target: string): boolean
+
+/**
+ * Whether a path stays inside the case directory.
+ * @param target - absolute or case-relative path.
+ * @returns true when the resolved path is the case root or a descendant.
+ */
+contains(target: string): boolean
+```
+
+Source: [`packages/analyst/investigation/src/index.ts:164`](../../packages/analyst/investigation/src/index.ts)
+
 <a id="ctxsessions--sessionstore"></a>
 
 ### `ctx.sessions` — `SessionStore`

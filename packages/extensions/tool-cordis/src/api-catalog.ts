@@ -821,6 +821,87 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'investigation',
+    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.',
+    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.',
+    methods: [
+      {
+        signature: 'readonly caseDir: string',
+        description: 'Resolved absolute case directory.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly evidenceReadOnly: boolean',
+        description: 'Whether evidence and capture files are read-only.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly autoHunt: boolean',
+        description: 'Whether new IP/hostname/user identities auto-issue hunts.',
+        parameters: [],
+      },
+      {
+        signature: 'identities(session: Session): Identity[]',
+        description: 'Identities already on a session log.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'unique identities in first-seen order.',
+      },
+      {
+        signature: 'hunts(session: Session): Hunt[]',
+        description: 'Hunts already on a session log.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'unique hunts in first-seen order.',
+      },
+      {
+        signature: 'report(session: Session): CaseReport | undefined',
+        description: 'Latest 5W1H report on a session log.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'the last report, or undefined.',
+      },
+      {
+        signature: 'recordIdentity(session: Session, identity: Identity): boolean',
+        description: 'Append one identity when kind+value is new.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'identity', description: 'identity to record.' }],
+        returns: 'true when a new event was appended.',
+      },
+      {
+        signature: 'recordHunt(session: Session, hunt: Hunt): boolean',
+        description: 'Append one hunt when kind+subject is new.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'hunt', description: 'hunt to record.' }],
+        returns: 'true when a new event was appended.',
+      },
+      {
+        signature: 'recordReport(session: Session, report: CaseReport): void',
+        description: 'Append a whole-value 5W1H close packet.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'report', description: '5W1H fields.' }],
+      },
+      {
+        signature: 'resolveInsideCase(target: string): string',
+        description: 'Resolve a path and require it to stay inside the case directory.',
+        parameters: [{ name: 'target', description: 'absolute or case-relative path.' }],
+        returns: 'the resolved absolute path.',
+      },
+      {
+        signature: 'isEvidence(target: string): boolean',
+        description: 'Whether a path is read-only evidence.',
+        parameters: [{ name: 'target', description: 'absolute or case-relative path.' }],
+        returns: 'true when writes must be denied.',
+      },
+      {
+        signature: 'isWritable(target: string): boolean',
+        description: 'Whether a path may be written while evidence stays read-only.',
+        parameters: [{ name: 'target', description: 'absolute or case-relative path.' }],
+        returns: 'true for `notes/` descendants and case-root `report.md`.',
+      },
+      {
+        signature: 'contains(target: string): boolean',
+        description: 'Whether a path stays inside the case directory.',
+        parameters: [{ name: 'target', description: 'absolute or case-relative path.' }],
+        returns: 'true when the resolved path is the case root or a descendant.',
+      },
+    ],
+  },
+  {
     key: 'jobs',
     summary: 'Abstract background job registry.',
     description: 'Abstract background job registry. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.jobs` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Registrations outlive producer and controller fibers. Owner and service disposal cancel live work and await compliant producers; a throwing teardown cancel force-fails only the record. Teardown cancellation also marks the record reported, because a record its owner is being destroyed for has no reader left.\n- Owned-job access is fenced by the owner\'s session id. Ids are predictable, so authorization — not secrecy — is the boundary.\n- Settlement is first-wins: one terminal record, released waiters, and one round of contained listener notification, even against a late producer outcome. Completion is announced last, after the record is committed and every other observer of the settlement has seen it, because a reporter may open a model turn synchronously.\n- start refuses work while no attached job controller serves the spec\'s owner, so a producer cannot start work that owner cannot collect or stop. One registry serves every composition in the process, so this question — and completion-listener delivery — is owner-relative rather than process-wide: registrations made from an unscoped context serve every owner, and registrations made under an agent composition\'s scope serve exactly the agents composed under it.',
@@ -2849,6 +2930,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
   },
   {
+    name: 'CaseReport',
+    declaration: 'export interface CaseReport {\n    who: string;\n    what: string;\n    when: string;\n    where: string;\n    why: string;\n    how: string;\n}',
+  },
+  {
     name: 'ClientResponse',
     declaration: 'export interface ClientResponse {\n    type: \'client-response\';\n    rpcId: RpcId;\n    result: RpcResult<unknown>;\n}',
   },
@@ -3251,6 +3336,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GoalView',
     declaration: 'export interface GoalView extends GoalSnapshot {\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly activation: GoalActivation;\n}',
+  },
+  {
+    name: 'Hunt',
+    declaration: 'export interface Hunt {\n    kind: HuntKind;\n    subjectKind: HuntSubjectKind;\n    subject: string;\n}',
+  },
+  {
+    name: 'HuntKind',
+    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\';',
+  },
+  {
+    name: 'HuntSubjectKind',
+    declaration: 'export type HuntSubjectKind = \'ip\' | \'hostname\' | \'user\';',
+  },
+  {
+    name: 'Identity',
+    declaration: 'export interface Identity {\n    kind: IdentityKind;\n    value: string;\n    label: string;\n}',
+  },
+  {
+    name: 'IdentityKind',
+    declaration: 'export type IdentityKind = \'ip\' | \'mac\' | \'hostname\' | \'user\' | \'full_name\';',
   },
   {
     name: 'ImageAttachmentLimits',

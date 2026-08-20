@@ -82,6 +82,7 @@ const GROUP_ORDER = [
   'web',
   'spill',
   'todo',
+  'analyst',
   'plan',
   'cordis',
   'hooks',
@@ -138,6 +139,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['agent-loop', 'agent', 'session-persistence', 'session-query', 'session-query-sqlite', 'subagent-inprocess', 'invariants', 'message-feedback'],
     note: 'Owns append-only Session instances and emits the durable session event feed.',
+  },
+  {
+    key: 'investigation',
+    pkg: 'investigation',
+    title: 'Case-scoped investigation ledger',
+    mode: 'seam',
+    consumers: ['analyst-tools'],
+    note: 'Folds identities, hunts, and the 5W1H report from the session log; denies evidence writes and issues Kerberos then SAMR hunts.',
   },
   {
     key: 'invariants',

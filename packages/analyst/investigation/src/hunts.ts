@@ -5,7 +5,11 @@
 
 import type { Hunt, HuntKind, Identity } from './types.ts'
 
-/** Uniqueness key for one hunt. */
+/**
+ * Uniqueness key for one hunt.
+ * @param hunt - hunt kind, subject kind, and subject.
+ * @returns kind+subject key.
+ */
 export function huntKey(hunt: Hunt): string {
   return `${hunt.kind}\0${hunt.subjectKind}\0${hunt.subject}`
 }
