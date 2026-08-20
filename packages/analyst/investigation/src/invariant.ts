@@ -53,7 +53,7 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
     return
   }
   if (event.type !== 'investigation/report') return
-  const data = event.data as Record<string, unknown>
+  const data = event.data
   for (const field of REPORT_FIELDS) {
     requireText(data[field], `investigation/report ${field}`, fail)
   }

@@ -22,15 +22,18 @@ export const inject = ['tools', 'investigation']
 
 /** Deployment-owned binaries, output cap, and command deadline. */
 export interface Config {
-  /** Maximum characters returned from a pcap or log tool. */
-  maxOutputChars: number
-  /** Deadline in milliseconds for one tshark or capinfos process. */
-  commandTimeoutMs: number
+  /** Maximum characters returned from a pcap or log tool. Defaults to 32000. */
+  maxOutputChars?: number
+  /** Deadline in milliseconds for one tshark or capinfos process. Defaults to 60000. */
+  commandTimeoutMs?: number
   /** `tshark` executable used by `pcap_filter` and as a `pcap_info` fallback. */
-  tsharkBin: string
+  tsharkBin?: string
   /** `capinfos` executable used by `pcap_info`. */
-  capinfosBin: string
+  capinfosBin?: string
 }
+
+/** Complete config after schemastery applies every field default. */
+type ResolvedConfig = Required<Config>
 
 /** Runtime schema for the analyst tool consumer. */
 export const Config: z<Config> = z.object({
@@ -131,8 +134,9 @@ export async function runHelper(
  */
 export function apply(ctx: Context, config: Config): void {
   const investigation = ctx.investigation
-  const maxOutputChars = config.maxOutputChars
-  const commandTimeoutMs = config.commandTimeoutMs
+  const resolved = config as ResolvedConfig
+  const maxOutputChars = resolved.maxOutputChars
+  const commandTimeoutMs = resolved.commandTimeoutMs
 
   ctx.tools.register(defineTool({
     name: 'pcap_info',
@@ -154,10 +158,10 @@ export function apply(ctx: Context, config: Config): void {
         signal: exec.signal,
       }
       try {
-        return { text: await runHelper(config.capinfosBin, ['-T', '-M', file], helper) }
+        return { text: await runHelper(resolved.capinfosBin, ['-T', '-M', file], helper) }
       } catch (error) {
         if (!(error instanceof Error) || !error.message.includes('is not installed')) throw error
-        return { text: await runHelper(config.tsharkBin, ['-r', file, '-q'], helper) }
+        return { text: await runHelper(resolved.tsharkBin, ['-r', file, '-q'], helper) }
       }
     },
     presentCall: args => ({ card: 'generic', title: 'pcap info', kind: 'other', rawInput: args.path }),
@@ -191,7 +195,7 @@ export function apply(ctx: Context, config: Config): void {
         argv.push('-T', 'fields')
         for (const field of fields) argv.push('-e', field)
       }
-      const stdout = await runHelper(config.tsharkBin, argv, {
+      const stdout = await runHelper(resolved.tsharkBin, argv, {
         cwd: investigation.caseDir,
         timeoutMs: commandTimeoutMs,
         maxOutputChars,

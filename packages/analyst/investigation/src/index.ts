@@ -55,11 +55,14 @@ export const METHODOLOGY_SECTION = [
 export interface Config {
   /** Absolute directory that owns this case's evidence, notes, and report. */
   caseDir: string
-  /** When true, evidence and capture files cannot be written or executed. */
-  evidenceReadOnly: boolean
-  /** When true, a new IP/hostname issues a Kerberos hunt and a new user issues a SAMR hunt. */
-  autoHunt: boolean
+  /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
+  evidenceReadOnly?: boolean
+  /** When true, a new IP/hostname issues a Kerberos hunt and a new user issues a SAMR hunt. Defaults to true. */
+  autoHunt?: boolean
 }
+
+/** Complete config after schemastery applies every field default. */
+type ResolvedConfig = Required<Config>
 
 /** Runtime schema for the investigation service. */
 export const Config: z<Config> = z.object({
@@ -175,9 +178,10 @@ export class Investigation extends Service {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'investigation')
-    this.caseDir = resolveCaseDir(config.caseDir)
-    this.evidenceReadOnly = config.evidenceReadOnly
-    this.autoHunt = config.autoHunt
+    const resolved = config as ResolvedConfig
+    this.caseDir = resolveCaseDir(resolved.caseDir)
+    this.evidenceReadOnly = resolved.evidenceReadOnly
+    this.autoHunt = resolved.autoHunt
 
     ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
       const reason = denyReason(exec, this.caseDir, this.evidenceReadOnly)

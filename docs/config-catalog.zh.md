@@ -329,14 +329,14 @@ export interface Config {
 ```ts config-catalog
 /** Deployment-owned binaries, output cap, and command deadline. */
 export interface Config {
-  /** Maximum characters returned from a pcap or log tool. */
-  maxOutputChars: number
-  /** Deadline in milliseconds for one tshark or capinfos process. */
-  commandTimeoutMs: number
+  /** Maximum characters returned from a pcap or log tool. Defaults to 32000. */
+  maxOutputChars?: number
+  /** Deadline in milliseconds for one tshark or capinfos process. Defaults to 60000. */
+  commandTimeoutMs?: number
   /** `tshark` executable used by `pcap_filter` and as a `pcap_info` fallback. */
-  tsharkBin: string
+  tsharkBin?: string
   /** `capinfos` executable used by `pcap_info`. */
-  capinfosBin: string
+  capinfosBin?: string
 }
 ```
 
@@ -918,10 +918,10 @@ export interface Config {
 export interface Config {
   /** Absolute directory that owns this case's evidence, notes, and report. */
   caseDir: string
-  /** When true, evidence and capture files cannot be written or executed. */
-  evidenceReadOnly: boolean
-  /** When true, a new IP/hostname issues a Kerberos hunt and a new user issues a SAMR hunt. */
-  autoHunt: boolean
+  /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
+  evidenceReadOnly?: boolean
+  /** When true, a new IP/hostname issues a Kerberos hunt and a new user issues a SAMR hunt. Defaults to true. */
+  autoHunt?: boolean
 }
 ```
 
