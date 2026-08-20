@@ -129,6 +129,8 @@ describe('investigation service', () => {
       'hostname', 'ip', 'user',
     ])
     expect(ctx.investigation.hunts(owner.session)).toEqual([
+      { kind: 'eth-src', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'name-service', subjectKind: 'ip', subject: '10.0.0.5' },
       { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' },
       { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.0.5' },
       { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' },
@@ -172,12 +174,24 @@ describe('investigation service', () => {
     expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
       expect.objectContaining({
         type: 'text',
-        text: expect.stringMatching(/New identity: IP 10\.1\.2\.3\.\nHunt issued: samr-userinfo/),
+        text: expect.stringMatching(/New identity: IP 10\.1\.2\.3\.\nHunt issued: eth-src/),
       }),
+    ])
+    expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('Hunt issued: name-service') }),
+    ])
+    expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('Hunt issued: samr-userinfo') }),
     ])
     expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
       expect.objectContaining({ type: 'text', text: expect.not.stringContaining('Hunt issued: kerberos-cname') }),
     ])
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'eth-src', subjectKind: 'ip', subject: '10.1.2.3',
+    })
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'name-service', subjectKind: 'ip', subject: '10.1.2.3',
+    })
     expect(ctx.investigation.hunts(owner.session)).toContainEqual({
       kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.1.2.3',
     })

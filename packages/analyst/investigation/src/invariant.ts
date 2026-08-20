@@ -6,7 +6,7 @@ import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-inva
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-investigation'
 const IDENTITY_KINDS = new Set(['ip', 'mac', 'hostname', 'user', 'full_name'])
-const HUNT_KINDS = new Set(['kerberos-cname', 'samr-userinfo'])
+const HUNT_KINDS = new Set(['kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service'])
 const HUNT_SUBJECTS = new Set(['ip', 'hostname', 'user'])
 const REPORT_FIELDS = ['who', 'what', 'when', 'where', 'why', 'how'] as const
 
