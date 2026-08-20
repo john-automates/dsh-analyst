@@ -8,6 +8,9 @@
 # DSH_CASE_DIR is set, the session workspace, tool cwd, and persona case
 # directory are that path. Investigation still denies writes outside the case
 # and keeps evidence read-only.
+#
+# An id-targeted patch replaces the whole config, so this row restates the
+# shipped bundle's required `task` while stamping cwd.
 
 - insert:
     - id: agent-presets
@@ -17,4 +20,5 @@
 
 - id: headless-runner
   config:
+    task: !!js ctx.headlessStartup.task
     cwd: !!js process.env.DSH_CASE_DIR ?? process.env.DSH_CWD ?? process.cwd()

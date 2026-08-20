@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`resolveHeadlessCwd` 是 `headless-runner` 唯一的会话工作区绑定。设置了 Config `cwd` 时用它，否则依次为 `DSH_CASE_DIR`、`DSH_CWD`、`process.cwd()`。空值跳过。相对路径会使本次运行失败。analyst overlay 在 `headless-runner` 行上设置同一条链。调查隔离不变：证据保持只读，案件之外的写入仍在 `tools/pre-execute` 失败。
+`resolveHeadlessCwd` 是 `headless-runner` 唯一的会话工作区绑定。设置了 Config `cwd` 时用它，否则依次为 `DSH_CASE_DIR`、`DSH_CWD`、`process.cwd()`。空值跳过。相对路径会使本次运行失败。analyst overlay 用 id 补丁在 `headless-runner` 行上设置同一条链。按 id 定位的补丁会替换整个 `config`，因此 overlay 复述随附组合包所需的 `task: !!js ctx.headlessStartup.task`。调查隔离不变：证据保持只读，案件之外的写入仍在 `tools/pre-execute` 失败。
 
 ## 备选方案
 
@@ -22,9 +22,11 @@ Status: implemented
 
 **只在 analyst overlay 中绑定，runner 仍使用 `process.cwd()`。** 否决，因为现场一次性路径就是 runner。仅 overlay 提供的 `cwd` 仍需要 runner 读取 Config `cwd`。
 
+**只在 overlay 的 `headless-runner` 行上盖 `cwd`。** 否决，因为按 id 定位的补丁会替换整个 `config`。这会丢掉必填的 `task`，启动以 `$.task missing required value` 失败。
+
 ## 测试
 
-`packages/bundle/headless/tests/headless.spec.ts` 把 `DSH_CASE_DIR` 盖到会话标头上。`examples/analyst/tests/case-workspace.spec.ts` 对该工作区运行 glob 与 read，若它们列出启动检出目录则会失败。
+`packages/bundle/headless/tests/headless.spec.ts` 把 `DSH_CASE_DIR` 盖到会话标头上。`examples/analyst/tests/case-workspace.spec.ts` 把随附 headless 组合包补丁与 overlay 合成，若补丁后的 runner 配置缺少 `task` 则会失败；它还对该工作区运行 glob 与 read，若它们列出启动检出目录则会失败。
 
 ## 后果
 
