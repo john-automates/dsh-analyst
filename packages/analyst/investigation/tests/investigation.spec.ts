@@ -128,8 +128,12 @@ describe('investigation service', () => {
     expect(ctx.investigation.identities(owner.session).map(item => item.kind).sort()).toEqual([
       'hostname', 'ip', 'user',
     ])
-    expect(ctx.investigation.hunts(owner.session).map(item => item.kind).sort()).toEqual([
-      'kerberos-cname', 'kerberos-cname', 'samr-userinfo',
+    expect(ctx.investigation.hunts(owner.session)).toEqual([
+      { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' },
+      { kind: 'samr-userinfo', subjectKind: 'hostname', subject: 'workstation1' },
+      { kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' },
     ])
     ctx.on('tools/post-execute', async (_exec, _result, next) => {
       const downstream = await next()
@@ -166,8 +170,17 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
-      expect.objectContaining({ type: 'text', text: 'New identity: IP 10.1.2.3.' }),
+      expect.objectContaining({
+        type: 'text',
+        text: expect.stringMatching(/New identity: IP 10\.1\.2\.3\.\nHunt issued: samr-userinfo/),
+      }),
     ])
+    expect(alreadyHunted.additionalContexts?.[0]?.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.not.stringContaining('Hunt issued: kerberos-cname') }),
+    ])
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.1.2.3',
+    })
     const again = await ctx.tools.execute({
       signal,
       callId: CallId('echo-2'),

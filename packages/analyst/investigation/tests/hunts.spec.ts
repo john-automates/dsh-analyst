@@ -7,20 +7,49 @@ const host: Identity = { kind: 'hostname', value: 'workstation1', label: 'hostna
 const user: Identity = { kind: 'user', value: 'brolf', label: 'user' }
 
 describe('auto-issued hunts', () => {
-  it('issues Kerberos after IP/hostname and SAMR after user, skipping duplicates', () => {
+  it('issues Kerberos and SAMR after IP or hostname without a harvested user', () => {
+    const fromIp = huntsForNewIdentities([ip], [])
+    expect(fromIp).toEqual([
+      { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.0.5' },
+    ])
+    expect(huntsForNewIdentities([host], [])).toEqual([
+      { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' },
+      { kind: 'samr-userinfo', subjectKind: 'hostname', subject: 'workstation1' },
+    ])
+    expect(huntsForNewIdentities([user], [])).toEqual([
+      { kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' },
+    ])
+  })
+
+  it('dedupes Kerberos and SAMR against existing hunts and itself', () => {
     const first = huntsForNewIdentities([ip, host, user], [])
-    expect(first.map(hunt => hunt.kind)).toEqual(['kerberos-cname', 'kerberos-cname', 'samr-userinfo'])
-    expect(first[0]).toEqual({ kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' })
-    expect(first[2]).toEqual({ kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' })
-    expect(huntsForNewIdentities([ip, user], first)).toEqual([])
-    expect(huntKey(first[0]!)).toContain('kerberos-cname')
+    expect(first).toEqual([
+      { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.0.5' },
+      { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' },
+      { kind: 'samr-userinfo', subjectKind: 'hostname', subject: 'workstation1' },
+      { kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' },
+    ])
+    expect(huntsForNewIdentities([ip, host, user], first)).toEqual([])
+    const kerberosOnly: Hunt = { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.0.5' }
+    expect(huntsForNewIdentities([ip], [kerberosOnly])).toEqual([
+      { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.0.5' },
+    ])
+    expect(huntKey(kerberosOnly)).toContain('kerberos-cname')
   })
 
   it('names valid tshark fields in hunt notices and formats the ledger', () => {
     const kerberos: Hunt = { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' }
     const samr: Hunt = { kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' }
-    expect(huntNotice(kerberos)).toContain('kerberos.CNameString')
-    expect(huntNotice(kerberos)).toContain('ldap.sAMAccountName')
+    const kerberosNotice = huntNotice(kerberos)
+    expect(kerberosNotice).toContain('kerberos.CNameString')
+    expect(kerberosNotice).toContain('ldap.sAMAccountName')
+    expect(kerberosNotice).toContain('kerberos.username')
+    expect(kerberosNotice).toContain('ldap.displayName')
+    expect(kerberosNotice).toContain('samr.samr_UserInfo21.account_name')
+    expect(kerberosNotice).toContain('samr.samr_UserInfo21.full_name')
+    expect(kerberosNotice).not.toContain('After a username appears')
     expect(huntNotice(samr)).toContain('samr.samr_UserInfo21.full_name')
     expect(huntNotice(samr)).toContain('Becka Rolf')
     expect(formatLedger([], [], undefined)).toBe('')

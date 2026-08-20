@@ -13,7 +13,7 @@ Case-scoped investigation ledger. The plugin records unique labeled identities, 
 - `recordReport` whole-value-replaces the 5W1H packet.
 - `resolveInsideCase`, `isEvidence`, `isWritable`, and `contains` enforce the case directory.
 
-`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`). A new IP or hostname issues `kerberos-cname`; a new user issues `samr-userinfo`.
+`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`). A new IP or hostname issues `kerberos-cname` and `samr-userinfo` for that subject; a new user issues `samr-userinfo`.
 
 The `investigation:policy` section states DINQ, 5W1H, evidence-first work, and the valid tshark 4.4.16 fields. `investigation:ledger` is a dynamic context listing recorded identities and hunts.
 
@@ -72,7 +72,7 @@ A new identity or hunt changes the context after the reusable prompt prefix.
 
 #### What the model sees
 
-A successful tool result that yields a new identity appends a plugin-sourced notice naming the identity and, when `autoHunt` is true, the issued hunt and the valid tshark fields.
+A successful tool result that yields a new identity appends a plugin-sourced notice naming the identity and, when `autoHunt` is true, the issued hunts and the valid tshark fields. The Kerberos notice tells the model to run SAMR QueryUserInfo without waiting for a username.
 
 #### Token effect
 

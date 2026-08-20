@@ -16,7 +16,8 @@ export function huntKey(hunt: Hunt): string {
 
 /**
  * Hunts to issue after identities that were just recorded.
- * A new IP or hostname issues `kerberos-cname`. A new user issues `samr-userinfo`.
+ * A new IP or hostname issues `kerberos-cname` then `samr-userinfo` for that subject.
+ * A new user issues `samr-userinfo`. SAMR does not wait for a harvested user.
  * @param added - identities appended on this tool result.
  * @param existing - hunts already on the session log.
  * @returns new hunts in issue order, unique against `existing` and themselves.
@@ -36,7 +37,10 @@ export function huntsForNewIdentities(added: readonly Identity[], existing: read
     out.push(hunt)
   }
   for (const identity of added) {
-    if (identity.kind === 'ip' || identity.kind === 'hostname') issue('kerberos-cname', identity)
+    if (identity.kind === 'ip' || identity.kind === 'hostname') {
+      issue('kerberos-cname', identity)
+      issue('samr-userinfo', identity)
+    }
     if (identity.kind === 'user') issue('samr-userinfo', identity)
   }
   return out
@@ -53,7 +57,7 @@ export function huntNotice(hunt: Hunt): string {
       `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
       'Run pcap_filter with display_filter `kerberos.CNameString` and field `kerberos.CNameString`.',
       'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
-      'After a username appears, hunt samr-userinfo with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName).',
+      'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
     ].join(' ')
   }
   return [

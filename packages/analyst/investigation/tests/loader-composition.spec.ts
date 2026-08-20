@@ -89,7 +89,10 @@ describe('investigation real Loader composition through cordis.yml', () => {
     })
     expect(result.isError).toBe(false)
     expect(ctx.investigation.identities(session)[0]?.value).toBe('casehost')
-    expect(ctx.investigation.hunts(session)[0]?.kind).toBe('kerberos-cname')
+    expect(ctx.investigation.hunts(session)).toEqual([
+      { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'casehost' },
+      { kind: 'samr-userinfo', subjectKind: 'hostname', subject: 'casehost' },
+    ])
     await rm(caseDir, { recursive: true, force: true })
   }, 30_000)
 

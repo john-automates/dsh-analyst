@@ -920,7 +920,10 @@ export interface Config {
   caseDir: string
   /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
   evidenceReadOnly?: boolean
-  /** When true, a new IP/hostname issues a Kerberos hunt and a new user issues a SAMR hunt. Defaults to true. */
+  /**
+   * When true, a new IP or hostname issues Kerberos CNameString and SAMR QueryUserInfo hunts;
+   * a new user issues SAMR QueryUserInfo. Defaults to true.
+   */
   autoHunt?: boolean
 }
 ```
