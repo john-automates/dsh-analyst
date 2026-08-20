@@ -926,14 +926,16 @@ export interface Config {
   /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
   evidenceReadOnly?: boolean
   /**
-   * When true, a new IP or hostname issues Kerberos CNameString and SAMR QueryUserInfo hunts;
-   * a new user issues SAMR QueryUserInfo. Defaults to true.
+   * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
+   * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
+   * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
+   * those identity hunts issue only for that C2-talking IP. Defaults to true.
    */
   autoHunt?: boolean
 }
 ```
 
-来源：[`packages/analyst/investigation/src/index.ts:55`](../packages/analyst/investigation/src/index.ts)
+来源：[`packages/analyst/investigation/src/index.ts:60`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 

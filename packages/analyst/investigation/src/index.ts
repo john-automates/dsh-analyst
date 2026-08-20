@@ -17,7 +17,9 @@ import type { PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionRes
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import { harvestIdentities, identityKey } from './harvest.ts'
-import { formatLedger, huntNotice, huntsForNewIdentities, huntKey } from './hunts.ts'
+import {
+  evidenceTextForHunts, formatLedger, huntNotice, huntsForNewIdentities, huntKey,
+} from './hunts.ts'
 import { denyReason } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
 import type { CaseReport, Hunt, Identity } from './types.ts'
@@ -26,7 +28,10 @@ export type * from './types.ts'
 export {
   decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
 } from './harvest.ts'
-export { formatLedger, huntKey, huntNotice, huntsForNewIdentities } from './hunts.ts'
+export {
+  c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, formatLedger, huntKey, huntNotice,
+  huntsForNewIdentities, isLanIpv4, isNonLanUnicastIpv4,
+} from './hunts.ts'
 export {
   denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
@@ -60,7 +65,8 @@ export interface Config {
   /**
    * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
-   * user issues SAMR QueryUserInfo. Defaults to true.
+   * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
+   * those identity hunts issue only for that C2-talking IP. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -329,7 +335,11 @@ export class Investigation extends Service {
     if (added.length === 0) return undefined
     const lines = added.map(identity => `New identity: ${identity.label} ${identity.value}.`)
     if (this.autoHunt) {
-      for (const hunt of huntsForNewIdentities(added, foldHunts(session.events))) {
+      for (const hunt of huntsForNewIdentities(
+        added,
+        foldHunts(session.events),
+        evidenceTextForHunts(session.events, resultText(result)),
+      )) {
         this.recordHunt(session, hunt)
         lines.push(huntNotice(hunt))
       }

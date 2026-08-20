@@ -207,6 +207,43 @@ describe('investigation service', () => {
     ])
   })
 
+  it('does not hunt the idle LAN workstation after a C2-talking LAN IP', async () => {
+    const { ctx, owner } = await setup()
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-two-client'),
+      name: 'echo',
+      arguments: {
+        text: [
+          '10.0.10.2 → 198.51.100.80 TCP',
+          '10.0.10.3 → 10.0.10.1 NBNS',
+          'hostname: lan-b-host',
+        ].join('\n'),
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const notice = result.additionalContexts?.[0]?.content[0]
+    expect(notice).toMatchObject({ type: 'text', text: expect.stringContaining('ip.addr == 10.0.10.2') })
+    expect(notice).toMatchObject({ type: 'text', text: expect.not.stringContaining('ip.addr == 10.0.10.3') })
+    expect(notice).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('Hunt issued: kerberos-cname for hostname lan-b-host'),
+    })
+    expect(notice).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('Hunt issued: samr-userinfo for hostname lan-b-host'),
+    })
+    expect(ctx.investigation.hunts(owner.session)).toEqual([
+      { kind: 'eth-src', subjectKind: 'ip', subject: '10.0.10.2' },
+      { kind: 'name-service', subjectKind: 'ip', subject: '10.0.10.2' },
+      { kind: 'kerberos-cname', subjectKind: 'ip', subject: '10.0.10.2' },
+      { kind: 'samr-userinfo', subjectKind: 'ip', subject: '10.0.10.2' },
+    ])
+    expect(ctx.investigation.identities(owner.session).some(item => item.value === '10.0.10.3')).toBe(true)
+    expect(ctx.investigation.identities(owner.session).some(item => item.value === 'lan-b-host')).toBe(true)
+  })
+
   it('skips harvest without an agent or when autoHunt is off, and skips errors', async () => {
     const { ctx, owner } = await setup({ autoHunt: false })
     const noAgent = await ctx.tools.execute({
