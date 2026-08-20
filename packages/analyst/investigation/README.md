@@ -13,7 +13,7 @@ Case-scoped investigation ledger. The plugin records unique labeled identities, 
 - `recordReport` whole-value-replaces the 5W1H packet.
 - `resolveInsideCase`, `isEvidence`, `isWritable`, and `contains` enforce the case directory.
 
-`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`) and hostnames in NBNS, BROWSER, SMB, and LLMNR tshark summaries. Workgroup and domain tokens distinguished as Domain/Workgroup Announcement, Local Master Announcement, or NBNS `<1b>`–`<1e>` are not recorded as hostname. A new IP issues `eth-src`, `name-service`, `kerberos-cname`, and `samr-userinfo` for that subject; a new hostname issues `kerberos-cname` and `samr-userinfo`; a new user issues `samr-userinfo`. `name-service` is `llmnr or nbns or browser`. SMB is not a hunt kind.
+`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`) and hostnames in NBNS, BROWSER, SMB, and LLMNR tshark summaries. Workgroup and domain tokens distinguished as Domain/Workgroup Announcement, Local Master Announcement, or NBNS `<1b>`–`<1e>` are not recorded as hostname. A new IP issues `eth-src`, `name-service`, `kerberos-cname`, and `samr-userinfo` for that subject; a new hostname issues `kerberos-cname` and `samr-userinfo`; a new user issues `samr-userinfo`. After a LAN IP shares a line with a non-LAN unicast peer, those identity hunts issue only for that C2-talking IP and the notice `display_filter` includes `ip.addr ==` that subject. `name-service` is `llmnr or nbns or browser`. SMB is not a hunt kind.
 
 The `investigation:policy` section states DINQ, 5W1H, evidence-first work, and the valid tshark 4.4.16 fields. `investigation:ledger` is a dynamic context listing recorded identities and hunts.
 
@@ -72,7 +72,7 @@ A new identity or hunt changes the context after the reusable prompt prefix.
 
 #### What the model sees
 
-A successful tool result that yields a new identity appends a plugin-sourced notice naming the identity and, when `autoHunt` is true, the issued hunts and the valid tshark 4.4.16 fields. An IP notice names `eth.src` and the `llmnr or nbns or browser` filters that produce DESKTOP-* / NBNS Registration / BROWSER Host Announcement lines. The Kerberos notice tells the model to run SAMR QueryUserInfo without waiting for a username.
+A successful tool result that yields a new identity appends a plugin-sourced notice naming the identity and, when `autoHunt` is true, the issued hunts and the valid tshark 4.4.16 fields. An IP notice names `eth.src` and the `llmnr or nbns or browser` filters that produce DESKTOP-* / NBNS Registration / BROWSER Host Announcement lines. IP-subject notices include `ip.addr ==` that subject. After a C2-talking LAN IP is seen, idle LAN workstations do not receive eth-src, Kerberos, or SAMR hunts. The Kerberos notice tells the model to run SAMR QueryUserInfo without waiting for a username.
 
 #### Token effect
 

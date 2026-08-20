@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-auto-issue-mac-and-name-service-hunts.md
-2026-08-20-auto-issue-mac-and-name-service-hunts.md: 0e19a997f42b1d347c527eab74e6e3f58cf9aa90
-2026-08-20-auto-issue-mac-and-name-service-hunts.zh.md: 458b54d117650ccc4acafe8029ee5613c940b0a0
+2026-08-20-auto-issue-mac-and-name-service-hunts.md: 198a48d6d6a2ec2934d8e336cf9563bc1f3d1a60
+2026-08-20-auto-issue-mac-and-name-service-hunts.zh.md: b91c39e6259e4bd197c3dc43f881025c97ed8244
