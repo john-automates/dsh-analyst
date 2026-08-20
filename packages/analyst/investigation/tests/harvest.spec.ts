@@ -69,4 +69,61 @@ describe('identity harvest', () => {
     expect(regexCapture(['all'] as unknown as RegExpMatchArray)).toBe('')
     expect(regexCapture(['all', 'kept'] as unknown as RegExpMatchArray)).toBe('kept')
   })
+
+  it('harvests hostname from NBNS, BROWSER, SMB, and LLMNR summaries', () => {
+    const identities = harvestIdentities([
+      '    12 0.123456  10.2.28.88 → 224.0.0.252    LLMNR 82 Standard query ANY DESKTOP-TEYQ2NR',
+      '    13 0.123457  10.2.28.88 → 10.2.28.255    NBNS 92 Registration NB DESKTOP-TEYQ2NR<00>',
+      '    14 0.123458  10.2.28.88 → 10.2.28.255    NBNS 92 Registration NB DESKTOP-TEYQ2NR<20>',
+      '    15 0.123459  10.2.28.88 → 10.2.28.255    BROWSER 243 Request Announcement DESKTOP-TEYQ2NR',
+      '    16 0.123460  10.2.28.88 → 10.2.28.255    BROWSER 243 Host Announcement DESKTOP-TEYQ2NR, Workstation, Server',
+      '    17 0.123461  10.2.28.88 → 10.2.28.88     SMB 128 Tree Connect AndX Request, Path: \\\\DESKTOP-TEYQ2NR\\IPC$',
+      '    18 0.123462  10.2.28.88 → 10.2.28.255    NBNS 92 Registration NB EASYAS123<00>',
+      '    19 0.123463  10.2.28.88 → 10.2.28.255    NBNS 92 Registration NB EASYAS123<1d>',
+      '    20 0.123464  10.2.28.88 → 10.2.28.255    BROWSER 243 Request Announcement EASYAS123',
+      '    21 0.123465  10.2.28.88 → 10.2.28.255    BROWSER 243 Domain/Workgroup Announcement EASYAS123, NT Workstation',
+      '    22 0.123466  10.2.28.88 → 10.2.28.255    BROWSER 243 Local Master Announcement EASYAS123',
+    ].join('\n'))
+    expect(identities.filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: 'desktop-teyq2nr', label: 'hostname' },
+    ])
+    expect(identities.some(item => item.value === 'easyas123')).toBe(false)
+  })
+
+  it('keeps IP, MAC, user, and full_name harvest beside summary hostnames', () => {
+    const identities = harvestIdentities([
+      '10.2.28.88',
+      '00:19:d1:b2:4d:ad',
+      'user: brolf',
+      'full_name: Becka Rolf',
+      'LLMNR Standard query ANY DESKTOP-TEYQ2NR',
+      'NBNS Registration NB DESKTOP-TEYQ2NR<00>',
+      'NBNS Registration NB DESKTOP-TEYQ2NR<20>',
+      'BROWSER Request Announcement DESKTOP-TEYQ2NR',
+      'BROWSER Host Announcement DESKTOP-TEYQ2NR',
+      'BROWSER Domain/Workgroup Announcement EASYAS123',
+    ].join('\n'))
+    expect(identities).toEqual([
+      { kind: 'ip', value: '10.2.28.88', label: 'IP' },
+      { kind: 'mac', value: '00:19:d1:b2:4d:ad', label: 'MAC' },
+      { kind: 'hostname', value: 'desktop-teyq2nr', label: 'hostname' },
+      { kind: 'user', value: 'brolf', label: 'user' },
+      { kind: 'full_name', value: 'Becka Rolf', label: 'full name' },
+    ])
+  })
+
+  it('covers remaining summary hostname forms and skips workgroup NBNS suffixes', () => {
+    const identities = harvestIdentities([
+      'LLMNR Standard query response 0x0001 A WORKSTATION1',
+      'LLMNR query 0xab AAAA WORKSTATION1',
+      'NBNS Name query NB WORKSTATION1<03>',
+      'SMB2 Tree Connect Request Tree: \\\\WORKSTATION1\\IPC$',
+      'NBNS Registration NB EASYAS123<1b>',
+      'NBNS Registration NB EASYAS123<1c>',
+      'NBNS Registration NB EASYAS123<1e>',
+    ].join('\n'))
+    expect(identities.filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: 'workstation1', label: 'hostname' },
+    ])
+  })
 })

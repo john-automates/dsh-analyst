@@ -13,7 +13,7 @@ Case-scoped investigation ledger. The plugin records unique labeled identities, 
 - `recordReport` whole-value-replaces the 5W1H packet.
 - `resolveInsideCase`, `isEvidence`, `isWritable`, and `contains` enforce the case directory.
 
-`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`). A new IP or hostname issues `kerberos-cname` and `samr-userinfo` for that subject; a new user issues `samr-userinfo`.
+`tools/pre-execute` denies writes to evidence and capture files, shell commands that leave the case, and malware runners (`wine`, `qemu`, captured `.exe`). `tools/post-execute` harvests IP, MAC, hostname, user, and full name from successful tool text, including UTF-16LE SAMR hex (`Becka Rolf`) and hostnames in NBNS, BROWSER, SMB, and LLMNR tshark summaries. Workgroup and domain tokens distinguished as Domain/Workgroup Announcement, Local Master Announcement, or NBNS `<1b>`–`<1e>` are not recorded as hostname. A new IP or hostname issues `kerberos-cname` and `samr-userinfo` for that subject; a new user issues `samr-userinfo`.
 
 The `investigation:policy` section states DINQ, 5W1H, evidence-first work, and the valid tshark 4.4.16 fields. `investigation:ledger` is a dynamic context listing recorded identities and hunts.
 
@@ -99,5 +99,5 @@ Denied calls extend the conversation normally.
 ## Known Limitations and Deferred Work
 
 - Shell policy tokenizes commands; a crafted one-liner can still name an outside path in a way the scanner misses. Prefer `pcap_filter` and `logs` over free-form shell for evidence.
-- Harvest is text-based. Structured tool values that never render as text are not recorded.
+- Harvest is text-based. Structured tool values that never render as text are not recorded. Hostname from tshark summaries is limited to NBNS, BROWSER, SMB, and LLMNR host forms; distinguished workgroup and domain tokens are omitted.
 - There is no Web projection card for the ledger yet; UIs read `session/event` or fold the log.
