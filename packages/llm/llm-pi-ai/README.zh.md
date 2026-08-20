@@ -152,6 +152,7 @@ pi-ai 依据提供方 id 与 baseURL 决定每个请求的形状：系统提示�
 ## 词汇差异
 
 - pi-ai 工具调用参数是已解析对象；harness 存储原始 JSON 字符串。适配器会解析输入，并将输出重新字符串化。
+- 已完成的 `stop` 若 assistant 文本含有格式完整的 Hermes `<function=name>` / `<parameter=…>` 转储，且名称属于该请求已提供的工具，则会被改写为工具调用分片和 `finish {kind:'tool-calls'}`。原生 `tool_calls`、辅助 `purpose` 调用，以及名称未被提供的转储仍保持为文本。
 - pi-ai 将失败报告为流内错误事件；它们会映射到 `finish {kind:'error'|'aborted', failure}` 分片。提供方特定错误文本会区分终止型 `QUOTA` 与暂时型 `RATE_LIMIT`，针对已解析模型上下文窗口评估的文本与 usage 信号则将溢出规范化为 `CONTEXT_WINDOW_EXCEEDED`。终止时的 `stop` 若消息不含内容块，则会映射为 `finish {kind:'error'}`，code 为 `EMPTY_RESPONSE`（默认策略会重试），而非成功空消息。
 - pi-ai 将推理 token 折叠到输出 usage 中；没有可映射的独立推理计数。
 - pi-ai 的 `off` 思考级别会原样穿过 Harness 能力 seam，并在分派时变为被省略的 pi-ai 通用 `reasoning` 选项。
@@ -185,7 +186,7 @@ pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK
 
 #### 模型看到的内容
 
-pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 分片。适配器把解析后的工具参数作为原始 JSON 字符串传给 harness。
+pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 分片。适配器把解析后的工具参数作为原始 JSON 字符串传给 harness。针对已提供工具的格式完整 Hermes XML 函数转储会恢复成工具调用块，因此下一次请求看到的是工具结果，而不是作为最终答案的转储。
 
 #### Token 影响
 
