@@ -1,6 +1,6 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
- * tool results, auto-issue Kerberos then SAMR hunts, deny writes to evidence
+ * tool results, auto-issue hunts after new identities, deny writes to evidence
  * and work outside the case directory, and persist a 5W1H close packet.
  *
  * State is folded from the session log. There is no live mirror.
@@ -58,8 +58,9 @@ export interface Config {
   /** When true, evidence and capture files cannot be written or executed. Defaults to true. */
   evidenceReadOnly?: boolean
   /**
-   * When true, a new IP or hostname issues Kerberos CNameString and SAMR QueryUserInfo hunts;
-   * a new user issues SAMR QueryUserInfo. Defaults to true.
+   * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
+   * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
+   * user issues SAMR QueryUserInfo. Defaults to true.
    */
   autoHunt?: boolean
 }

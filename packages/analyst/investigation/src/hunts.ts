@@ -3,6 +3,7 @@
  * @module @deepseek-ai/dsh-investigation/hunts
  */
 
+import { assertNever } from '@deepseek-ai/dsh-llm'
 import type { Hunt, HuntKind, Identity } from './types.ts'
 
 /**
@@ -16,8 +17,10 @@ export function huntKey(hunt: Hunt): string {
 
 /**
  * Hunts to issue after identities that were just recorded.
- * A new IP or hostname issues `kerberos-cname` then `samr-userinfo` for that subject.
+ * A new IP issues `eth-src`, `name-service`, `kerberos-cname`, then `samr-userinfo`.
+ * A new hostname issues `kerberos-cname` then `samr-userinfo`.
  * A new user issues `samr-userinfo`. SAMR does not wait for a harvested user.
+ * `name-service` is LLMNR/NBNS/BROWSER. SMB is not a hunt kind and is not issued.
  * @param added - identities appended on this tool result.
  * @param existing - hunts already on the session log.
  * @returns new hunts in issue order, unique against `existing` and themselves.
@@ -37,6 +40,10 @@ export function huntsForNewIdentities(added: readonly Identity[], existing: read
     out.push(hunt)
   }
   for (const identity of added) {
+    if (identity.kind === 'ip') {
+      issue('eth-src', identity)
+      issue('name-service', identity)
+    }
     if (identity.kind === 'ip' || identity.kind === 'hostname') {
       issue('kerberos-cname', identity)
       issue('samr-userinfo', identity)
@@ -52,20 +59,35 @@ export function huntsForNewIdentities(added: readonly Identity[], existing: read
  * @returns notice text naming the valid tshark 4.4.16 fields.
  */
 export function huntNotice(hunt: Hunt): string {
-  if (hunt.kind === 'kerberos-cname') {
-    return [
-      `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
-      'Run pcap_filter with display_filter `kerberos.CNameString` and field `kerberos.CNameString`.',
-      'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
-      'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
-    ].join(' ')
+  switch (hunt.kind) {
+    case 'eth-src':
+      return [
+        `Hunt issued: eth-src for ${hunt.subjectKind} ${hunt.subject}.`,
+        'Run pcap_filter with display_filter `eth.src` and field `eth.src`.',
+      ].join(' ')
+    case 'name-service':
+      return [
+        `Hunt issued: name-service for ${hunt.subjectKind} ${hunt.subject}.`,
+        'Run pcap_filter with display_filter `llmnr or nbns or browser`.',
+        'Those filters produce DESKTOP-* names, NBNS Registration, and BROWSER Host Announcement lines.',
+      ].join(' ')
+    case 'kerberos-cname':
+      return [
+        `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
+        'Run pcap_filter with display_filter `kerberos.CNameString` and field `kerberos.CNameString`.',
+        'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
+        'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
+      ].join(' ')
+    case 'samr-userinfo':
+      return [
+        `Hunt issued: samr-userinfo for ${hunt.subjectKind} ${hunt.subject}.`,
+        'Run pcap_filter with display_filter `samr.samr_UserInfo21.account_name or samr.samr_UserInfo21.full_name`',
+        'and fields `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`.',
+        'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
+      ].join(' ')
+    default:
+      return assertNever(hunt.kind, 'huntNotice')
   }
-  return [
-    `Hunt issued: samr-userinfo for ${hunt.subjectKind} ${hunt.subject}.`,
-    'Run pcap_filter with display_filter `samr.samr_UserInfo21.account_name or samr.samr_UserInfo21.full_name`',
-    'and fields `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`.',
-    'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
-  ].join(' ')
 }
 
 /**

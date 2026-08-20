@@ -483,13 +483,14 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 ```ts persistence-catalog
 /**
  * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
- * log order. Kerberos CNameString hunts follow a new IP or hostname; SAMR
- * QueryUserInfo hunts follow a new user.
+ * log order. A new IP issues `eth-src`, `name-service`, Kerberos
+ * CNameString, and SAMR QueryUserInfo. A new hostname issues Kerberos then
+ * SAMR. A new user issues SAMR.
  */
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:65`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:66`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -516,7 +517,7 @@ Source: [`packages/analyst/investigation/src/types.ts:59`](../packages/analyst/i
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:69`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:70`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

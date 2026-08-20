@@ -19,7 +19,7 @@ export interface Identity {
 }
 
 /** Auto-issued or recorded hunt kinds. */
-export type HuntKind = 'kerberos-cname' | 'samr-userinfo'
+export type HuntKind = 'kerberos-cname' | 'samr-userinfo' | 'eth-src' | 'name-service'
 
 /** Subject kinds a hunt can attach to. */
 export type HuntSubjectKind = 'ip' | 'hostname' | 'user'
@@ -59,8 +59,9 @@ declare module '@deepseek-ai/dsh-session/types' {
     'investigation/identity': Identity
     /**
      * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
-     * log order. Kerberos CNameString hunts follow a new IP or hostname; SAMR
-     * QueryUserInfo hunts follow a new user.
+     * log order. A new IP issues `eth-src`, `name-service`, Kerberos
+     * CNameString, and SAMR QueryUserInfo. A new hostname issues Kerberos then
+     * SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**

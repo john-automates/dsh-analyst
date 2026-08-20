@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-案件范围内的调查账本。插件记录唯一的带标签身份，自动下发 Kerberos 然后 SAMR 的 hunt，拒绝写入证据以及案件目录外的操作，并持久化 5W1H 结案包。状态从会话日志折叠得出。
+案件范围内的调查账本。插件记录唯一的带标签身份，在新 IP 后自动下发 MAC、名称服务、Kerberos，然后 SAMR 的 hunt，拒绝写入证据以及案件目录外的操作，并持久化 5W1H 结案包。状态从会话日志折叠得出。
 
 ## 服务：`Investigation`（ctx 键：`investigation`）
 
@@ -13,7 +13,7 @@
 - `recordReport` 以整值替换 5W1H 结案包。
 - `resolveInsideCase`、`isEvidence`、`isWritable` 和 `contains` 强制案件目录范围。
 
-`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 或主机名对该主体下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。
+`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。
 
 `investigation:policy` 章节陈述 DINQ、5W1H、证据优先工作，以及有效的 tshark 4.4.16 字段。`investigation:ledger` 是列出已记录身份与 hunt 的动态上下文。
 
@@ -72,7 +72,7 @@ You are a network-security investigation analyst, not a coding agent. Define the
 
 #### 模型看到什么
 
-产生新身份的成功工具结果会追加一条插件来源的通知，点名该身份；当 `autoHunt` 为 true 时，还点名已下发的 hunt 以及有效 tshark 字段。Kerberos 通知会要求模型立刻跑 SAMR QueryUserInfo，而不等待用户名出现。
+产生新身份的成功工具结果会追加一条插件来源的通知，点名该身份；当 `autoHunt` 为 true 时，还点名已下发的 hunt 以及有效 tshark 4.4.16 字段。IP 通知会点名 `eth.src`，以及会产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行的 `llmnr or nbns or browser` 过滤器。Kerberos 通知会要求模型立刻跑 SAMR QueryUserInfo，而不等待用户名出现。
 
 #### Token 影响
 
