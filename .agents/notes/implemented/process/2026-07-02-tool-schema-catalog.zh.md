@@ -25,7 +25,7 @@ Cordis 目录是纯 TypeScript AST 遍历，因为每个事件/服务名都是�
 
 ### 恢复「不会静默遗漏」的保证
 
-启动有一项 AST 遍历不存在的代价：没有源码声明集合可供枚举，新工具包可能被遗忘。一个**完整性守卫**恢复了这项保证——`assertManifestComplete` 对 `packages/` 下所有 `tool-*` 包进行 glob，若有任何一个不在生成器的启动 manifest 中则直接报错。新工具包在注册之前会导致生成器失败，进而导致 `doc-sync` 失败。这与 Cordis 生成器通过枚举源码免费获得的结构性属性相同，只是为基于启动的生成器重新实现了一遍。
+启动有一项 AST 遍历不存在的代价：没有源码声明集合可供枚举，新工具包可能被遗忘。一个**完整性守卫**恢复了这项保证——`assertManifestComplete` 对 `packages/` 下所有 `tool-*` 包以及 `packages/analyst/analyst-tools` 进行 glob，若有任何一个不在生成器的启动 manifest 中则直接报错。新工具包在注册之前会导致生成器失败，进而导致 `doc-sync` 失败。这与 Cordis 生成器通过枚举源码免费获得的结构性属性相同，只是为基于启动的生成器重新实现了一遍。
 
 ### 手动维护的启动 manifest 是无法省去的策略
 
@@ -33,7 +33,7 @@ Cordis 目录是纯 TypeScript AST 遍历，因为每个事件/服务名都是�
 
 ### 范围
 
-`packages/*/tool-*` 下已发布的产品工具包，每个都使用默认配置启动，包括 `dsh-tool-bash`（`bash`）、`dsh-tool-jobs`（`job_output`、`job_list`、`job_kill`）和 `dsh-tool-subagent`（`subagent`）。仅供示例使用的工具不在范围内。
+`packages/*/tool-*` 以及 `packages/analyst/analyst-tools` 下已发布的产品工具包，每个都使用默认配置启动，包括 `dsh-tool-bash`（`bash`）、`dsh-tool-jobs`（`job_output`、`job_list`、`job_kill`）、`dsh-tool-subagent`（`subagent`）和 `dsh-analyst-tools`（`pcap_info`、`pcap_filter`、`logs`、`case_report`）。仅供示例使用的工具不在范围内。
 
 目录的单位是包，而非经过配置的每个工具实例。每个包以默认配置启动一次；加载时的别名（如 `subagent_fork`）会注明，但不枚举所有部署配置组合。部署清单覆盖的是一个独立且无界的范围。
 

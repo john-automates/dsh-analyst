@@ -1,0 +1,8 @@
+{
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "Define the Investigation Question, hunt Kerberos CNameString in evidence/a.pcap, then close with a 5W1H case_report."
+    }
+  ]
+}

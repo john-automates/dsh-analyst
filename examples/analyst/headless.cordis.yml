@@ -1,0 +1,13 @@
+# Headless overlay: mount the shipped agent-preset roster and default to
+# `analyst`. `apps/cli` injects the shipped preset root when this row is
+# present. The headless runner joins the default preset when
+# `ctx.agentPresets` exists. No DeepSeek API key is required; configure a
+# Qwen (or other) OpenAI-compatible route in settings instead.
+#
+# cd into the case directory first. DSH_CASE_DIR defaults to process.cwd().
+
+- insert:
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: analyst

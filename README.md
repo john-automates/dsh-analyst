@@ -36,6 +36,19 @@ pnpm dsh web
 
 `pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
+## Investigate a pcap case
+
+This fork ships an `analyst` investigation preset in addition to Standard, Minimal, Code, and Creator. It is not a coding-agent skin: DINQ, 5W1H, read-only evidence, pcap/log tools, identity harvest, and Kerberos-then-SAMR hunts. A DeepSeek API key is not required; configure Qwen or another OpenAI-compatible route ([Configure models](docs/user/guide/providers.md#qwen-openai-compatible)).
+
+```sh
+cd /path/to/case
+export DSH_CASE_DIR="$PWD"
+pnpm dsh --profile headless --patch examples/analyst/headless.cordis.yml \
+  "Define the Investigation Question, then hunt Kerberos CNameString in evidence/"
+```
+
+See [Investigate a pcap case](docs/user/guide/analyst.md).
+
 ## Community and support
 
 - Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).

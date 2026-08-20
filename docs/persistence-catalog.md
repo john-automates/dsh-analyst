@@ -474,6 +474,50 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:19`](../packages/hooks/hook-
 
 Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-protocol/src/types.ts)
 
+### `investigation/*`
+
+<a id="investigationhunt--log-only"></a>
+
+#### `investigation/hunt` — log-only
+
+```ts persistence-catalog
+/**
+ * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
+ * log order. Kerberos CNameString hunts follow a new IP or hostname; SAMR
+ * QueryUserInfo hunts follow a new user.
+ */
+'investigation/hunt': Hunt
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:65`](../packages/analyst/investigation/src/types.ts)
+
+<a id="investigationidentity--log-only"></a>
+
+#### `investigation/identity` — log-only
+
+```ts persistence-catalog
+/**
+ * One unique labeled identity harvested from a tool result. Duplicate
+ * kind+value pairs are not appended; fold in log order.
+ */
+'investigation/identity': Identity
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:59`](../packages/analyst/investigation/src/types.ts)
+
+<a id="investigationreport--log-only"></a>
+
+#### `investigation/report` — log-only
+
+```ts persistence-catalog
+/**
+ * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
+ */
+'investigation/report': CaseReport
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:69`](../packages/analyst/investigation/src/types.ts)
+
 ### `llm/*`
 
 <a id="llmretry--log-only"></a>

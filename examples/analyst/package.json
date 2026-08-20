@@ -1,0 +1,7 @@
+{
+  "name": "@deepseek-ai/dsh-example-analyst",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Headless overlay that defaults the shipped preset roster to analyst"
+}

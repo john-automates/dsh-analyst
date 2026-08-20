@@ -1,0 +1,37 @@
+/**
+ * tshark 4.4.16 field names this analyst stack accepts or rejects.
+ * These are protocol facts, not deployment tunables.
+ * @module @deepseek-ai/dsh-analyst-tools/fields
+ */
+
+/** Fields that look useful but do not exist (or do not mean what analysts expect) in tshark 4.4.16. */
+export const INVALID_TSHARK_FIELDS = [
+  'ldap.sAMAccountName',
+  'ldap.displayName',
+  'kerberos.username',
+  'samr.full_name',
+] as const
+
+/** Fields the analyst tools recommend for Kerberos then SAMR display-name hunts. */
+export const RECOMMENDED_TSHARK_FIELDS = [
+  'kerberos.CNameString',
+  'samr.samr_UserInfo21.account_name',
+  'samr.samr_UserInfo21.full_name',
+] as const
+
+const INVALID = new Set(INVALID_TSHARK_FIELDS.map(field => field.toLowerCase()))
+
+/**
+ * Reject tshark display-filter field names that are invalid on tshark 4.4.16.
+ * @param fields - model-supplied `-e` field names.
+ * @returns the same list when every field is usable.
+ */
+export function rejectInvalidTsharkFields(fields: readonly string[]): readonly string[] {
+  const invalid = fields.filter(field => INVALID.has(field.toLowerCase()))
+  if (invalid.length === 0) return fields
+  throw new Error(
+    `invalid tshark 4.4.16 field(s): ${invalid.join(', ')}. `
+    + `Use ${RECOMMENDED_TSHARK_FIELDS.join(', ')}. `
+    + `Do not use ${INVALID_TSHARK_FIELDS.join(', ')}.`,
+  )
+}

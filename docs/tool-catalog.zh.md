@@ -7,9 +7,9 @@
 
 已发布插件向 `ctx.tools` 提供的所有面向模型的工具：模型通过系统提示词组装获得的 `name`、`description` 和 JSON Schema `parameters`。本目录是[子系统页面](subsystems/core.md)（类型及每页生成的 `cordis-surface` 接线区域）的补充；本页列出的是向 agent（智能体）提供的*工具*。
 
-英文源文件由系统**生成**，并通过 `pnpm run verify-tool-catalog`（`doc-sync`（文档同步门禁）的一部分）验证新鲜度；本中文文件作为经评审对侧通过双语配对维护。与 Cordis 目录（纯源码 AST 处理）不同，英文生成器会在真实上下文中**启动**每个工具插件并读取 `ctx.tools.schemas()`，因为工具 schema 无法通过静态分析完全确定，例如运行时展开的枚举、拼接的描述、由配置决定的名称以及使用原始 JSON Schema 的 MCP 工具。完整性守卫会 glob 匹配 `packages/*/tool-*`；如果生成器的启动 manifest（元数据清单）遗漏任何包，检查就会失败，因此新工具不会在无人察觉的情况下缺少文档。参见[工具 schema 目录 Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md)。
+英文源文件由系统**生成**，并通过 `pnpm run verify-tool-catalog`（`doc-sync`（文档同步门禁）的一部分）验证新鲜度；本中文文件作为经评审对侧通过双语配对维护。与 Cordis 目录（纯源码 AST 处理）不同，英文生成器会在真实上下文中**启动**每个工具插件并读取 `ctx.tools.schemas()`，因为工具 schema 无法通过静态分析完全确定，例如运行时展开的枚举、拼接的描述、由配置决定的名称以及使用原始 JSON Schema 的 MCP 工具。完整性守卫会 glob 匹配 `packages/*/tool-*` 和 `packages/analyst/analyst-tools`；如果生成器的启动 manifest（元数据清单）遗漏任何包，检查就会失败，因此新工具不会在无人察觉的情况下缺少文档。参见[工具 schema 目录 Agent Note](../.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md)。
 
-范围：`packages/*/tool-*` 下已发布的产品工具，每个工具均使用其**默认**配置启动；但如果某个 Config 字段是**必填项**且没有默认值，生成器就必须作出选择，对应包的说明会记录本页展示的是哪个分支。注册的工具**名称**可以是加载时配置，例如 `tool-subagent` 的 `toolName`，因此部署可能以不同名称或额外名称提供某个包；如果存在随产品发布的别名，对应包的说明会予以记录。`examples/` 中的演示工具（例如 `echo`）不在范围内，这与 Cordis 目录仅涵盖包的范围一致。
+范围：`packages/*/tool-*` 以及 `packages/analyst/analyst-tools` 下已发布的产品工具，每个工具均使用其**默认**配置启动；但如果某个 Config 字段是**必填项**且没有默认值，生成器就必须作出选择，对应包的说明会记录本页展示的是哪个分支。注册的工具**名称**可以是加载时配置，例如 `tool-subagent` 的 `toolName`，因此部署可能以不同名称或额外名称提供某个包；如果存在随产品发布的别名，对应包的说明会予以记录。`examples/` 中的演示工具（例如 `echo`）不在范围内，这与 Cordis 目录仅涵盖包的范围一致。
 
 ## 工具包映射
 
@@ -43,6 +43,7 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+| `@deepseek-ai/dsh-analyst-tools` | `case_report`、`logs`、`pcap_filter`、`pcap_info` | `ctx.tools`、`ctx.investigation` | `tool/call`、`tool/result`、`investigation/report via case_report` | - | analyst 预设的 SOC/NSM 工具。pcap_filter 在启动前拒绝无效的 tshark 4.4.16 身份字段。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2223,3 +2224,137 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
+
+<a id="deepseek-aidsh-analyst-tools"></a>
+
+## `@deepseek-ai/dsh-analyst-tools`
+
+### `case_report`
+
+用 5W1H 数据包结案。只发送有证据支撑的陈述。这会替换会话日志上此前的 case_report。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "who": {
+      "type": "string",
+      "description": "Who was involved."
+    },
+    "what": {
+      "type": "string",
+      "description": "What happened."
+    },
+    "when": {
+      "type": "string",
+      "description": "When it happened."
+    },
+    "where": {
+      "type": "string",
+      "description": "Where it happened."
+    },
+    "why": {
+      "type": "string",
+      "description": "Why it happened, as evidenced."
+    },
+    "how": {
+      "type": "string",
+      "description": "How it happened, as evidenced."
+    }
+  },
+  "required": [
+    "who",
+    "what",
+    "when",
+    "where",
+    "why",
+    "how"
+  ]
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `logs`
+
+读取案件目录中的日志或文本文件。该文件保持只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the log file."
+    },
+    "start_line": {
+      "type": "integer",
+      "description": "1-based first line to return. Defaults to 1."
+    },
+    "max_lines": {
+      "type": "integer",
+      "description": "Maximum lines to return. Defaults to the rest of the file, still clipped by maxOutputChars."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `pcap_filter`
+
+用 tshark 过滤案件目录中的 pcap/pcapng。用 display_filter 表示 Wireshark 显示过滤器，用 fields 表示 `-e` 字段名。有效的 tshark 4.4.16 身份字段包括 kerberos.CNameString、samr.samr_UserInfo21.account_name 和 samr.samr_UserInfo21.full_name。无效字段（会被拒绝）：ldap.sAMAccountName、ldap.displayName、kerberos.username、samr.full_name。出现主机名或 IP 后，先追查 kerberos.CNameString，再追查 SAMR QueryUserInfo 以取显示名。SAMR full_name 是 UTF-16LE（Becka Rolf 是已验证示例），不是 LDAP displayName。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the capture file."
+    },
+    "display_filter": {
+      "type": "string",
+      "description": "Wireshark display filter, for example kerberos.CNameString."
+    },
+    "fields": {
+      "type": "array",
+      "description": "tshark `-e` field names. Invalid tshark 4.4.16 fields are rejected before spawn.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `pcap_info`
+
+用 capinfos（若 capinfos 缺失则用 tshark）汇总案件目录中的 pcap/pcapng。该文件保持只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Case-relative or absolute path of the capture file."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+`analyst` 预设的 SOC/NSM 工具。pcap_filter 会在启动子进程之前拒绝无效的 tshark 4.4.16 身份字段。

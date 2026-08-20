@@ -130,6 +130,8 @@ interface SessionEventMap {
 
 `UserMessage` is the identified, frozen user-role value shared by ordinary prompts, injected context, steering, and live inbox events. Event wrappers add only event-local position or outcome facts; the loop adds only driver-owned routing state while an item remains pending.
 
+`investigation/identity`, `investigation/hunt`, and `investigation/report` merge into `SessionEventMap` from [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md). They are log-only ledger events: unique labeled identities, auto-issued hunts, and the last 5W1H close packet.
+
 ### `TodoItem` — one todo-list entry
 
 The unit of the `todo/write` event's whole-list snapshot. Deliberately minimal — a `content` line and a three-state `status` (no id, priority, or `activeForm`): the list is replaced wholesale on every write, so entries need no stable identity. See the [todo_write Agent Note](../../.agents/notes/implemented/feature/2026-06-29-todo-write-tool.md).
