@@ -10,7 +10,7 @@ English | [中文](2026-08-20-dsh-case-dir-session-workspace.zh.md)
 
 ## Decision
 
-`resolveHeadlessCwd` is the one session-workspace bind for `headless-runner`. Config `cwd` wins when set; otherwise `DSH_CASE_DIR`, then `DSH_CWD`, then `process.cwd()`. Empty values are skipped. A relative path fails the run. The analyst overlay sets the same chain on the `headless-runner` row. Investigation containment is unchanged: evidence stays read-only, and writes outside the case still fail at `tools/pre-execute`.
+`resolveHeadlessCwd` is the one session-workspace bind for `headless-runner`. Config `cwd` wins when set; otherwise `DSH_CASE_DIR`, then `DSH_CWD`, then `process.cwd()`. Empty values are skipped. A relative path fails the run. The analyst overlay id-patches the `headless-runner` row with that same chain. An id-targeted patch replaces the whole `config`, so the overlay restates the shipped bundle's required `task: !!js ctx.headlessStartup.task`. Investigation containment is unchanged: evidence stays read-only, and writes outside the case still fail at `tools/pre-execute`.
 
 ## Alternatives considered
 
@@ -22,9 +22,11 @@ English | [中文](2026-08-20-dsh-case-dir-session-workspace.zh.md)
 
 **Bind only in the analyst overlay, leave the runner on `process.cwd()`.** Rejected because the live one-shot path is the runner. An overlay-only `cwd` still needs the runner to read Config `cwd`.
 
+**Stamp only `cwd` on the overlay `headless-runner` row.** Rejected because an id-targeted patch replaces the whole `config`. That drops required `task` and fails boot with `$.task missing required value`.
+
 ## Testing
 
-`packages/bundle/headless/tests/headless.spec.ts` stamps `DSH_CASE_DIR` on the session header. `examples/analyst/tests/case-workspace.spec.ts` runs glob and read against that workspace and fails if they list the launch checkout.
+`packages/bundle/headless/tests/headless.spec.ts` stamps `DSH_CASE_DIR` on the session header. `examples/analyst/tests/case-workspace.spec.ts` composes the shipped headless bundle patch with the overlay and fails if the patched runner config is missing `task`; it also runs glob and read against that workspace and fails if they list the launch checkout.
 
 ## Consequences
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-dsh-case-dir-session-workspace.md
-2026-08-20-dsh-case-dir-session-workspace.md: 10ce958cc1b2ee96c536db2b18118418c4964d49
-2026-08-20-dsh-case-dir-session-workspace.zh.md: 38b423ceb5cb46063da4541e741cc1cf32129bd4
+2026-08-20-dsh-case-dir-session-workspace.md: c26d6b834f04c511db29e5263c2b322aa1bbaadf
+2026-08-20-dsh-case-dir-session-workspace.zh.md: ffee8c6492081ce81da7c6eae858e508da795435
