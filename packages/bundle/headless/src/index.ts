@@ -8,6 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { isAbsolute, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
@@ -32,11 +33,31 @@ export const inject = ['agentDefaultModel', 'agents', 'sessions']
 export interface Config {
   /** The prompt text for the single run. */
   task: string
+  /**
+   * Absolute session workspace for glob, read, bash, and `{{cwd}}`.
+   * When omitted, `DSH_CASE_DIR`, then `DSH_CWD`, then `process.cwd()`.
+   */
+  cwd?: string
 }
 
 export const Config: z<Config> = z.object({
   task: z.string().required(),
+  cwd: z.string(),
 })
+
+/**
+ * Resolve the one-shot session workspace.
+ * @param cwd - explicit Config value; empty or omitted defers to the env chain.
+ * @returns the resolved absolute path.
+ */
+export function resolveHeadlessCwd(cwd?: string): string {
+  const raw = [cwd, process.env.DSH_CASE_DIR, process.env.DSH_CWD]
+    .find(value => typeof value === 'string' && value.trim() !== '') ?? process.cwd()
+  if (!isAbsolute(raw)) {
+    throw new Error('headless-runner: workspace cwd must be an absolute path')
+  }
+  return resolve(raw)
+}
 
 /** Outcome of one owned run interval. */
 interface RunOutcome {
@@ -91,10 +112,10 @@ function fail(io: HeadlessIo, error: unknown): void {
 /**
  * Run one task through a freshly created Agent and request process exit.
  * @param ctx - plugin context carrying the Agent, default model, Session, and launcher IO services.
- * @param task - one-shot task text.
+ * @param config - validated task and optional session workspace.
  * @param io - process-facing effects.
  */
-async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
+async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> {
   // Loader siblings mount concurrently. Await the complete application before
   // creating an Agent so its scoped tools and adapters are not half-composed.
   await ctx.get('loader')?.await()
@@ -111,7 +132,7 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   // the default preset here before the agent is published.
   const { agent } = await agents.create({
     sessionId: SessionId(`session-${randomUUID()}`),
-    meta: { cwd: process.cwd() },
+    meta: { cwd: resolveHeadlessCwd(config.cwd) },
     agentOptions: { provider: selection.provider, model: selection.model },
     setup: async (agentCtx) => {
       const selected: ModelSelectionRef = { current: selection, assembled: undefined }
@@ -123,7 +144,7 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   await agent.whenIdle()
   const firstSeq = agent.session.seq
   agent.followup(createUserMessage({
-    content: [{ type: 'text', text: task }],
+    content: [{ type: 'text', text: config.task }],
     source: { kind: 'user' },
   }))
   await agent.whenIdle()
@@ -139,7 +160,7 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
 /**
  * Mount the one-shot direct driver.
  * @param ctx - plugin context carrying core services and the launcher-provided exit request.
- * @param config - validated task config.
+ * @param config - validated task and optional session workspace.
  */
 export function apply(ctx: Context, config: Config): void {
   // Read through the global service store, not the property proxy: appExit is
@@ -149,5 +170,5 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error('headless-runner: the launcher must provide ctx.appExit before the tree mounts')
   }
   const io: HeadlessIo = { stdout: internals.stdout, stderr: internals.stderr, exit }
-  void run(ctx, config.task, io).catch((error: unknown) => { fail(io, error) })
+  void run(ctx, config, io).catch((error: unknown) => { fail(io, error) })
 }

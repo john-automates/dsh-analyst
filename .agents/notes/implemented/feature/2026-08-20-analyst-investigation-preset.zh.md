@@ -18,7 +18,7 @@ John 既有的分析师工作流（Chris Sanders 调查方法；先 Kerberos `CN
 
 `@deepseek-ai/dsh-analyst-tools` 是函数插件。它注册 `pcap_info`、`pcap_filter`、`logs` 和 `case_report`。`pcap_filter` 在启动进程前拒绝 `ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username` 和 `samr.full_name`。辅助进程用 `execFile`，cwd 为案件目录。
 
-Qwen 被文档化为头等的自定义 OpenAI-completions 提供方（`supportsDeveloperRole: false`，`maxTokensField: max_tokens`）。Bedrock Qwen3 Coder 和本地 35B 使用同一适配器、不同路由。启动不要求 `DEEPSEEK_API_KEY`。当组合了花名册时，headless 会调用 `ctx.agentPresets.mount`。
+Qwen 被文档化为头等的自定义 OpenAI-completions 提供方（`supportsDeveloperRole: false`，`maxTokensField: max_tokens`）。Bedrock Qwen3 Coder 和本地 35B 使用同一适配器、不同路由。启动不要求 `DEEPSEEK_API_KEY`。当组合了花名册时，headless 会调用 `ctx.agentPresets.mount`。`DSH_CASE_DIR` 既是会话工作区（glob、read、bash、`{{cwd}}`），也是调查隔离根目录；见 [DSH_CASE_DIR 会话工作区](../bug-fix/2026-08-20-dsh-case-dir-session-workspace.md)。
 
 ## 备选方案
 

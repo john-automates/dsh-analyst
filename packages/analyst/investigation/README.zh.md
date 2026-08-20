@@ -28,7 +28,7 @@
     autoHunt: true
 ```
 
-未知键在加载时失败。相对 `caseDir` 在加载时失败。
+未知键在加载时失败。相对 `caseDir` 在加载时失败。headless 把同一条 `DSH_CASE_DIR` 链绑定为会话工作区，因此 glob、read、bash 和 `{{cwd}}` 看到的是案件目录；`caseDir` 仍拒绝写入案件之外的路径。
 
 设计见[调查分析预设](../../../.agents/notes/implemented/feature/2026-08-20-analyst-investigation-preset.md)。
 

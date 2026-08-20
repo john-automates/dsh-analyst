@@ -4,10 +4,17 @@
 # `ctx.agentPresets` exists. No DeepSeek API key is required; configure a
 # Qwen (or other) OpenAI-compatible route in settings instead.
 #
-# cd into the case directory first. DSH_CASE_DIR defaults to process.cwd().
+# Run from the case directory, or set DSH_CASE_DIR to that directory. When
+# DSH_CASE_DIR is set, the session workspace, tool cwd, and persona case
+# directory are that path. Investigation still denies writes outside the case
+# and keeps evidence read-only.
 
 - insert:
     - id: agent-presets
       name: '@deepseek-ai/dsh-agent-presets'
       config:
         default: analyst
+
+- id: headless-runner
+  config:
+    cwd: !!js process.env.DSH_CASE_DIR ?? process.env.DSH_CWD ?? process.cwd()

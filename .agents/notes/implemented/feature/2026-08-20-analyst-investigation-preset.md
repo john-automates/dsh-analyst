@@ -18,7 +18,7 @@ Add a fifth shipped preset, `analyst`, and two packages under `packages/analyst/
 
 `@deepseek-ai/dsh-analyst-tools` is a function plugin. It registers `pcap_info`, `pcap_filter`, `logs`, and `case_report`. `pcap_filter` rejects `ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, and `samr.full_name` before spawn. Helpers use `execFile` with the case directory as cwd.
 
-Qwen is documented as a first-class custom OpenAI-completions provider (`supportsDeveloperRole: false`, `maxTokensField: max_tokens`). Bedrock Qwen3 Coder and a local 35B use the same adapter with different routes. Boot does not require `DEEPSEEK_API_KEY`. Headless joins `ctx.agentPresets.mount` when a roster is composed.
+Qwen is documented as a first-class custom OpenAI-completions provider (`supportsDeveloperRole: false`, `maxTokensField: max_tokens`). Bedrock Qwen3 Coder and a local 35B use the same adapter with different routes. Boot does not require `DEEPSEEK_API_KEY`. Headless joins `ctx.agentPresets.mount` when a roster is composed. `DSH_CASE_DIR` is the session workspace (glob, read, bash, `{{cwd}}`) as well as the investigation containment root; see [DSH_CASE_DIR session workspace](../bug-fix/2026-08-20-dsh-case-dir-session-workspace.md).
 
 ## Alternatives considered
 
