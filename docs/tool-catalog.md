@@ -41,7 +41,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
-| `@deepseek-ai/dsh-analyst-tools` | `bind_relationship`, `case_report`, `logs`, `pcap_filter`, `pcap_info` | `ctx.tools`, `ctx.investigation` | `tool/call`, `tool/result`, `investigation/bind via bind_relationship`, `investigation/report via case_report` | - | SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn. |
+| `@deepseek-ai/dsh-analyst-tools` | `bind_relationship`, `case_report`, `investigation_mission`, `investigation_plan`, `logs`, `pcap_filter`, `pcap_info` | `ctx.tools`, `ctx.investigation` | `tool/call`, `tool/result`, `investigation/bind via bind_relationship`, `investigation/report via case_report`, `investigation/mission via investigation_mission`, `investigation/plan via investigation_plan`, `investigation/action and investigation/extras via leftover hunts` | - | SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2227,7 +2227,7 @@ web_search and web_fetch keep provider selection behind ctx.web so model-visible
 
 ### `bind_relationship`
 
-Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, distractor, unknown) on each endpoint. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address. Cue and observation addresses default to c2 and cannot be victim. Exactly one victim.
+Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, distractor, unknown) on each endpoint. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim. Exactly one victim. Name a C2 hypothesis and check CDN/DC/update alternatives on the Plan before this bind.
 
 ```json
 {
@@ -2285,7 +2285,7 @@ Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, dis
               },
               "because": {
                 "type": "string",
-                "description": "Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address."
+                "description": "Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address or a well-known CDN or update destination."
               }
             },
             "required": [
@@ -2421,6 +2421,122 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
     "why",
     "how"
   ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `investigation_mission`
+
+Update the chassis Mission cue pointer and slot 0a validate-the-cue. Purpose is stamped at session start as a victim-identity + C2 investigation and cannot be overwritten.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "purpose": {
+      "type": "string",
+      "description": "Must remain the chassis purpose: This is a victim-identity + C2 investigation."
+    },
+    "cue_addr": {
+      "type": "string",
+      "description": "Cue or observation address."
+    },
+    "cue_evidence_id": {
+      "type": "string",
+      "description": "Id of the cited cue evidence."
+    },
+    "cue_validation": {
+      "type": "string",
+      "description": "Slot 0a: whether this observation is valid, still open, or invalid.",
+      "enum": [
+        "valid",
+        "open",
+        "invalid"
+      ]
+    },
+    "closed_means": {
+      "type": "array",
+      "description": "Ignored. Chassis closed-means stay who/where on the victim, C2 is not CDN/DC/update, extras only if proven.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "purpose",
+    "cue_addr",
+    "cue_evidence_id",
+    "cue_validation"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `investigation_plan`
+
+Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis is I believe X because Y plus a disconfirm test. Candidate labels are victim, c2, dc, cdn, update, distractor. Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan. Answers generate more questions. This call appends; it does not replace.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "inventory": {
+      "type": "array",
+      "description": "Sources that can attest.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Known gaps.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "description": "Hypotheses to append.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Hypothesis id. Action rows cite this id."
+          },
+          "claim": {
+            "type": "string",
+            "description": "I believe X because Y."
+          },
+          "disconfirm": {
+            "type": "string",
+            "description": "How this hypothesis would be killed."
+          },
+          "label": {
+            "type": "string",
+            "description": "Candidate role label.",
+            "enum": [
+              "victim",
+              "c2",
+              "dc",
+              "cdn",
+              "update",
+              "distractor"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "claim",
+          "disconfirm",
+          "label"
+        ]
+      }
+    }
+  }
 }
 ```
 

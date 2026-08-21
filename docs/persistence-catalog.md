@@ -476,6 +476,21 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 
 ### `investigation/*`
 
+<a id="investigationaction--log-only"></a>
+
+#### `investigation/action` — log-only
+
+```ts persistence-catalog
+/**
+ * One Action hunt outcome. Every auto-run hunt row carries
+ * `hypothesis_id`, including identity hunts. BindRelationship is not
+ * a substitute for naming the C2 H.
+ */
+'investigation/action': InvestigationAction
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:322`](../packages/analyst/investigation/src/types.ts)
+
 <a id="investigationbind--log-only"></a>
 
 #### `investigation/bind` — log-only
@@ -488,7 +503,23 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 'investigation/bind': RelationshipBind
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:284`](../packages/analyst/investigation/src/types.ts)
+
+<a id="investigationextras--log-only"></a>
+
+#### `investigation/extras` — log-only
+
+```ts persistence-catalog
+/**
+ * Report-hook leftover extras. The last `investigation/extras` wins for
+ * fields it sets. Not an accepted close: who/where/what/when/why/how are
+ * absent. `foldReport` overlays these extras onto a later 5W1H packet.
+ * A denied prose `case_report` does not wipe this event.
+ */
+'investigation/extras': CaseReportExtras
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:329`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -502,21 +533,23 @@ Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/
  * peer, those identity hunts issue only for that C2-talking IP. Assigning
  * victim to a cue/observation address issues `other-end` for that cue IP
  * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
- * LAN victim and unique non-LAN C2 issues `extra-wan` for that victim
- * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each C2
- * IPv4 (bound plus harvested extras; TLS SNI / DNS). A both-LAN
- * conversation deny does not issue `other-end`, `extra-wan`, or
- * `c2-domain` and does not invent a C2. When `autoHunt` is true,
- * outstanding issued hunts execute through `pcap_filter` with the scoped
- * display filter; `other-end` and `c2-domain` auto-run even though the
- * subject is the cue or C2, and `extra-wan` auto-runs for the LAN victim
- * even when a C2-talking focus IP exists. A new hostname issues Kerberos
- * then SAMR. A new user issues SAMR.
+ * LAN victim and unique non-LAN C2 that is not a well-known CDN or
+ * update destination issues `extra-wan` for that victim
+ * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each
+ * remaining C2 IPv4 (bound plus harvested extras; TLS SNI / DNS). A
+ * both-LAN or CDN/update C2 deny does not issue `other-end`,
+ * `extra-wan`, or `c2-domain` and does not invent a C2. When `autoHunt`
+ * is true and Plan is ready, outstanding issued hunts execute through
+ * `pcap_filter` with the scoped display filter; `other-end` and
+ * `c2-domain` auto-run even though the subject is the cue or C2, and
+ * `extra-wan` auto-runs for the LAN victim even when a C2-talking
+ * focus IP exists. Mission alone does not auto-run. A new hostname
+ * issues Kerberos then SAMR. A new user issues SAMR.
  */
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:168`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:279`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -530,7 +563,37 @@ Source: [`packages/analyst/investigation/src/types.ts:168`](../packages/analyst/
 'investigation/identity': Identity
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:149`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:258`](../packages/analyst/investigation/src/types.ts)
+
+<a id="investigationmission--log-only"></a>
+
+#### `investigation/mission` — log-only
+
+```ts persistence-catalog
+/**
+ * Mission persist. The last `investigation/mission` wins. The plugin
+ * stamps Mission at session start as a victim-identity + C2
+ * investigation. Mission scopes the case. Auto-hunts run after Plan
+ * is ready. Bind still needs a named C2 hypothesis on the Plan.
+ */
+'investigation/mission': InvestigationMission
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:311`](../packages/analyst/investigation/src/types.ts)
+
+<a id="investigationplan--log-only"></a>
+
+#### `investigation/plan` — log-only
+
+```ts persistence-catalog
+/**
+ * One append-only Plan entry. Fold concatenates inventory, gaps, and
+ * first-seen hypotheses. Answers generate more questions.
+ */
+'investigation/plan': InvestigationPlanEntry
+```
+
+Source: [`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -551,14 +614,15 @@ Source: [`packages/analyst/investigation/src/types.ts:149`](../packages/analyst/
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP frames
  * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
- * plus extra WAN destinations whose `evidence_id` is that victim, when
- * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
- * on any of those C2 IPv4s, when one exists.
+ * plus extra WAN destinations whose `evidence_id` is that victim, omitting
+ * an IP whose evidenced hostname is a well-known CDN or update name, when
+ * any remain. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+ * on any remaining C2 IPv4s that is not CDN/update, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:192`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:304`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

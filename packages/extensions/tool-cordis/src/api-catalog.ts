@@ -878,13 +878,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'recordReport(session: Session, report: CaseReport): void',
-        description: 'Append a whole-value 5W1H close packet.',
+        description: 'Append a whole-value 5W1H close packet. Re-merges leftover extras from the Report hook so a later accepted close keeps them.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'report', description: '5W1H fields.' }],
       },
       {
         signature: 'recordBind(session: Session, bind: RelationshipBind): void',
         description: 'Append a whole-value conversation bind. The last bind is the live bind.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'bind', description: 'resolved relationship and endpoints.' }],
+      },
+      {
+        signature: 'recordMission(session: Session, mission: InvestigationMission): void',
+        description: 'Append a whole-value Mission. The last Mission is live. Does not issue or auto-run hunts.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'mission', description: 'Mission fields.' }],
+      },
+      {
+        signature: 'recordPlan(session: Session, entry: InvestigationPlanEntry): void',
+        description: 'Append one Plan entry. Inventory, gaps, and new hypothesis ids concatenate. Does not issue or auto-run hunts.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'entry', description: 'Plan entry to append.' }],
+      },
+      {
+        signature: 'recordAction(session: Session, action: InvestigationAction): void',
+        description: 'Append one Action hunt outcome.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'action', description: 'Action row.' }],
+      },
+      {
+        signature: 'mission(session: Session): InvestigationMission | undefined',
+        description: 'Latest Mission on a session log.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'the last Mission, or undefined.',
+      },
+      {
+        signature: 'extras(session: Session): CaseReportExtras | undefined',
+        description: 'Leftover extras from the Report hook. Not an accepted close.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'extras, or undefined when none exist.',
       },
       {
         signature: 'resolveInsideCase(target: string): string',
@@ -2945,12 +2972,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
   },
   {
+    name: 'CandidateLabel',
+    declaration: 'export type CandidateLabel = \'victim\' | \'c2\' | \'dc\' | \'cdn\' | \'update\' | \'distractor\';',
+  },
+  {
     name: 'CaseIdentitySlot',
     declaration: 'export interface CaseIdentitySlot {\n    entity_id: string;\n    ip?: string;\n    mac?: string;\n    hostname?: string;\n    user?: string;\n    full_name?: string;\n}',
   },
   {
     name: 'CaseReport',
-    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n    c2_domain?: string;\n}',
+    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n    c2_ips?: string[];\n    c2_domain?: string;\n}',
+  },
+  {
+    name: 'CaseReportExtras',
+    declaration: 'export interface CaseReportExtras {\n    c2_ips?: string[];\n    c2_domain?: string;\n    killed?: string[];\n}',
   },
   {
     name: 'ClientResponse',
@@ -3139,6 +3174,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CredentialRef',
     declaration: 'export type CredentialRef = Branded<\'CredentialRef\'>;',
+  },
+  {
+    name: 'CueValidation',
+    declaration: 'export type CueValidation = \'valid\' | \'open\' | \'invalid\';',
   },
   {
     name: 'DiffCallView',
@@ -3366,7 +3405,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HuntKind',
-    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\' | \'other-end\' | \'c2-domain\';',
+    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\' | \'other-end\' | \'c2-domain\' | \'extra-wan\';',
   },
   {
     name: 'HuntSubjectKind',
@@ -3415,6 +3454,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'InvariantInstaller',
     declaration: 'export interface InvariantInstaller {\n    (ctx: Context, fail: InvariantFailure): void | Promise<void>;\n    readonly inject?: Inject;\n}',
+  },
+  {
+    name: 'InvestigationAction',
+    declaration: 'export interface InvestigationAction {\n    huntKind: HuntKind;\n    subject: string;\n    hypothesis_id: string;\n    evidence_id?: string;\n    thesis: ThesisRevise;\n}',
+  },
+  {
+    name: 'InvestigationHypothesis',
+    declaration: 'export interface InvestigationHypothesis {\n    id: string;\n    claim: string;\n    disconfirm: string;\n    label: CandidateLabel;\n}',
+  },
+  {
+    name: 'InvestigationMission',
+    declaration: 'export interface InvestigationMission {\n    purpose: string;\n    slots: Record<string, {\n        score?: number;\n        value?: string;\n    }>;\n    closedMeans: string[];\n    cue: {\n        addr: string;\n        evidence_id: string;\n    };\n    cueValidation: CueValidation;\n}',
+  },
+  {
+    name: 'InvestigationPlanEntry',
+    declaration: 'export interface InvestigationPlanEntry {\n    inventory?: string[];\n    gaps?: string[];\n    hypotheses?: InvestigationHypothesis[];\n}',
   },
   {
     name: 'InvocationDescriptor',
@@ -4639,6 +4694,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
+  },
+  {
+    name: 'ThesisRevise',
+    declaration: 'export interface ThesisRevise {\n    name: string;\n    claim: string;\n    rule: string;\n    result: \'confirm\' | \'kill\' | \'gap\';\n}',
   },
   {
     name: 'TodoItem',

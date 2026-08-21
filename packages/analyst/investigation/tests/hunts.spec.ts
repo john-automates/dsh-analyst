@@ -201,6 +201,23 @@ describe('auto-issued hunts', () => {
       fields: ['samr.samr_UserInfo21.account_name', 'samr.samr_UserInfo21.full_name'],
     })
     expect(formatLedger([], [], undefined)).toBe('')
+    expect(formatLedger([], [], undefined, undefined, '', {
+      purpose: 'This is a victim-identity + C2 investigation.',
+      slots: { '0a': { value: 'valid' } },
+      closedMeans: ['who/where proven on the victim'],
+      cue: { addr: C2, evidence_id: 'conv-1' },
+      cueValidation: 'valid',
+    })).toContain('Mission: This is a victim-identity + C2 investigation.')
+    expect(formatLedger([], [], undefined, undefined, '', undefined, {
+      inventory: ['evidence/a.pcap'],
+      gaps: [],
+      hypotheses: [{
+        id: 'h-c2',
+        claim: 'I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that cue',
+        disconfirm: 'SNI is a CDN or update name',
+        label: 'c2',
+      }],
+    })).toContain('Plan: 1 hypotheses')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Identities:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Hunts:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('case_report')
@@ -226,9 +243,10 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hostHunt, twoClientFixture)).toBe(false)
     expect(shouldAutoRunHunt(userHunt, twoClientFixture)).toBe(false)
     const issued = [c2Mac, idleMac, lanMac, hostHunt]
-    expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([lanMac])
-    expect(huntsToAutoRun(issued, '', new Set())).toEqual([idleMac, lanMac, hostHunt])
-    expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]))).toEqual([])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set(), true)).toEqual([lanMac])
+    expect(huntsToAutoRun(issued, '', new Set(), true)).toEqual([idleMac, lanMac, hostHunt])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]), true)).toEqual([])
   })
 
   it('issues other-end for a cue IP and auto-runs that hunt', () => {
@@ -247,7 +265,8 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hunt, '')).toBe(true)
     expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
     expect(shouldAutoRunHunt({ kind: 'other-end', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
-    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set(), true)).toEqual([hunt])
     expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
   })
 
@@ -275,7 +294,8 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hunt, '')).toBe(true)
     expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
     expect(shouldAutoRunHunt({ kind: 'c2-domain', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
-    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set(), true)).toEqual([hunt])
     expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
   })
 
@@ -300,7 +320,8 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt({ kind: 'extra-wan', subjectKind: 'ip', subject: C2 }, '')).toBe(false)
     expect(shouldAutoRunHunt({ kind: 'extra-wan', subjectKind: 'ip', subject: LAN_B }, twoClientFixture))
       .toBe(true)
-    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set(), true)).toEqual([hunt])
     expect(huntsForNewIdentities([lanA], [], twoClientFixture)).not.toContainEqual(hunt)
   })
 })

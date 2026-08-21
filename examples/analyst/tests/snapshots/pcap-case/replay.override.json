@@ -13,6 +13,16 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_investigation_plan", "name": "investigation_plan", "argumentsDelta": "{\"inventory\":[\"evidence/a.pcap\"],\"gaps\":[\"C2 domain unknown\"],\"hypotheses\":[{\"id\":\"h-c2\",\"claim\":\"I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue\",\"disconfirm\":\"SNI is a CDN or update name or the peer is a LAN DC\",\"label\":\"c2\"},{\"id\":\"h-cdn\",\"claim\":\"I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there\",\"disconfirm\":\"a non-CDN dotted name is evidenced on that IP\",\"label\":\"cdn\"}]}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_investigation_plan", "name": "investigation_plan", "arguments": "{\"inventory\":[\"evidence/a.pcap\"],\"gaps\":[\"C2 domain unknown\"],\"hypotheses\":[{\"id\":\"h-c2\",\"claim\":\"I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue\",\"disconfirm\":\"SNI is a CDN or update name or the peer is a LAN DC\",\"label\":\"c2\"},{\"id\":\"h-cdn\",\"claim\":\"I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there\",\"disconfirm\":\"a non-CDN dotted name is evidenced on that IP\",\"label\":\"cdn\"}]}" } },
+      { "type": "usage", "usage": { "inputTokens": 28, "outputTokens": 10 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
       { "type": "tool-call-delta", "index": 0, "id": "call_bind_relationship", "name": "bind_relationship", "argumentsDelta": "{\"src\":\"10.0.10.2\",\"dst\":\"198.51.100.80\",\"dport\":443,\"t\":\"2026-08-21T00:00:00Z\",\"evidence_id\":\"conv-1\",\"endpoints\":[{\"addr\":\"10.0.10.2\",\"role\":\"victim\",\"because\":\"10.0.10.2 talking to 198.51.100.80 in evidence conv-1\"},{\"addr\":\"198.51.100.80\",\"because\":\"cue/observation address\"}]}" },
       { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_bind_relationship", "name": "bind_relationship", "arguments": "{\"src\":\"10.0.10.2\",\"dst\":\"198.51.100.80\",\"dport\":443,\"t\":\"2026-08-21T00:00:00Z\",\"evidence_id\":\"conv-1\",\"endpoints\":[{\"addr\":\"10.0.10.2\",\"role\":\"victim\",\"because\":\"10.0.10.2 talking to 198.51.100.80 in evidence conv-1\"},{\"addr\":\"198.51.100.80\",\"because\":\"cue/observation address\"}]}" } },
       { "type": "usage", "usage": { "inputTokens": 30, "outputTokens": 10 } },

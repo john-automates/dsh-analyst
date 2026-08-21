@@ -130,7 +130,7 @@ interface SessionEventMap {
 
 `UserMessage` 是普通提示词、注入上下文、steering（中途引导）与实时收件箱事件共享的带标识且冻结的 user-role 值。事件包装层只会增加事件本地的位置或结果事实；条目待处理期间，loop 只额外附加驱动器自有的路由状态。
 
-`investigation/identity`、`investigation/hunt`、`investigation/bind` 和 `investigation/report` 由 [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md) 合并进 `SessionEventMap`。它们是只记入日志的账本事件：唯一的带标签身份、自动下发的 hunt、当前会话绑定，以及最后一份 5W1H 结案包。
+`investigation/identity`、`investigation/hunt`、`investigation/bind`、`investigation/report`、`investigation/mission`、`investigation/plan`、`investigation/action` 和 `investigation/extras` 由 [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md) 合并进 `SessionEventMap`。它们是只记入日志的账本事件：唯一的带标签身份、自动下发的 hunt、当前会话绑定、最后一份 5W1H 结案包、Mission／Plan／Action 底盘行，以及无结案时持久化的遗留附加项。
 
 ### `TodoItem`：一条待办项
 
@@ -678,7 +678,8 @@ recordIdentity(session: Session, identity: Identity): boolean
 recordHunt(session: Session, hunt: Hunt): boolean
 
 /**
- * Append a whole-value 5W1H close packet.
+ * Append a whole-value 5W1H close packet. Re-merges leftover extras from
+ * the Report hook so a later accepted close keeps them.
  * @param session - session to append to.
  * @param report - 5W1H fields.
  */
@@ -690,6 +691,43 @@ recordReport(session: Session, report: CaseReport): void
  * @param bind - resolved relationship and endpoints.
  */
 recordBind(session: Session, bind: RelationshipBind): void
+
+/**
+ * Append a whole-value Mission. The last Mission is live. Does not issue
+ * or auto-run hunts.
+ * @param session - session to append to.
+ * @param mission - Mission fields.
+ */
+recordMission(session: Session, mission: InvestigationMission): void
+
+/**
+ * Append one Plan entry. Inventory, gaps, and new hypothesis ids concatenate.
+ * Does not issue or auto-run hunts.
+ * @param session - session to append to.
+ * @param entry - Plan entry to append.
+ */
+recordPlan(session: Session, entry: InvestigationPlanEntry): void
+
+/**
+ * Append one Action hunt outcome.
+ * @param session - session to append to.
+ * @param action - Action row.
+ */
+recordAction(session: Session, action: InvestigationAction): void
+
+/**
+ * Latest Mission on a session log.
+ * @param session - session whose log is folded.
+ * @returns the last Mission, or undefined.
+ */
+mission(session: Session): InvestigationMission | undefined
+
+/**
+ * Leftover extras from the Report hook. Not an accepted close.
+ * @param session - session whose log is folded.
+ * @returns extras, or undefined when none exist.
+ */
+extras(session: Session): CaseReportExtras | undefined
 
 /**
  * Resolve a path and require it to stay inside the case directory.
@@ -720,7 +758,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:267`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:302`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

@@ -15,6 +15,9 @@ const HUNT_SUBJECTS = new Set(['ip', 'hostname', 'user'])
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const CLAIM_FIELDS = ['what', 'when', 'why', 'how'] as const
 const SLOT_FIELDS = ['ip', 'mac', 'hostname', 'user'] as const
+const CUE_VALIDATIONS = new Set(['valid', 'open', 'invalid'])
+const CANDIDATE_LABELS = new Set(['victim', 'c2', 'dc', 'cdn', 'update', 'distractor'])
+const THESIS_RESULTS = new Set(['confirm', 'kill', 'gap'])
 
 /** Cordis companion plugin name. */
 export const name = 'investigation-invariant'
@@ -107,6 +110,106 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
     }
     return
   }
+  if (event.type === 'investigation/mission') {
+    const data = event.data as {
+      purpose?: unknown
+      slots?: unknown
+      closedMeans?: unknown
+      cue?: { addr?: unknown; evidence_id?: unknown }
+      cueValidation?: unknown
+    }
+    requireText(data.purpose, 'investigation/mission purpose', fail)
+    if (typeof data.cueValidation !== 'string' || !CUE_VALIDATIONS.has(data.cueValidation)) {
+      fail(`investigation/mission cueValidation ${JSON.stringify(data.cueValidation)} is not valid`)
+    }
+    if (typeof data.cue !== 'object' || data.cue === null) {
+      fail('investigation/mission cue must be an object')
+    } else {
+      requireText(data.cue.addr, 'investigation/mission cue.addr', fail)
+      requireText(data.cue.evidence_id, 'investigation/mission cue.evidence_id', fail)
+    }
+    if (!Array.isArray(data.closedMeans)) {
+      fail('investigation/mission closedMeans must be an array')
+    } else {
+      for (const [index, item] of data.closedMeans.entries()) {
+        requireText(item, `investigation/mission closedMeans[${index}]`, fail)
+      }
+    }
+    if (typeof data.slots !== 'object' || data.slots === null || Array.isArray(data.slots)) {
+      fail('investigation/mission slots must be an object')
+    }
+    return
+  }
+  if (event.type === 'investigation/plan') {
+    const data = event.data as {
+      inventory?: unknown
+      gaps?: unknown
+      hypotheses?: unknown
+    }
+    validateStringList(data.inventory, 'investigation/plan inventory', fail)
+    validateStringList(data.gaps, 'investigation/plan gaps', fail)
+    if (data.hypotheses !== undefined) {
+      if (!Array.isArray(data.hypotheses)) {
+        fail('investigation/plan hypotheses must be an array')
+      } else {
+        for (const [index, row] of data.hypotheses.entries()) {
+          if (typeof row !== 'object' || row === null) {
+            fail(`investigation/plan hypotheses[${index}] must be an object`)
+            continue
+          }
+          const hypothesis = row as {
+            id?: unknown
+            claim?: unknown
+            disconfirm?: unknown
+            label?: unknown
+          }
+          requireText(hypothesis.id, `investigation/plan hypotheses[${index}].id`, fail)
+          requireText(hypothesis.claim, `investigation/plan hypotheses[${index}].claim`, fail)
+          requireText(hypothesis.disconfirm, `investigation/plan hypotheses[${index}].disconfirm`, fail)
+          if (typeof hypothesis.label !== 'string' || !CANDIDATE_LABELS.has(hypothesis.label)) {
+            fail(`investigation/plan hypotheses[${index}].label ${JSON.stringify(hypothesis.label)} is not valid`)
+          }
+        }
+      }
+    }
+    return
+  }
+  if (event.type === 'investigation/action') {
+    const data = event.data as {
+      huntKind?: unknown
+      subject?: unknown
+      hypothesis_id?: unknown
+      evidence_id?: unknown
+      thesis?: {
+        name?: unknown
+        claim?: unknown
+        rule?: unknown
+        result?: unknown
+      }
+    }
+    if (typeof data.huntKind !== 'string' || !HUNT_KINDS.has(data.huntKind)) {
+      fail(`investigation/action carries unknown huntKind ${JSON.stringify(data.huntKind)}`)
+    }
+    requireText(data.subject, 'investigation/action subject', fail)
+    requireText(data.hypothesis_id, 'investigation/action hypothesis_id', fail)
+    if (data.evidence_id !== undefined) requireText(data.evidence_id, 'investigation/action evidence_id', fail)
+    const thesis = data.thesis
+    if (thesis === undefined || typeof thesis !== 'object' || thesis === null) {
+      fail('investigation/action thesis is required')
+    } else {
+      requireText(thesis.name, 'investigation/action thesis.name', fail)
+      requireText(thesis.claim, 'investigation/action thesis.claim', fail)
+      requireText(thesis.rule, 'investigation/action thesis.rule', fail)
+      if (typeof thesis.result !== 'string' || !THESIS_RESULTS.has(thesis.result)) {
+        fail(`investigation/action thesis.result ${JSON.stringify(thesis.result)} is not valid`)
+      }
+    }
+    return
+  }
+  if (event.type === 'investigation/extras') {
+    validateExtras(event.data, 'investigation/extras', fail)
+    return
+  }
   if (event.type !== 'investigation/report') return
   const data = event.data
   for (const field of CLAIM_FIELDS) {
@@ -123,6 +226,46 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
         requireText(ip, `investigation/report c2_ips[${index}]`, fail)
       }
     }
+  }
+}
+
+function validateStringList(value: unknown, label: string, fail: InvariantFailure): void {
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    fail(`${label} must be an array`)
+    return
+  }
+  for (const [index, item] of value.entries()) {
+    requireText(item, `${label}[${index}]`, fail)
+  }
+}
+
+function validateExtras(data: {
+  c2_domain?: unknown
+  c2_ips?: unknown
+  killed?: unknown
+}, label: string, fail: InvariantFailure): void {
+  if (data.c2_domain !== undefined) requireText(data.c2_domain, `${label} c2_domain`, fail)
+  if (data.c2_ips !== undefined) {
+    if (!Array.isArray(data.c2_ips) || data.c2_ips.length === 0) {
+      fail(`${label} c2_ips must be a non-empty array`)
+    } else {
+      for (const [index, ip] of data.c2_ips.entries()) {
+        requireText(ip, `${label} c2_ips[${index}]`, fail)
+      }
+    }
+  }
+  if (data.killed !== undefined) {
+    if (!Array.isArray(data.killed) || data.killed.length === 0) {
+      fail(`${label} killed must be a non-empty array`)
+    } else {
+      for (const [index, id] of data.killed.entries()) {
+        requireText(id, `${label} killed[${index}]`, fail)
+      }
+    }
+  }
+  if (data.c2_domain === undefined && data.c2_ips === undefined && data.killed === undefined) {
+    fail(`${label} must set c2_ips, c2_domain, or killed`)
   }
 }
 
