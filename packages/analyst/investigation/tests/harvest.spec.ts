@@ -266,4 +266,79 @@ describe('identity harvest', () => {
     )).toEqual([LAN_A])
     expect(ipsEvidencingIdentity(host, `NBNS Registration NB otherhost<00>\tip.src: ${LAN_A}`)).toEqual([])
   })
+
+  it('stamps user and full_name evidence_id from the conversation client, not the hunt-subject scopeIp', () => {
+    const LAN_A = '10.0.10.2'
+    const LAN_B = '10.0.10.3'
+    const C2 = '198.51.100.80'
+    const MAC_A = '02:00:00:00:00:0a'
+    const HOST_A = 'lan-host'
+    const USER = 'lan-user'
+    const FULL = 'Lan User'
+    const kerberos = harvestIdentities(
+      `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}\thostname: ${HOST_A}`,
+      `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}\thostname: ${HOST_A}`,
+      LAN_B,
+    )
+    expect(kerberos.filter(item => item.kind === 'user')).toEqual([
+      { kind: 'user', value: USER, label: 'user', evidence_id: LAN_A },
+    ])
+    expect(kerberos.filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: HOST_A, label: 'hostname', evidence_id: LAN_B },
+    ])
+    const samr = harvestIdentities(
+      `ip.src: ${LAN_A}\tip.dst: ${LAN_B}\taccount_name: ${USER}\tfull_name: ${FULL}`,
+      `ip.src: ${LAN_A}\tip.dst: ${LAN_B}\taccount_name: ${USER}\tfull_name: ${FULL}`,
+      LAN_B,
+    )
+    expect(samr.filter(item => item.kind === 'user')).toEqual([
+      { kind: 'user', value: USER, label: 'user', evidence_id: LAN_A },
+    ])
+    expect(samr.filter(item => item.kind === 'full_name')).toEqual([
+      { kind: 'full_name', value: FULL, label: 'full name', evidence_id: LAN_A },
+    ])
+    expect(harvestIdentities(
+      `ip.src: ${LAN_B}\tip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
+      `ip.src: ${LAN_B}\tip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `kerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user' })
+    expect(harvestIdentities(
+      `ip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
+      `ip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `eth.src: ${MAC_A}\tip.src: ${LAN_A}\t${LAN_A} → ${C2}`,
+      `eth.src: ${MAC_A}\tip.src: ${LAN_A}\t${LAN_A} → ${C2}`,
+      LAN_B,
+    ).find(item => item.kind === 'mac')).toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A })
+    const user = identityOf('user', USER)!
+    const name = identityOf('full_name', FULL)!
+    expect(ipsEvidencingIdentity(user, `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(
+      { ...user, evidence_id: LAN_B },
+      `ip.src: ${LAN_B}\tip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(name, `ip.src: ${LAN_A}\tip.dst: ${LAN_B}\tfull_name: ${FULL}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(identityOf('full_name', 'Becka Rolf')!, `${LAN_A} → ${LAN_B}  ${BECKA_HEX}`))
+      .toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(user, `user: ${USER}`)).toEqual([])
+    expect(ipsEvidencingIdentity(identityOf('ip', LAN_A)!, `${LAN_A} → ${LAN_B}`)).toEqual([])
+    expect(ipsEvidencingIdentity(user, `${LAN_A} → ${LAN_B}  kerberos.CNameString: other-user`)).toEqual([])
+    expect(ipsEvidencingIdentity(name, `${LAN_A} → ${LAN_B}  full_name: Other Name`)).toEqual([])
+    expect(ipsEvidencingIdentity(name, `${LAN_A} → ${LAN_B}  00:01:02:03:04:05:06:07`)).toEqual([])
+    expect(ipsEvidencingIdentity(
+      user,
+      `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}\n${LAN_A} → ${LAN_B}  account_name: ${USER}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(
+      user,
+      `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}\n${C2} → ${LAN_B}  kerberos.CNameString: ${USER}`,
+    )).toEqual([LAN_A, C2])
+  })
 })
