@@ -1818,6 +1818,121 @@ describe('analyst tools', () => {
     await machine.ctx.fiber.dispose()
   })
 
+  it('persists a workstation hostname on case_report instead of an AD SRV / DC locator', async () => {
+    const srv = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
+    const workstation = 'desktop-test01'
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: srv, label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: workstation, label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const cue = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-srv-hostname-cue'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '198.51.100.80', role: 'victim', because: 'alert named this host' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(cue.isError).toBe(true)
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-srv-hostname'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-srv-hostname'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+        where: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: workstation },
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.who.hostname).toBe(workstation)
+    expect(ctx.investigation.report(owner.session)?.where.hostname).toBe(workstation)
+    expect(ctx.investigation.report(owner.session)?.who.hostname).not.toBe(srv)
+    expect(ctx.investigation.report(owner.session)?.where.hostname).not.toBe(srv)
+    expect(text(result)).toContain('Who: 10.0.10.2 desktop-test01')
+    expect(text(result)).not.toContain('_ldap._tcp')
+    expect(text(result)).not.toContain('_msdcs')
+    const locatorOnly = await setup()
+    locatorOnly.ctx.investigation.recordIdentity(locatorOnly.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    locatorOnly.ctx.investigation.recordIdentity(locatorOnly.owner.session, {
+      kind: 'hostname', value: srv, label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    const locatorBind = await locatorOnly.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-srv-only'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: locatorOnly.owner,
+    })
+    expect(locatorBind.isError).toBe(false)
+    const locatorReport = await locatorOnly.ctx.tools.execute({
+      signal,
+      callId: CallId('report-srv-only'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+        where: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+      },
+      agent: locatorOnly.owner,
+    })
+    expect(locatorReport.isError).toBe(false)
+    expect(locatorOnly.ctx.investigation.report(locatorOnly.owner.session)?.who.hostname)
+      .toBeUndefined()
+    expect(locatorOnly.ctx.investigation.report(locatorOnly.owner.session)?.where.hostname)
+      .toBeUndefined()
+    expect(text(locatorReport)).not.toContain('_ldap._tcp')
+    expect(text(locatorReport)).not.toContain('desktop-test01')
+    await locatorOnly.ctx.fiber.dispose()
+  })
+
   it('persists a submitted victim MAC when case_report who/where donate that MAC to the DC', async () => {
     const { ctx, owner } = await setup()
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })

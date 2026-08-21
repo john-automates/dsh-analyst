@@ -27,11 +27,14 @@
  * drops, empty leftovers coerce to the victim row. A leftover C2 IPv4, a
  * leftover named non-infra IPv4, or unmatched words still deny. Omitted mac persists the unique ledger MAC that is not
  * DC/gateway-only when a sticky DC donate or uniqueness left the projected
- * row empty. Omitted user still persists from victim-IP evidence. A
- * submitted user, hostname, or full_name is kept when the row has no
- * donated value and that identity does not donate to a different entity. A
- * submitted mac is kept unless talking-IP frames source that MAC only from
- * a non-victim.
+ * row empty. Omitted user still persists from victim-IP evidence. An
+ * AD SRV / DC locator hostname does not persist as who/where hostname. A
+ * submitted or harvested workstation hostname is kept. Hostname stays
+ * omitted when only that locator is harvested. A submitted user,
+ * hostname, or full_name is kept when the row has no donated value and
+ * that identity does not donate to a different entity. A submitted mac
+ * is kept unless talking-IP frames source that MAC only from a
+ * non-victim.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
@@ -571,6 +574,7 @@ export function identityDonatesToVictim(
 
 /**
  * Project the victim entity row (IP / MAC / hostname / user / full_name).
+ * First donated hostname skips an AD SRV / DC locator name.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
@@ -589,7 +593,9 @@ export function projectVictimSlot(
   ))
   const first = (kind: Identity['kind']): string | undefined => (
     donated.find(identity => (
-      identity.kind === kind && (kind !== 'user' || !isMachineSam(identity.value))
+      identity.kind === kind
+      && (kind !== 'user' || !isMachineSam(identity.value))
+      && (kind !== 'hostname' || !isAdSrvLocatorName(identity.value))
     ))?.value
   )
   const ip = first('ip') ?? (isIpv4(victim.addr) ? victim.addr : undefined)
@@ -615,16 +621,20 @@ export function projectVictimSlot(
  * evidence (conversation-client stamp), or from the unique harvested human
  * user when machine SAMs are the only other users. Uniqueness does not
  * block an omitted conversation-client user. A user that donates to a
- * non-victim and is not evidenced on the victim stays off. A submitted user,
- * hostname, or full_name is kept when the row has no donated value and
- * that identity does not donate to a different entity. A submitted
- * human user is kept without a conversation-client stamp. A machine SAM
- * ending in `$` is not persisted as user. A submitted mac is kept unless
- * talking-IP frames source that MAC only from a non-victim (never as
- * eth.src from the bound victim IP; never the NIC of that victim). A
- * submitted string that is not a six-octet MAC stays off. A sticky DC
- * `evidence_id` or donate does not override that submitted MAC. A
- * model-offered IP does not replace the bound victim ip. Slots the row
+ * non-victim and is not evidenced on the victim stays off. An AD SRV /
+ * DC locator hostname does not persist as who/where hostname. A submitted
+ * or harvested workstation hostname is kept when the row has no donated
+ * non-locator hostname. Hostname stays omitted when only that locator is
+ * harvested. A submitted locator does not fall through to that harvest. A
+ * submitted user, hostname, or full_name is kept when the row has no
+ * donated value and that identity does not donate to a different entity.
+ * A submitted human user is kept without a conversation-client stamp. A
+ * machine SAM ending in `$` is not persisted as user. A submitted mac is
+ * kept unless talking-IP frames source that MAC only from a non-victim
+ * (never as eth.src from the bound victim IP; never the NIC of that
+ * victim). A submitted string that is not a six-octet MAC stays off. A
+ * sticky DC `evidence_id` or donate does not override that submitted MAC.
+ * A model-offered IP does not replace the bound victim ip. Slots the row
  * and frames do not evidence are not invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
@@ -633,9 +643,10 @@ export function projectVictimSlot(
  * @param evidenceText - tool-result text for victim-IP scope and conversation-client donate.
  * @returns the accepted slot: entity_id, ip, donated or unique non-DC-only
  * omitted mac, evidenced omitted user or unique harvested human user,
- * donated hostname/full_name, kept submitted mac unless talking-IP
- * proves DC/gateway-only, and kept submitted user/hostname/full_name.
- * A machine SAM is not a submitted or harvested user.
+ * donated non-locator hostname/full_name, kept submitted mac unless
+ * talking-IP proves DC/gateway-only, and kept submitted
+ * user/hostname/full_name. A machine SAM is not a submitted or harvested
+ * user. An AD SRV / DC locator is not a submitted or harvested hostname.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
@@ -648,7 +659,10 @@ export function completeAcceptedSlot(
   const model = submittedSlotRecord(submitted)
   for (const key of SLOT_KEYS) {
     const donated = projected[key]
-    if (donated !== undefined) {
+    if (
+      donated !== undefined
+      && !(key === 'hostname' && isAdSrvLocatorName(donated))
+    ) {
       accepted[key] = donated
       continue
     }
@@ -658,6 +672,7 @@ export function completeAcceptedSlot(
       const normalized = normalizeIdentityValue(key, offered)
       if (normalized === undefined) continue
       if (key === 'user' && isMachineSam(normalized)) continue
+      if (key === 'hostname' && isAdSrvLocatorName(normalized)) continue
       if (key === 'mac') {
         if (!MAC_HANDLE.test(normalized)) continue
         if (
@@ -687,6 +702,11 @@ export function completeAcceptedSlot(
     if (key === 'user') {
       const evidenced = omittedUserEvidencedOnVictim(bind, identities, evidenceText)
       if (evidenced !== undefined) accepted.user = evidenced
+      continue
+    }
+    if (key === 'hostname') {
+      const evidenced = omittedHostnameEvidencedOnVictim(bind, identities, evidenceText)
+      if (evidenced !== undefined) accepted.hostname = evidenced
     }
   }
   return accepted
@@ -699,8 +719,11 @@ export function completeAcceptedSlot(
  * MAC that is not DC/gateway-only when a sticky DC donate or uniqueness
  * left the row empty. Omitted user still persists from victim-IP evidence,
  * or the unique harvested human user when machine SAMs blocked uniqueness
- * donate. A submitted user, hostname, or full_name is kept when the row has no
- * donated value and that identity does not donate to a different entity.
+ * donate. An AD SRV / DC locator hostname does not persist as who/where
+ * hostname. A submitted or harvested workstation hostname is kept.
+ * Hostname stays omitted when only that locator is harvested. A submitted
+ * user, hostname, or full_name is kept when the row has no donated value
+ * and that identity does not donate to a different entity.
  * After a live bind, omitted who/where fold sibling top-level identity
  * keys (ip, mac, hostname, user, full_name) from the same case_report
  * arguments into that submitted slot. A submitted human user is kept
@@ -1335,6 +1358,58 @@ function offeredDonatesToNonVictim(
  */
 function isMachineSam(value: string): boolean {
   return value.endsWith('$')
+}
+
+/**
+ * Whether a hostname is an AD SRV / DC locator name, not a workstation.
+ * `_ldap._tcp…`, `_msdcs.`, `_sites.dc.`, and `_service._tcp` / `_udp`
+ * locators match. A workstation NetBIOS or DNS name does not.
+ * @param value - raw or normalized hostname.
+ * @returns true when the name must stay off who/where hostname.
+ */
+function isAdSrvLocatorName(value: string): boolean {
+  const host = value.toLowerCase().replace(/\.+$/, '')
+  if (host.startsWith('_msdcs.') || host.includes('._msdcs.') || host.endsWith('._msdcs')) {
+    return true
+  }
+  if (host.startsWith('_sites.') || host.includes('._sites.')) return true
+  return /^_[a-z0-9-]+\._(tcp|udp)(?:\.|$)/i.test(host)
+}
+
+/**
+ * First ledger hostname evidenced on the bound victim, or the unique
+ * harvested workstation hostname when AD SRV / DC locators are the only
+ * other hostnames.
+ * A hunt-subject `evidence_id` of that IP, or a name-service line scoped
+ * to that IP, qualifies. Uniqueness does not block a victim-IP-scoped
+ * workstation. A hostname that only donates to a non-victim is not
+ * returned. An AD SRV / DC locator is not a harvested hostname and does
+ * not count against the unique-workstation fallback.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns the first evidenced workstation hostname, the unique harvested
+ * workstation hostname, or undefined when none exists.
+ */
+function omittedHostnameEvidencedOnVictim(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): string | undefined {
+  const victim = victimOf(bind)
+  if (victim === undefined) return undefined
+  const hosts: string[] = []
+  for (const identity of identities) {
+    if (identity.kind !== 'hostname') continue
+    if (isAdSrvLocatorName(identity.value)) continue
+    if (ipv4EvidenceId(identity.evidence_id) === victim.addr) return identity.value
+    if (ipsEvidencingIdentity(identity, evidenceText).includes(victim.addr)) return identity.value
+    if (offeredDonatesToNonVictim('hostname', identity.value, bind, identities, evidenceText)) {
+      continue
+    }
+    hosts.push(identity.value)
+  }
+  return new Set(hosts).size === 1 ? hosts[0] : undefined
 }
 
 /**

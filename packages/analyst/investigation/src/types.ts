@@ -213,7 +213,7 @@ export interface CaseIdentitySlot {
   ip?: string
   /** Victim MAC, when it belongs to the victim entity. */
   mac?: string
-  /** Victim hostname, when it belongs to the victim entity. */
+  /** Victim hostname, when it belongs to the victim entity. An AD SRV / DC locator name is not persisted. */
   hostname?: string
   /** Victim user, when it belongs to the victim entity. */
   user?: string
@@ -293,9 +293,12 @@ declare module '@deepseek-ai/dsh-session/types' {
      * from the same case_report arguments into that submitted slot. Omitted
      * mac persists the unique ledger MAC that is not DC/gateway-only when a
      * sticky DC donate or uniqueness left the row empty. Omitted user still
-     * persists from victim-IP evidence. A submitted user, hostname, or
-     * full_name is kept when the row has no donated value and that identity
-     * does not donate to a different entity. A submitted human user is kept
+     * persists from victim-IP evidence. An AD SRV / DC locator hostname
+     * does not persist as who/where hostname. A submitted or harvested
+     * workstation hostname is kept. Hostname stays omitted when only that
+     * locator is harvested. A submitted user, hostname, or full_name is
+     * kept when the row has no donated value and that identity does not
+     * donate to a different entity. A submitted human user is kept
      * without a conversation-client stamp. A machine SAM ending in `$` is
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
