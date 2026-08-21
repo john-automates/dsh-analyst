@@ -2208,7 +2208,7 @@ describe('BindRelationship', () => {
     }, live, identities, frames)).toEqual(projected)
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, {
       mac: DISTRACTOR_MAC,
-    }, live, identities, frames)).toEqual({ entity_id: LAN, ip: LAN })
+    }, live, identities, frames)).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, {
       mac: CLIENT_MAC,
     })).toEqual({ entity_id: LAN, ip: LAN })
@@ -2217,7 +2217,7 @@ describe('BindRelationship', () => {
     }, { relationship, endpoints: [] }, identities, frames)).toEqual({ entity_id: LAN, ip: LAN })
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, {
       mac: 'not-a-mac',
-    }, live, identities, frames)).toEqual({ entity_id: LAN, ip: LAN })
+    }, live, identities, frames)).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
     const dumpOnly = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN, entity_id: DISTRACTOR }
     expect(completeAcceptedSlot(
       { entity_id: LAN, ip: LAN },
@@ -2425,14 +2425,14 @@ describe('BindRelationship', () => {
       live,
       identities,
       evidence,
-    )).toEqual({ entity_id: LAN, ip: LAN, mac: CLIENT_MAC })
+    )).toEqual({ entity_id: LAN, ip: LAN, mac: CLIENT_MAC, hostname: HOST })
     expect(completeAcceptedSlot(
       { entity_id: LAN, ip: LAN },
       { mac: DISTRACTOR_MAC, user: DISTRACTOR_USER },
       live,
       identities,
       evidence,
-    )).toEqual({ entity_id: LAN, ip: LAN })
+    )).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
   })
 
   it('persists omitted who.user from the harvested victim-row human when where already has it', () => {
