@@ -144,7 +144,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     'investigation/bind': RelationshipBind
     /**
      * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
-     * who/where are projections of the bound victim entity row.
+     * who/where are the projected victim entity row; omitted model keys are
+     * filled from that row after deny/coerce.
      */
     'investigation/report': CaseReport
   }

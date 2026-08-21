@@ -58,6 +58,31 @@ const CASE_IDENTITY_SLOT_SCHEMA = {
   },
 }
 
+const CASE_REPORT_SLOT_INPUT = {
+  type: 'object' as const,
+  additionalProperties: false as const,
+  properties: {
+    entity_id: {
+      type: 'string' as const,
+      description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.',
+    },
+    ip: { type: 'string' as const, description: 'Victim IPv4 when known. Omitted after a live bind is filled from the victim row.' },
+    mac: { type: 'string' as const, description: 'Victim MAC when it belongs to the victim entity. Omitted after a live bind is filled from the victim row.' },
+    hostname: { type: 'string' as const, description: 'Victim hostname when it belongs to the victim entity. Omitted after a live bind is filled from the victim row.' },
+    user: { type: 'string' as const, description: 'Victim user when it belongs to the victim entity. Omitted after a live bind is filled from the victim row.' },
+    full_name: { type: 'string' as const, description: 'Victim full name when it belongs to the victim entity. Omitted after a live bind is filled from the victim row.' },
+  },
+}
+
+const CASE_REPORT_SLOT_DESCRIPTION = [
+  'Optional victim-row handle.',
+  'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
+  'A victim-row handle string is the same handle after a live bind.',
+  'A JSON object string with entity_id is the same handle.',
+  'Omitted keys are filled from the projected victim row after a live bind.',
+  'Unmatched free-text who or where is denied.',
+].join(' ')
+
 /**
  * Render a projected who/where slot as one line.
  * @param slot - victim entity row.
@@ -297,46 +322,16 @@ export function apply(ctx: Context, config: Config): void {
       why: { type: 'string', required: true, description: 'Why it happened, as evidenced.' },
       how: { type: 'string', required: true, description: 'How it happened, as evidenced.' },
       who: {
-        description: [
-          'Optional victim-row handle.',
-          'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
-          'A victim-row handle string is the same handle after a live bind.',
-          'A JSON object string with entity_id is the same handle.',
-          'Unmatched free-text who is denied.',
-        ].join(' '),
+        description: CASE_REPORT_SLOT_DESCRIPTION,
         oneOf: [
-          {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              entity_id: {
-                type: 'string',
-                description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.',
-              },
-            },
-          },
+          CASE_REPORT_SLOT_INPUT,
           { type: 'string' },
         ],
       },
       where: {
-        description: [
-          'Optional victim-row handle.',
-          'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
-          'A victim-row handle string is the same handle after a live bind.',
-          'A JSON object string with entity_id is the same handle.',
-          'Unmatched free-text where is denied.',
-        ].join(' '),
+        description: CASE_REPORT_SLOT_DESCRIPTION,
         oneOf: [
-          {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              entity_id: {
-                type: 'string',
-                description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.',
-              },
-            },
-          },
+          CASE_REPORT_SLOT_INPUT,
           { type: 'string' },
         ],
       },
@@ -384,7 +379,10 @@ export function apply(ctx: Context, config: Config): void {
       const evidenceText = foldToolResultText(session.events)
       const denied = caseReportDenyReason(args, bind, identities, evidenceText)
       if (denied !== undefined) throw new Error(denied)
-      const report = requireCaseReport(bind, identities, claims, evidenceText)
+      const report = requireCaseReport(bind, identities, claims, evidenceText, {
+        who: args.who,
+        where: args.where,
+      })
       ctx.investigation.recordReport(session, report)
       return Promise.resolve(report)
     },

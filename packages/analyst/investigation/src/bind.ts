@@ -3,6 +3,7 @@
  * Who/Where. The conversation must include a cue/observation address.
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
+ * After deny/coerce, omitted model keys are filled from that projected row.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
@@ -70,7 +71,16 @@ export const LAN_C2_REASON = 'unbound: role c2 cannot be a LAN address.'
 
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
+const SLOT_KEYS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 const INTEGER_STRING = /^-?\d+$/
+
+/** Model-supplied who/where after deny/coerce, before the row fills omitted keys. */
+export interface SubmittedIdentitySlots {
+  /** Raw who argument, or omitted. */
+  who?: unknown
+  /** Raw where argument, or omitted. */
+  where?: unknown
+}
 
 /** Cited conversation as submitted to bind_relationship. */
 export interface BindRelationshipInput {
@@ -372,11 +382,43 @@ export function projectVictimSlot(
 }
 
 /**
+ * Persist the projected victim row after deny/coerce.
+ * Keys the model omitted are filled from that row. A donated victim-IP-sourced
+ * MAC is copied even when the model omits `mac`. A model-supplied key that the
+ * row did not donate (a DC or gateway MAC that never appears as eth.src on the
+ * bound victim IP) is not persisted. Slots are not invented.
+ * @param projected - victim entity row from {@link projectVictimSlot}.
+ * @param submitted - raw who or where argument after deny/coerce, or omitted.
+ * @returns the accepted slot: entity_id, ip, and donated mac/hostname/user/full_name.
+ */
+export function completeAcceptedSlot(
+  projected: CaseIdentitySlot,
+  submitted?: unknown,
+): CaseIdentitySlot {
+  const accepted: CaseIdentitySlot = { entity_id: projected.entity_id }
+  const model = submittedSlotRecord(submitted)
+  for (const key of SLOT_KEYS) {
+    const donated = projected[key]
+    if (donated !== undefined) {
+      accepted[key] = donated
+      continue
+    }
+    const offered = model?.[key]
+    if (typeof offered !== 'string' || offered.trim() === '') continue
+    // Row has no donated value. Do not invent from the model.
+  }
+  return accepted
+}
+
+/**
  * Build the persisted case_report packet. who/where are the victim row.
+ * Model-supplied who/where go through deny/coerce first; omitted keys are
+ * filled from that projected row.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
+ * @param submitted - raw who/where after deny/coerce, or omitted.
  * @returns the report, or undefined when the bind has no unique victim.
  */
 export function projectCaseReport(
@@ -384,14 +426,15 @@ export function projectCaseReport(
   identities: readonly Identity[],
   claims: CaseReportClaims,
   evidenceText = '',
+  submitted: SubmittedIdentitySlots = {},
 ): CaseReport | undefined {
   const slot = projectVictimSlot(bind, identities, evidenceText)
   if (slot === undefined) return undefined
   return {
-    who: slot,
+    who: completeAcceptedSlot(slot, submitted.who),
     what: claims.what,
     when: claims.when,
-    where: slot,
+    where: completeAcceptedSlot(slot, submitted.where),
     why: claims.why,
     how: claims.how,
   }
@@ -403,6 +446,7 @@ export function projectCaseReport(
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
+ * @param submitted - raw who/where after deny/coerce, or omitted.
  * @returns the projected report.
  */
 export function requireCaseReport(
@@ -410,9 +454,10 @@ export function requireCaseReport(
   identities: readonly Identity[],
   claims: CaseReportClaims,
   evidenceText = '',
+  submitted: SubmittedIdentitySlots = {},
 ): CaseReport {
   if (bind === undefined) throw new Error(UNBOUND_REASON)
-  const report = projectCaseReport(bind, identities, claims, evidenceText)
+  const report = projectCaseReport(bind, identities, claims, evidenceText, submitted)
   if (report === undefined) throw new Error(UNBOUND_REASON)
   return report
 }
@@ -741,6 +786,28 @@ function pointsAtNonVictim(
 
 function isIpv4(addr: string): boolean {
   return /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(addr)
+}
+
+/**
+ * Model-supplied who/where as a record of slot keys, when the argument is an
+ * object or a JSON object string. A handle string is not a slot record.
+ * @param submitted - raw who or where argument.
+ * @returns the object, or undefined when there are no model slot keys.
+ */
+function submittedSlotRecord(submitted: unknown): Record<string, unknown> | undefined {
+  let value = submitted
+  if (typeof submitted === 'string') {
+    const text = submitted.trim()
+    if (!text.startsWith('{')) return undefined
+    try {
+      value = JSON.parse(text) as unknown
+    } catch {
+      // JSON.parse SyntaxError: not a JSON object. Treat as no model keys.
+      return undefined
+    }
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  return value as Record<string, unknown>
 }
 
 /**

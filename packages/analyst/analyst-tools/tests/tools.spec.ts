@@ -772,6 +772,140 @@ describe('analyst tools', () => {
     expect(text(result)).not.toContain('idle-host')
   })
 
+  it('persists a victim-sourced MAC when case_report who/where omit that key', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'lan-user', label: 'user' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const omittedMac = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    const cueVictim = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cue-victim-omitted-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '198.51.100.80', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(cueVictim.isError).toBe(true)
+    expect(text(cueVictim)).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-omitted-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-omitted-mac'),
+      name: 'case_report',
+      arguments: { ...claims, who: omittedMac, where: omittedMac },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    const noMac = await setup()
+    noMac.ctx.investigation.recordIdentity(noMac.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    noMac.ctx.investigation.recordIdentity(noMac.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    const noMacBind = await noMac.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-no-victim-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: noMac.owner,
+    })
+    expect(noMacBind.isError).toBe(false)
+    const noMacReport = await noMac.ctx.tools.execute({
+      signal,
+      callId: CallId('report-no-victim-mac'),
+      name: 'case_report',
+      arguments: { ...claims, who: { entity_id: '10.0.10.2', ip: '10.0.10.2' } },
+      agent: noMac.owner,
+    })
+    expect(noMacReport.isError).toBe(false)
+    expect(noMac.ctx.investigation.report(noMac.owner.session)?.who).toEqual({
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+    })
+    expect(noMac.ctx.investigation.report(noMac.owner.session)?.who.mac).toBeUndefined()
+    await noMac.ctx.fiber.dispose()
+  })
+
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const bind = await ctx.tools.execute({
