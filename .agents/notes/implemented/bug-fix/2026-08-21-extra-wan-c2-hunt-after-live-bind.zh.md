@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-成功的 `bind_relationship` 在唯一 LAN victim 与唯一非 LAN C2 上，下发主体为该 victim IPv4 的 `extra-wan` hunt。过滤器是 `ip.src ==` 该 victim，对非 LAN 单播目的地址讲话，且不是已经绑定的 C2（RFC1918、回环、链路本地、组播、保留地址和 `0.0.0.0` 排除在外）。字段是 `ip.dst`。两端都在 LAN 或 CDN／更新 C2 的拒绝到不了当前绑定，因此不下发该 hunt（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)，[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。
+成功的 `bind_relationship` 在唯一 LAN victim 与唯一非 LAN C2 上，下发主体为该 victim IPv4 的 `extra-wan` hunt。过滤器是 `ip.src ==` 该 victim，对非 LAN 单播目的地址讲话，且不是已经绑定的 C2（RFC1918、回环、链路本地、组播、保留地址和 `0.0.0.0` 排除在外）。字段是 `ip.dst`。`pcap_filter` 在输出裁切之前按首次出现顺序对这些目的地址去重（[在裁切之前对 extra-wan 目的地址按首次出现去重](2026-08-21-unique-collapse-extra-wan-before-clip.md)）。两端都在 LAN 或 CDN／更新 C2 的拒绝到不了当前绑定，因此不下发该 hunt（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)，[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。
 
 当 `autoHunt` 为 true 时，即使主体是 LAN victim，且即使已有 C2 通信焦点 IP，`extra-wan` 仍通过 `pcap_filter` 自动运行，但仅在一次 Plan 已就绪（已点名线索为 valid 或显式 open、C2 假设、CDN／DC／更新替代、清单）的现场绑定之后。线索为 `invalid` 时仍会挡住。底盘 Mission 不解锁遗留自动运行（[在没有 5W1H 结案时持久化遗留 C2 附加项](2026-08-21-persist-c2-extras-without-close.md)）。`scopeIpFromHunt` 返回该 victim，因此收割把目的 `kind=ip` 的 `evidence_id` 戳成该 victim。插件随后对每个 C2 IPv4（已绑定加上额外地址）下发 [`c2-domain`](2026-08-21-c2-domain-hunt-after-live-bind.md)。`shouldAutoRunHunt` 仍允许非 LAN 主体上的 `c2-domain`。
 
@@ -40,7 +40,7 @@ scout、遗留报告禁令和新评测不在本次变更内。测试使用合成
 
 ## 测试
 
-`packages/analyst/investigation/tests/hunts.spec.ts` 钉住 LAN `10.0.10.2` 与 TEST-NET C2 `198.51.100.80` 上 `extra-wan` 的过滤器、字段、通知和自动运行。`bind.spec.ts` 在额外 WAN `203.0.113.50` 上戳有 `c2.example.test` 时把它持久化到 `c2_ips` 且已绑定 C2 在前，丢掉未点名的遗留附加项，排除没有戳记或戳在非 victim 上的干扰 WAN `203.0.113.99` 以及 LAN／域控／网关，对每个已证明附加项下发 `c2-domain`，在额外 C2 上戳记时把 `c2.example.test` 持久化为 `c2_domain`，who/where 的 hostname 仍是 `lan-host`、ip 仍是 victim，并且对构造出的 LAN C2 两种 hunt 都不下发。`harvest.spec.ts` 给限定范围的目的 IP 打戳。`investigation.spec.ts` 在 `bind_relationship` 之后下发并自动运行 `extra-wan` 然后按 C2 的 `c2-domain`，且 `203.0.113.99` 不进入 `c2_ips`；两端都在 LAN 或 LAN c2 的拒绝两种都不下发。`analyst-tools/tests/tools.spec.ts` 经 `case_report` 结案，并保持身份槽不变。
+`packages/analyst/investigation/tests/hunts.spec.ts` 钉住 LAN `10.0.10.2` 与 TEST-NET C2 `198.51.100.80` 上 `extra-wan` 的过滤器、字段、通知和自动运行，并保持其他 hunt 不使用单独的 `ip.dst` 字段。`bind.spec.ts` 在额外 WAN `203.0.113.50` 上戳有 `c2.example.test` 时把它持久化到 `c2_ips` 且已绑定 C2 在前，丢掉未点名的遗留附加项，排除没有戳记或戳在非 victim 上的干扰 WAN `203.0.113.99` 以及 LAN／域控／网关，对每个已证明附加项下发 `c2-domain`，在额外 C2 上戳记时把 `c2.example.test` 持久化为 `c2_domain`，who/where 的 hostname 仍是 `lan-host`、ip 仍是 victim，并且对构造出的 LAN C2 两种 hunt 都不下发。`harvest.spec.ts` 给限定范围的目的 IP 打戳。`investigation.spec.ts` 在 `bind_relationship` 之后下发并自动运行 `extra-wan` 然后按 C2 的 `c2-domain`，且 `203.0.113.99` 不进入 `c2_ips`；两端都在 LAN 或 LAN c2 的拒绝两种都不下发。`analyst-tools/tests/tools.spec.ts` 在输出裁切之前对 extra-wan 的 `ip.dst` 去重，经 `case_report` 结案，并保持身份槽不变。
 
 ## 后果
 

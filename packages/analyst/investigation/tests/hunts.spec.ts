@@ -310,6 +310,11 @@ describe('auto-issued hunts', () => {
       display_filter: extraWanDisplayFilter(LAN_A, C2),
       fields: ['ip.dst'],
     })
+    expect(huntFilterSpec(otherEndHunt(C2)).fields).not.toEqual(['ip.dst'])
+    expect(huntFilterSpec(c2DomainHunt(C2)).fields).not.toEqual(['ip.dst'])
+    expect(huntFilterSpec({
+      kind: 'eth-src', subjectKind: 'ip', subject: LAN_A,
+    }).fields).not.toEqual(['ip.dst'])
     const notice = huntNotice(hunt)
     expect(notice).toContain('extra-wan')
     expect(notice).toContain(`ip.src == ${LAN_A}`)
