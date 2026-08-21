@@ -2476,7 +2476,7 @@ Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/anal
 
 ### `investigation_plan`
 
-Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis is I believe X because Y plus a disconfirm test. Candidate labels are victim, c2, dc, cdn, update, distractor. Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan. Answers generate more questions. This call appends; it does not replace.
+Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis is I believe X because Y plus a disconfirm test. Candidate labels are victim, c2, dc, cdn, update, distractor. Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan. After a named live cue, omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis. Answers generate more questions. This call appends; it does not replace.
 
 ```json
 {
@@ -2498,7 +2498,7 @@ Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis
     },
     "hypotheses": {
       "type": "array",
-      "description": "Hypotheses to append.",
+      "description": "Hypotheses to append. After a named live cue, an omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.",
       "items": {
         "type": "object",
         "additionalProperties": false,

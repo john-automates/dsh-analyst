@@ -47,8 +47,8 @@ import { formatLedger } from './ledger.ts'
 import {
   actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
   foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt, killedHypothesisIds,
-  namedLiveCue, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
-  sameHuntExtras, thesisForHuntDump,
+  defaultOpenAlternative, hasAlternativeHypothesis, namedLiveCue, planEntryDenyReason,
+  planReady, planReadyDenyReason, projectHuntExtras, sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
@@ -74,7 +74,8 @@ export { formatLedger } from './ledger.ts'
 export {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_CLOSED_MEANS,
   CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
-  isBelieveBecauseClaim, killedHypothesisIds, namedLiveCue, planEntryDenyReason,
+  defaultOpenAlternative, hasAlternativeHypothesis, isBelieveBecauseClaim,
+  killedHypothesisIds, namedLiveCue, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
   projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
@@ -109,7 +110,7 @@ export const METHODOLOGY_SECTION = [
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
   'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Mission scopes the case. Auto-hunts run after Plan is ready, including a named cue that is valid or explicitly open. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
-  'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan.',
+  'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan. After a named live cue, omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
   'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
@@ -559,6 +560,7 @@ export class Investigation extends Service {
         'Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan.',
         'After a named live cue, omitted inventory defaults to the case capture when one exists.',
         'Empty inventory is not a finished Plan.',
+        'After a named live cue, omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.',
         'Answers generate more questions. This call appends; it does not replace.',
       ].join(' '),
       parameters: {
@@ -594,7 +596,8 @@ export class Investigation extends Service {
               },
             },
           },
-          description: 'Hypotheses to append.',
+          description:
+            'Hypotheses to append. After a named live cue, an omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.',
         },
       },
       output: {
@@ -615,23 +618,37 @@ export class Investigation extends Service {
       execute: async (args, exec) => {
         if (exec.agent === undefined) throw new Error('investigation_plan requires an owning agent session')
         const entry: InvestigationPlanEntry = {}
+        const mission = foldMission(exec.agent.session.events)
         let inventory = (args.inventory ?? []).map(item => item.trim()).filter(item => item !== '')
         const gaps = (args.gaps ?? []).map(item => item.trim()).filter(item => item !== '')
-        if (inventory.length === 0 && namedLiveCue(foldMission(exec.agent.session.events))) {
+        let hypotheses = (args.hypotheses ?? []).map(item => ({
+          id: item.id.trim(),
+          claim: item.claim.trim(),
+          disconfirm: item.disconfirm.trim(),
+          label: item.label,
+        }))
+        if (inventory.length === 0 && namedLiveCue(mission)) {
           // After a live cue, omitted inventory attests the case capture when one exists.
           const capture = await caseCapturePath(this.caseDir)
           if (capture !== undefined) inventory = [capture]
         }
+        const folded = foldPlan(exec.agent.session.events)
+        const hasC2 = hypotheses.some(item => item.label === 'c2')
+          || folded.hypotheses.some(item => item.label === 'c2')
+        const hasInventory = inventory.length > 0 || folded.inventory.length > 0
+        if (
+          namedLiveCue(mission)
+          && hasC2
+          && hasInventory
+          && !hasAlternativeHypothesis(hypotheses)
+          && !hasAlternativeHypothesis(folded.hypotheses)
+        ) {
+          // After a live cue, omitted alternative stays an open CDN-or-update hypothesis.
+          hypotheses = [...hypotheses, defaultOpenAlternative()]
+        }
         if (inventory.length > 0) entry.inventory = inventory
         if (gaps.length > 0) entry.gaps = gaps
-        if (args.hypotheses !== undefined && args.hypotheses.length > 0) {
-          entry.hypotheses = args.hypotheses.map(item => ({
-            id: item.id.trim(),
-            claim: item.claim.trim(),
-            disconfirm: item.disconfirm.trim(),
-            label: item.label,
-          }))
-        }
+        if (hypotheses.length > 0) entry.hypotheses = hypotheses
         const denied = planEntryDenyReason(entry)
         if (denied !== undefined) throw new Error(denied)
         this.recordPlan(exec.agent.session, entry)
