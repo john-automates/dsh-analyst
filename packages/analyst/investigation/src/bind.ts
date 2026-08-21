@@ -148,10 +148,13 @@ export function resolveBind(request: BindRequest): BindResolution {
 /**
  * Entity id an identity may donate for. IPs donate as themselves. An explicit
  * `entity_id` wins. A MAC sourced from the C2-talking LAN IP donates to that IP
- * when it matches the bound victim. Distractors never donate.
+ * when it matches the bound victim. After a live bind, an unaffiliated identity
+ * (no `entity_id`, `evidence_id` does not point at a non-victim) donates to the
+ * bound victim when it is the only identity of that kind that is not affiliated
+ * with a different entity. Distractors never donate.
  * @param identity - ledger identity.
  * @param bind - live bind.
- * @param identities - full ledger, used to resolve a sourced MAC.
+ * @param identities - full ledger, used to resolve a sourced MAC and uniqueness.
  * @param evidenceText - tool-result text for C2-talking detection.
  * @returns the entity id, or undefined when the identity is unaffiliated.
  */
@@ -163,9 +166,9 @@ export function entityIdForIdentity(
 ): string | undefined {
   if (identity.entity_id !== undefined && identity.entity_id !== '') return identity.entity_id
   if (identity.kind === 'ip') return identity.value
+  const victim = victimOf(bind)
   if (identity.kind === 'mac') {
     const sourced = c2TalkingLanVictim(identities, evidenceText)
-    const victim = victimOf(bind)
     if (
       sourced !== undefined
       && sourced.mac === identity.value
@@ -175,13 +178,21 @@ export function entityIdForIdentity(
       return victim.addr
     }
   }
+  if (
+    victim !== undefined
+    && uniqueUnaffiliatedOfKind(identity, victim, bind, identities, evidenceText)
+  ) {
+    return victim.addr
+  }
   return undefined
 }
 
 /**
  * Whether an identity may donate a who/where slot for the bound victim.
  * Distractors and other non-victim entities cannot donate. An `evidence_id`
- * that names a non-victim entity also blocks donation.
+ * that names a non-victim entity also blocks donation. After a live bind, a
+ * unique unaffiliated identity of a kind donates; two unaffiliated values of
+ * that kind donate neither.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger.
@@ -201,7 +212,7 @@ export function identityDonatesToVictim(
 }
 
 /**
- * Project the victim entity row (IP / MAC / hostname / user).
+ * Project the victim entity row (IP / MAC / hostname / user / full_name).
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for sourced-MAC affiliation.
@@ -223,12 +234,10 @@ export function projectVictimSlot(
   )
   const ip = first('ip') ?? (isIpv4(victim.addr) ? victim.addr : undefined)
   if (ip !== undefined) slot.ip = ip
-  const mac = first('mac')
-  if (mac !== undefined) slot.mac = mac
-  const hostname = first('hostname')
-  if (hostname !== undefined) slot.hostname = hostname
-  const user = first('user')
-  if (user !== undefined) slot.user = user
+  for (const kind of ['mac', 'hostname', 'user', 'full_name'] as const) {
+    const value = first(kind)
+    if (value !== undefined) slot[kind] = value
+  }
   return slot
 }
 
@@ -412,6 +421,62 @@ function resolveEndpoint(
   if (role === 'victim' && isCueObservationAddr(addr)) return UNBOUND_REASON
   seen.add(addr)
   return { addr, role, because }
+}
+
+/**
+ * Whether an unaffiliated identity is the only one of its kind that is not
+ * affiliated with a different entity. Two unaffiliated values of the same kind
+ * donate neither. A distractor with another endpoint's `entity_id` does not
+ * count against uniqueness and does not donate. A MAC sourced to a non-victim
+ * IP is affiliated with that other entity.
+ * @param identity - candidate ledger identity (no explicit `entity_id`).
+ * @param victim - unique victim endpoint on the live bind.
+ * @param bind - live bind.
+ * @param identities - full ledger.
+ * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @returns true when this identity is the unique non-foreign value of its kind.
+ */
+function uniqueUnaffiliatedOfKind(
+  identity: Identity,
+  victim: BoundEndpoint,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  const candidates = identities.filter(other => (
+    other.kind === identity.kind
+    && !affiliatedWithDifferentEntity(other, victim.addr, identities, evidenceText)
+    && !pointsAtNonVictim(other.evidence_id, bind, identities)
+  ))
+  return candidates.length === 1 && candidates[0].value === identity.value
+}
+
+/**
+ * Whether an identity already belongs to an entity other than the bound victim.
+ * Explicit `entity_id` wins. A MAC sourced from a C2-talking LAN IP belongs to
+ * that IP.
+ * @param identity - ledger identity.
+ * @param victimAddr - bound victim address.
+ * @param identities - full ledger.
+ * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @returns true when the identity is already tied to a different entity.
+ */
+function affiliatedWithDifferentEntity(
+  identity: Identity,
+  victimAddr: string,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  if (identity.entity_id !== undefined && identity.entity_id !== '') {
+    return identity.entity_id !== victimAddr
+  }
+  if (identity.kind === 'mac') {
+    const sourced = c2TalkingLanVictim(identities, evidenceText)
+    if (sourced !== undefined && sourced.mac === identity.value) {
+      return sourced.ip !== victimAddr
+    }
+  }
+  return false
 }
 
 function pointsAtNonVictim(

@@ -91,6 +91,8 @@ export interface CaseIdentitySlot {
   hostname?: string
   /** Victim user, when it belongs to the victim entity. */
   user?: string
+  /** Victim full name, when it belongs to the victim entity. */
+  full_name?: string
 }
 
 /** 5W1H case-close packet stored on `investigation/report`. */
