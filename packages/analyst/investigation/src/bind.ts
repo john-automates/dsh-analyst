@@ -4,6 +4,8 @@
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
+ * A submitted user, hostname, or full_name is kept when the row has no
+ * donated value and that identity does not donate to a different entity.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
@@ -425,17 +427,25 @@ export function projectVictimSlot(
  * Persist the projected victim row after deny/coerce.
  * Keys the model omitted are filled from that row. A donated victim-IP-sourced
  * MAC — including a field-only `eth.src` dump scoped to that IP — is copied
- * even when the model omits `mac`. A model-supplied key that the row did not
+ * even when the model omits `mac`. A submitted user, hostname, or full_name
+ * is kept when the row has no donated value and that identity does not
+ * donate to a different entity. A model-offered MAC or IP the row did not
  * donate (a DC or gateway MAC that never appears as eth.src on the bound
- * victim IP or in a victim-IP-scoped dump) is not persisted. Slots are not
- * invented.
+ * victim IP or in a victim-IP-scoped dump) is not persisted. Slots the
+ * model never submitted are not invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
- * @returns the accepted slot: entity_id, ip, and donated mac/hostname/user/full_name.
+ * @param bind - live bind used to reject a value that donates elsewhere.
+ * @param identities - folded ledger identities for that donate check.
+ * @param evidenceText - tool-result text for victim-IP scope and conversation-client donate.
+ * @returns the accepted slot: entity_id, ip, donated mac/hostname/user/full_name, and kept submitted user/hostname/full_name.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
   submitted?: unknown,
+  bind?: RelationshipBind,
+  identities: readonly Identity[] = [],
+  evidenceText = '',
 ): CaseIdentitySlot {
   const accepted: CaseIdentitySlot = { entity_id: projected.entity_id }
   const model = submittedSlotRecord(submitted)
@@ -447,7 +457,16 @@ export function completeAcceptedSlot(
     }
     const offered = model?.[key]
     if (typeof offered !== 'string' || offered.trim() === '') continue
-    // Row has no donated value. Do not invent from the model.
+    if (key === 'ip' || key === 'mac') continue
+    const normalized = normalizeIdentityValue(key, offered)
+    if (normalized === undefined) continue
+    if (
+      bind !== undefined
+      && offeredDonatesToNonVictim(key, normalized, bind, identities, evidenceText)
+    ) {
+      continue
+    }
+    accepted[key] = normalized
   }
   return accepted
 }
@@ -455,7 +474,9 @@ export function completeAcceptedSlot(
 /**
  * Build the persisted case_report packet. who/where are the victim row.
  * Model-supplied who/where go through deny/coerce first; omitted keys are
- * filled from that projected row. A harvested C2 DNS/SNI name persists as
+ * filled from that projected row. A submitted user, hostname, or full_name
+ * is kept when the row has no donated value and that identity does not
+ * donate to a different entity. A harvested C2 DNS/SNI name persists as
  * `c2_domain` and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
@@ -474,10 +495,10 @@ export function projectCaseReport(
   const slot = projectVictimSlot(bind, identities, evidenceText)
   if (slot === undefined) return undefined
   const report: CaseReport = {
-    who: completeAcceptedSlot(slot, submitted.who),
+    who: completeAcceptedSlot(slot, submitted.who, bind, identities, evidenceText),
     what: claims.what,
     when: claims.when,
-    where: completeAcceptedSlot(slot, submitted.where),
+    where: completeAcceptedSlot(slot, submitted.where, bind, identities, evidenceText),
     why: claims.why,
     how: claims.how,
   }
@@ -846,6 +867,32 @@ function pointsAtNonVictim(
 
 function isIpv4(addr: string): boolean {
   return /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(addr)
+}
+
+/**
+ * Whether a model-offered hostname, user, or full_name already donates to
+ * an entity other than the bound victim. A value that is not on the ledger,
+ * or that does not resolve to another entity, does not donate elsewhere.
+ * @param kind - offered slot kind.
+ * @param value - normalized offered value.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for scoped donate.
+ * @returns true when the offered identity belongs to a non-victim entity.
+ */
+function offeredDonatesToNonVictim(
+  kind: 'hostname' | 'user' | 'full_name',
+  value: string,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  const victim = victimOf(bind)
+  if (victim === undefined) return false
+  const identity = identities.find(item => item.kind === kind && item.value === value)
+  if (identity === undefined) return false
+  const entityId = entityIdForIdentity(identity, bind, identities, evidenceText)
+  return entityId !== undefined && entityId !== victim.addr
 }
 
 /**
