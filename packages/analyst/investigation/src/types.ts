@@ -27,7 +27,8 @@ export interface Identity {
    * field-only `eth.src` dump with no talking IP. A user or full_name stamps
    * the conversation client IPv4 (LAN / non-DC end), including a field-only
    * SAMR/CName dump whose evidence text names that client talking to a DC.
-   * A `name-service` hunt-subject IPv4 scopes a hostname. A slot whose
+   * A `name-service` hunt-subject IPv4 scopes a hostname. An IP stamps
+   * hunt-subject `scopeIp` when that scope is set. A slot whose
    * `evidence_id` points at a non-victim entity cannot donate who/where,
    * except a MAC later sourced from the bound victim IP or restamped from a
    * victim-IP-scoped `eth.src` dump — including overwrite of a DC/peer first
@@ -126,8 +127,8 @@ export interface CaseReport {
   /** How it happened, as evidenced. */
   how: string
   /**
-   * Bound C2 IPv4 plus extra WAN destination IPs harvested from the
-   * bound victim. Omitted when none exist. Not a who/where slot and not
+   * Bound C2 IPv4 plus extra WAN destination IPs whose `evidence_id` is
+   * that victim. Omitted when none exist. Not a who/where slot and not
    * a second bind.
    */
   c2_ips?: string[]
@@ -184,9 +185,9 @@ declare module '@deepseek-ai/dsh-session/types' {
      * without a conversation-client stamp. A machine SAM ending in `$` is
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
-     * plus extra WAN destinations harvested from that victim, when any
-     * exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced on
-     * any of those C2 IPv4s, when one exists.
+     * plus extra WAN destinations whose `evidence_id` is that victim, when
+     * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+     * on any of those C2 IPv4s, when one exists.
      */
     'investigation/report': CaseReport
   }

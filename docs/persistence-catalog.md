@@ -488,7 +488,7 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 'investigation/bind': RelationshipBind
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:172`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -516,7 +516,7 @@ Source: [`packages/analyst/investigation/src/types.ts:172`](../packages/analyst/
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:167`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:168`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -530,7 +530,7 @@ Source: [`packages/analyst/investigation/src/types.ts:167`](../packages/analyst/
 'investigation/identity': Identity
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:148`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:149`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -551,14 +551,14 @@ Source: [`packages/analyst/investigation/src/types.ts:148`](../packages/analyst/
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP frames
  * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
- * plus extra WAN destinations harvested from that victim, when any
- * exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced on
- * any of those C2 IPv4s, when one exists.
+ * plus extra WAN destinations whose `evidence_id` is that victim, when
+ * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+ * on any of those C2 IPv4s, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:191`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:192`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

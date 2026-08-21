@@ -8,10 +8,11 @@
  * stamp `evidence_id` from the conversation client IPv4 (the LAN / non-DC
  * end), not from a SAMR/CNameString hunt subject. A field-only SAMR/CName
  * line with no IP resolves that client from evidenceText. Protocol field
- * names and truncated dumps are not identities. A `name-service` hunt
- * subject still stamps `evidence_id` on hostname. A `c2-domain` hunt
- * subject stamps the C2 IPv4; single-label LAN / DC / NetBIOS names are
- * not recorded under that non-LAN scope.
+ * names and truncated dumps are not identities. A harvested IP stamps
+ * `evidence_id` from hunt-subject `scopeIp` when that scope is set. A
+ * `name-service` hunt subject still stamps `evidence_id` on hostname. A
+ * `c2-domain` hunt subject stamps the C2 IPv4; single-label LAN / DC /
+ * NetBIOS names are not recorded under that non-LAN scope.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
@@ -166,7 +167,8 @@ export function isC2DomainName(value: string): boolean {
  * Protocol field names and truncated dumps are not user or full_name
  * identities. When `scopeIp` is an IPv4 hunt subject and that talking or
  * client IP differs, the talking or client IP wins. A `name-service`
- * hunt-subject `scopeIp` still stamps harvested hostname records.
+ * hunt-subject `scopeIp` still stamps harvested hostname records. A
+ * harvested IP stamps that same `scopeIp` as `evidence_id` when set.
  * @param text - rendered tool output being harvested.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @param scopeIp - hunt-subject IPv4 that scoped this dump, when known.
@@ -196,7 +198,7 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
     } else if (kind === 'user' || kind === 'full_name') {
       const source = talkingIp === undefined ? undefined : normalizeIdentityValue('ip', talkingIp)
       if (source !== undefined) identity.evidence_id = source
-    } else if (scope !== undefined && kind === 'hostname') {
+    } else if (scope !== undefined && (kind === 'hostname' || kind === 'ip')) {
       identity.evidence_id = scope
     }
     out.push(identity)

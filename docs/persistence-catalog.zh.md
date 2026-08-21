@@ -553,9 +553,9 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP frames
  * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
- * plus extra WAN destinations harvested from that victim, when any
- * exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced on
- * any of those C2 IPv4s, when one exists.
+ * plus extra WAN destinations whose `evidence_id` is that victim, when
+ * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+ * on any of those C2 IPv4s, when one exists.
  */
 'investigation/report': CaseReport
 ```

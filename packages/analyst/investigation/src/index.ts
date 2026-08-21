@@ -707,13 +707,20 @@ export class Investigation extends Service {
 }
 
 /**
- * Hunt-subject IPv4 for an `eth-src`, `name-service`, or `c2-domain` dump.
+ * Hunt-subject IPv4 for an `eth-src`, `name-service`, `c2-domain`, or
+ * `extra-wan` dump. Extra-wan scopes the bound victim so harvested dest
+ * IPs stamp that victim as `evidence_id`.
  * @param hunt - issued hunt whose dump is being harvested.
  * @returns the IP subject, or undefined when the hunt is not IP-scoped.
  */
 function scopeIpFromHunt(hunt: Hunt): string | undefined {
   if (hunt.subjectKind !== 'ip') return undefined
-  if (hunt.kind === 'eth-src' || hunt.kind === 'name-service' || hunt.kind === 'c2-domain') {
+  if (
+    hunt.kind === 'eth-src'
+    || hunt.kind === 'name-service'
+    || hunt.kind === 'c2-domain'
+    || hunt.kind === 'extra-wan'
+  ) {
     return hunt.subject
   }
   return undefined

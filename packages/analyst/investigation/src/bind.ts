@@ -4,11 +4,12 @@
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
- * After a live bind, extra WAN destinations of the victim persist as
- * `c2_ips` and a dotted name evidenced on any of those C2 IPs persists as
- * `c2_domain`. A who/where string whose leftover identity tokens are
- * victim-row handles is coerced to `{ entity_id: victim }` even when labels
- * or a sentence wrap those handles. Locator leftovers (client / ip /
+ * After a live bind, extra WAN destinations whose `evidence_id` is the
+ * victim persist as `c2_ips` and a dotted name evidenced on any of those
+ * C2 IPs persists as `c2_domain`. A who/where string whose leftover
+ * identity tokens are victim-row handles is coerced to
+ * `{ entity_id: victim }` even when labels or a sentence wrap those
+ * handles. Locator leftovers (client / ip /
  * located / at / on / network) are wrappers. A leftover CIDR that contains
  * the bound victim IP is dropped so `/` does not shatter it into a
  * non-victim IPv4 plus a prefix. A leftover MAC that talking-IP frames
@@ -98,7 +99,7 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
 }
 
 /**
- * C2-domain hunts for the bound C2 plus harvested extra WAN IPv4s.
+ * C2-domain hunts for the bound C2 plus extra WAN IPv4s stamped on the victim.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
  * @returns one hunt per C2 IPv4, bound first.
@@ -123,9 +124,9 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 }
 
 /**
- * Bound C2 IPv4 plus extra non-LAN unicast IPs on the ledger.
- * LAN / DC / gateway / multicast / broadcast stay off. Who/where are
- * not updated. A second bind is not invented.
+ * Bound C2 IPv4 plus extra non-LAN unicast IPs whose `evidence_id` is
+ * the bound victim. LAN / DC / gateway / multicast / unbound WAN stay
+ * off. Who/where are not updated. A second bind is not invented.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 exists.
@@ -136,11 +137,14 @@ export function acceptedC2Ips(
 ): string[] {
   const bound = boundC2Ipv4(bind)
   if (bound === undefined) return []
+  const victim = victimOf(bind)
   const seen = new Set<string>([bound])
   const out = [bound]
+  if (victim === undefined) return out
   for (const identity of identities) {
     if (identity.kind !== 'ip' || seen.has(identity.value)) continue
     if (!isNonLanUnicastIpv4(identity.value)) continue
+    if (identity.evidence_id !== victim.addr) continue
     seen.add(identity.value)
     out.push(identity.value)
   }
@@ -655,10 +659,10 @@ export function completeAcceptedSlot(
  * arguments into that submitted slot. A submitted human user is kept
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP
- * frames source that MAC only from a non-victim. Bound and extra C2
- * IPv4s persist as `c2_ips`. A harvested C2 DNS/SNI name evidenced on
- * any of those IPs persists as `c2_domain` and does not fill who/where
- * hostname.
+ * frames source that MAC only from a non-victim. Bound C2 plus extra
+ * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`. A
+ * harvested C2 DNS/SNI name evidenced on any of those IPs persists as
+ * `c2_domain` and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
