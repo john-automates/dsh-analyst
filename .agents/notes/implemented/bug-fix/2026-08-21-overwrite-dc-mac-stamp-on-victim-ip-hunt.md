@@ -36,7 +36,7 @@ A DC or gateway MAC that never appears as `eth.src` on victim-IP frames or in a 
 
 ## Testing
 
-`packages/analyst/investigation/tests/investigation.spec.ts` records `CLIENT_MAC` with `evidence_id=10.0.10.3`, then a conversation `10.0.10.2 → 198.51.100.80` and a field-only victim-IP `eth.src` dump. The row restamps to `10.0.10.2`. A later DC-scoped dump of the same MAC does not overwrite. Fold with a live bind overwrites DC→victim and keeps victim→DC. Hostname keeps the first non-empty stamp.
+`packages/analyst/investigation/tests/investigation.spec.ts` records `CLIENT_MAC` with `evidence_id=10.0.10.3` after a live bind (victim `10.0.10.2`), then a field-only victim-IP `eth.src` dump. The row restamps to `10.0.10.2`. A later DC-scoped dump of the same MAC does not overwrite. Fold overwrites DC→victim when the log has a live bind or a C2-talking line, and keeps victim→DC. Hostname keeps the first non-empty stamp.
 
 `packages/analyst/investigation/tests/bind.spec.ts` takes `CLIENT_MAC` first stamped `10.0.10.3`, then restamped `10.0.10.2`, plus a DC MAC on a DC-scoped dump. After a live bind, who/where that omit `mac` persist `CLIENT_MAC` and keep ip/hostname/user/full_name. The DC MAC stays off.
 

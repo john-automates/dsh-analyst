@@ -709,12 +709,14 @@ describe('investigation service', () => {
     const { ctx, caseDir, owner } = await setup({ autoHunt: false })
     await mkdir(join(caseDir, 'evidence'), { recursive: true })
     await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
-    await ctx.tools.execute({
-      signal,
-      callId: CallId('echo-conversation'),
-      name: 'echo',
-      arguments: { text: '10.0.10.2 → 198.51.100.80 TCP' },
-      agent: owner,
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
     })
     ctx.investigation.recordIdentity(owner.session, {
       kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3',

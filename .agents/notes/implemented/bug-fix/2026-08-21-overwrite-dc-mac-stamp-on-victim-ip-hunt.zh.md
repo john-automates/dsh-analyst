@@ -36,7 +36,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/investigation.spec.ts` 先把 `CLIENT_MAC` 记成 `evidence_id=10.0.10.3`，再给出会话 `10.0.10.2 → 198.51.100.80` 和仅字段受害端 IP `eth.src` 转储。该行改戳成 `10.0.10.2`。后来对同一 MAC 的域控范围转储不会覆盖。带当前绑定的折叠会覆盖域控→受害端，并保留受害端→域控。主机名保留第一次非空戳记。
+`packages/analyst/investigation/tests/investigation.spec.ts` 在当前绑定（victim `10.0.10.2`）之后把 `CLIENT_MAC` 记成 `evidence_id=10.0.10.3`，再给出仅字段受害端 IP `eth.src` 转储。该行改戳成 `10.0.10.2`。后来对同一 MAC 的域控范围转储不会覆盖。日志里有当前绑定或 C2 通信行时，折叠会覆盖域控→受害端，并保留受害端→域控。主机名保留第一次非空戳记。
 
 `packages/analyst/investigation/tests/bind.spec.ts` 先把 `CLIENT_MAC` 戳成 `10.0.10.3`，再改戳成 `10.0.10.2`，外加限定在域控的域控 MAC。当前绑定之后，省略 `mac` 的 who／where 持久化 `CLIENT_MAC`，并保留 ip／hostname／user／full_name。域控 MAC 保持不在。
 
