@@ -81,10 +81,8 @@ export function normalizeIdentityValue(kind: IdentityKind, value: string): strin
   if (trimmed === '') return undefined
   if (kind === 'mac') return trimmed.toLowerCase().replace(/-/g, ':')
   if (kind === 'hostname' || kind === 'ip') return trimmed.toLowerCase()
-  if (kind === 'user' || kind === 'full_name') {
-    if (isNonIdentityAccountValue(trimmed)) return undefined
-    return kind === 'full_name' ? trimmed.replace(/\s+/g, ' ') : trimmed
-  }
+  if (isNonIdentityAccountValue(trimmed)) return undefined
+  if (kind === 'full_name') return trimmed.replace(/\s+/g, ' ')
   return trimmed
 }
 
