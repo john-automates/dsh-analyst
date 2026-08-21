@@ -304,6 +304,17 @@ describe('BindRelationship', () => {
     expect(report.who.ip).toBe(LAN)
     expect(report.where.ip).toBe(LAN)
     expect(live.endpoints.filter(endpoint => endpoint.role === 'c2')).toHaveLength(1)
+    const extras = [{ ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN }]
+    expect(acceptedC2Ips(bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: DISTRACTOR, role: 'victim', because: 'second LAN host' },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+      ],
+    }), extras)).toEqual([C2])
+    expect(acceptedC2Ips(bind({
+      endpoints: [{ addr: C2, role: 'c2', because: 'cue/observation address' }],
+    }), extras)).toEqual([C2])
   })
 
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
