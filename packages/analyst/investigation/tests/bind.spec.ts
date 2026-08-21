@@ -907,7 +907,7 @@ describe('BindRelationship', () => {
     expect(dcScoped).toEqual({
       kind: 'mac', value: DISTRACTOR_MAC, label: 'MAC', evidence_id: DISTRACTOR,
     })
-    const restamped = { ...firstHarvest, evidence_id: victimScoped?.evidence_id }
+    const restamped = { ...firstHarvest, evidence_id: LAN }
     const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
     const victimUser = identityOf('user', USER)!
     const victimName = identityOf('full_name', FULL_NAME)!
