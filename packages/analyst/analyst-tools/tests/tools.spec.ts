@@ -1421,7 +1421,40 @@ describe('analyst tools', () => {
     })
     expect(objectClose.isError).toBe(false)
     expect(ctx.investigation.report(owner.session)?.who.user).toBe('lan-user')
-    const handleClose = await ctx.tools.execute({
+    const handle = await setup()
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user',
+    })
+    const handleBind = await handle.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-sibling-handle-close'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: handle.owner,
+    })
+    expect(handleBind.isError).toBe(false)
+    const handleClose = await handle.ctx.tools.execute({
       signal,
       callId: CallId('report-sibling-handle-close'),
       name: 'case_report',
@@ -1430,16 +1463,11 @@ describe('analyst tools', () => {
         who: 'lan-user (Lan User)',
         where: '10.0.10.2 (lan-host)',
       },
-      agent: owner,
+      agent: handle.owner,
     })
     expect(handleClose.isError).toBe(false)
-    expect(ctx.investigation.report(owner.session)?.who).toEqual({
-      entity_id: '10.0.10.2',
-      ip: '10.0.10.2',
-      mac: '02:00:00:00:00:0a',
-      hostname: 'lan-host',
-      full_name: 'Lan User',
-    })
+    expect(handle.ctx.investigation.report(handle.owner.session)?.who).toEqual(projected)
+    await handle.ctx.fiber.dispose()
   })
 
   it('persists a submitted victim MAC when case_report who/where donate that MAC to the DC', async () => {

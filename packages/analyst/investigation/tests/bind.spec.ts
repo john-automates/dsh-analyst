@@ -1763,22 +1763,23 @@ describe('BindRelationship', () => {
     })
     expect(objectClose.who.user).toBe(USER)
     expect(objectClose.where.user).toBeUndefined()
+    const uniqueUser = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN },
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+      identityOf('full_name', FULL_NAME)!,
+      identityOf('user', USER)!,
+    ]
     expect(caseReportDenyReason({
       who: `${USER} (${FULL_NAME})`,
       where: `${LAN} (${HOST})`,
-    }, live, identities, frames)).toBeUndefined()
-    const handleClose = requireCaseReport(live, identities, claims, frames, {
+    }, live, uniqueUser, frames)).toBeUndefined()
+    const handleClose = requireCaseReport(live, uniqueUser, claims, frames, {
       who: `${USER} (${FULL_NAME})`,
       where: `${LAN} (${HOST})`,
     })
-    expect(handleClose.who).toEqual({
-      entity_id: LAN,
-      ip: LAN,
-      mac: CLIENT_MAC,
-      hostname: HOST,
-      full_name: FULL_NAME,
-    })
-    expect(handleClose.where).toEqual(handleClose.who)
+    expect(handleClose.who).toEqual(projected)
+    expect(handleClose.where).toEqual(projected)
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: MACHINE_SAM }))
       .toEqual({ entity_id: LAN, ip: LAN })
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: USER }))
