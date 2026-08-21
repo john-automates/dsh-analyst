@@ -4,6 +4,7 @@
  * Thesis-revise is a scenario object, not a fourth IR phase.
  * The plugin stamps Mission at session start to scope the case.
  * Auto-hunts run only when Plan is ready. Bind needs a named C2 hypothesis.
+ * A text-only stop is not complete while Mission is cue-pending or Plan is not ready.
  *
  * @module @deepseek-ai/dsh-investigation/mindset
  */
@@ -48,6 +49,14 @@ export const CUE_INVALID_REASON =
 /** Deny text when slot 0a is still the chassis pending cue. */
 export const CUE_PENDING_REASON =
   'unbound: slot 0a must name a real cue (valid or explicitly open) before bind_relationship.'
+
+/** Deny text when a text-only stop would close while slot 0a is still cue-pending. */
+export const COMPLETE_CUE_PENDING_REASON =
+  'incomplete: Mission is still cue-pending and Plan is not ready; name a real cue and persist a ready Plan before treating the investigation as complete.'
+
+/** Deny text when a text-only stop would close while Plan is not ready. */
+export const COMPLETE_PLAN_NOT_READY_REASON =
+  'incomplete: Plan is not ready; persist a ready Plan before treating the investigation as complete.'
 
 /** Alias of {@link PLAN_C2_HYPOTHESIS_REASON}. */
 export const PLAN_NOT_READY_REASON = PLAN_C2_HYPOTHESIS_REASON
@@ -264,6 +273,23 @@ export function planReadyDenyReason(
   if (!hasAlternativeHypothesis(plan.hypotheses)) return PLAN_ALTERNATIVE_REASON
   if (plan.inventory.length === 0) return PLAN_INVENTORY_REASON
   return undefined
+}
+
+/**
+ * Deny reason when a text-only stop may not close the investigation as complete.
+ * Names cue-pending and/or Plan not ready. Hunt and bind denies stay on
+ * {@link planReadyDenyReason}. Does not invent a cue or Plan.
+ * @param mission - last Mission, or undefined.
+ * @param plan - folded Plan.
+ * @returns a complete-deny reason, or undefined when complete may proceed.
+ */
+export function completeDenyReason(
+  mission: InvestigationMission | undefined,
+  plan: InvestigationPlan,
+): string | undefined {
+  if (planReady(mission, plan)) return undefined
+  if (cueSlotDenyReason(mission) === CUE_PENDING_REASON) return COMPLETE_CUE_PENDING_REASON
+  return COMPLETE_PLAN_NOT_READY_REASON
 }
 
 /**

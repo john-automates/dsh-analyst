@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-refuse-complete-while-cue-pending.md
+2026-08-21-refuse-complete-while-cue-pending.md: e0126a2313f29b82b6a551f031f94d1896376517
+2026-08-21-refuse-complete-while-cue-pending.zh.md: f07d2d05e492cc7d586915ce2bdd7ab8adac48b7

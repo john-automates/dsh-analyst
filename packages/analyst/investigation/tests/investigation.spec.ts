@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -15,7 +15,7 @@ import Investigation, {
   foldHunts, foldIdentities, foldMission, foldPlan, foldReport, METHODOLOGY_SECTION,
   CUE_PENDING_REASON, PLAN_ALTERNATIVE_REASON, defaultOpenAlternative,
   PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, planReady, requireCaseReport, resolveCaseDir,
-  setsWhoWhere,
+  setsWhoWhere, COMPLETE_CUE_PENDING_REASON, COMPLETE_PLAN_NOT_READY_REASON,
 } from '../src/index.ts'
 import { stampReadyMindset } from './mindset-fixture.ts'
 
@@ -30,6 +30,17 @@ afterEach(async () => {
 function agent(id = 'case-1'): Agent {
   const session = Session.create(SessionId(id))
   return { id: SessionId(id), session } as unknown as Agent
+}
+
+/** Record `steer` calls on a stub Agent used with `agent/turn-stopping`. */
+function attachSteer(owner: Agent): UserMessage[] {
+  const steered: UserMessage[] = []
+  Object.assign(owner, {
+    steer(message: UserMessage) {
+      steered.push(message)
+    },
+  })
+  return steered
 }
 
 async function setup(
@@ -2839,6 +2850,43 @@ describe('investigation service', () => {
     expect(foldMission(session.events)?.cue.addr).toBe('cue-pending')
     expect(foldMission(session.events)?.cueValidation).toBe('open')
     expect(ctx.investigation.ensureChassisMission(session)).toBe(false)
+  })
+
+  it('refuses turn/end complete while Mission is still cue-pending', async () => {
+    const { ctx, owner } = await setup({}, { mindset: false })
+    ctx.investigation.ensureChassisMission(owner.session)
+    const steered = attachSteer(owner)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('cue-pending')
+    expect(planReady(foldMission(owner.session.events), foldPlan(owner.session.events))).toBe(false)
+    expect(steered).toHaveLength(1)
+    expect(steered[0]?.content).toEqual([{ type: 'text', text: COMPLETE_CUE_PENDING_REASON }])
+    expect(steered[0]?.source).toMatchObject({ kind: 'plugin', plugin: 'investigation' })
+  })
+
+  it('refuses turn/end complete while Plan is not ready', async () => {
+    const { ctx, owner } = await setup({}, { mindset: false })
+    ctx.investigation.recordMission(owner.session, {
+      purpose: CHASSIS_MISSION_PURPOSE,
+      slots: { '0a': { value: 'open' } },
+      closedMeans: [...CHASSIS_CLOSED_MEANS],
+      cue: { addr: '198.51.100.80', evidence_id: 'conv-1' },
+      cueValidation: 'open',
+    })
+    const steered = attachSteer(owner)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('198.51.100.80')
+    expect(planReady(foldMission(owner.session.events), foldPlan(owner.session.events))).toBe(false)
+    expect(steered).toHaveLength(1)
+    expect(steered[0]?.content).toEqual([{ type: 'text', text: COMPLETE_PLAN_NOT_READY_REASON }])
+  })
+
+  it('allows turn/end complete after a named live cue and planReady', async () => {
+    const { ctx, owner } = await setup()
+    const steered = attachSteer(owner)
+    expect(planReady(foldMission(owner.session.events), foldPlan(owner.session.events))).toBe(true)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
+    expect(steered).toEqual([])
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

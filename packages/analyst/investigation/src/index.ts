@@ -14,6 +14,8 @@
  * 5W1H close packet whose who/where project from the bound victim entity row.
  * The plugin stamps Mission at session start to scope the case. Auto-hunts
  * run only when Plan is ready. Bind still needs a named C2 hypothesis.
+ * A text-only stop is not a completed investigation while Mission is still
+ * cue-pending or Plan is not ready.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -46,9 +48,10 @@ import {
 import { formatLedger } from './ledger.ts'
 import {
   actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
-  foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt, killedHypothesisIds,
-  defaultOpenAlternative, hasAlternativeHypothesis, namedLiveCue, planEntryDenyReason,
-  planReady, planReadyDenyReason, projectHuntExtras, sameHuntExtras, thesisForHuntDump,
+  completeDenyReason, foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt,
+  killedHypothesisIds, defaultOpenAlternative, hasAlternativeHypothesis, namedLiveCue,
+  planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras, sameHuntExtras,
+  thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
@@ -75,9 +78,10 @@ export {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_CLOSED_MEANS,
   CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
   defaultOpenAlternative, hasAlternativeHypothesis, isBelieveBecauseClaim,
-  killedHypothesisIds, namedLiveCue, planEntryDenyReason,
+  killedHypothesisIds, namedLiveCue, planEntryDenyReason, completeDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
+  COMPLETE_CUE_PENDING_REASON, COMPLETE_PLAN_NOT_READY_REASON,
   projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
   thesisForHuntDump,
 } from './mindset.ts'
@@ -307,7 +311,8 @@ function withNotice(decision: PostToolDecision, notice: UserMessage): PostToolDe
 
 /**
  * `ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence
- * policy, BindRelationship, methodology prompt, and 5W1H report persistence.
+ * policy, BindRelationship, methodology prompt, 5W1H report persistence, and
+ * a text-only turn/end complete denial while cue-pending or Plan is not ready.
  */
 export class Investigation extends Service {
   static inject = ['tools', 'systemPrompt']
@@ -335,6 +340,23 @@ export class Investigation extends Service {
 
     ctx.on('session/created', (session) => {
       this.ensureChassisMission(session)
+    }, { global: true })
+
+    ctx.on('agent/turn-stopping', ({ agent }) => {
+      const reason = completeDenyReason(
+        foldMission(agent.session.events),
+        foldPlan(agent.session.events),
+      )
+      if (reason === undefined) return
+      agent.steer(createUserMessage({
+        content: [{ type: 'text', text: reason }],
+        source: {
+          kind: 'plugin',
+          plugin: 'investigation',
+          form: 'notice',
+          summary: boundContextSummary('Investigation complete denied'),
+        },
+      }))
     }, { global: true })
 
     ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
