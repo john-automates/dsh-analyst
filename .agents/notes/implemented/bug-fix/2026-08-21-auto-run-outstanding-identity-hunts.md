@@ -14,7 +14,7 @@ Issuance and notice text were already correct. Execution waited for `pcap_filter
 
 When `autoHunt` is true, outstanding issued identity hunts — `eth-src`, `name-service`, `kerberos-cname`, and `samr-userinfo` — execute through `pcap_filter` with the scoped `display_filter` and fields from `huntFilterSpec` / `huntNotice`. The plugin does not wait for the model to call `pcap_filter`. Each dump harvests into the identity ledger as usual.
 
-When a C2-talking LAN IP is known, only that subject's hunts auto-run. A hunt whose subject is a non-LAN / C2 IP never auto-runs, except [`other-end`](2026-08-21-other-end-hunt-on-cue-victim.md), which hunts LAN `ip.src` talking to that cue. Hostname and user hunts auto-run only before a C2-talking LAN IP is known.
+When a C2-talking LAN IP is known, only that subject's hunts auto-run. A hunt whose subject is a non-LAN / C2 IP never auto-runs, except [`other-end`](2026-08-21-other-end-hunt-on-cue-victim.md), which hunts LAN `ip.src` talking to that cue, and [`c2-domain`](2026-08-21-c2-domain-hunt-after-live-bind.md), which hunts TLS SNI / DNS on that C2. Hostname and user hunts auto-run only before a C2-talking LAN IP is known.
 
 The capture path is the triggering pcap tool's `path` when that argument has a capture suffix, otherwise the first `*.pcap` / `*.pcapng` / `*.cap` under `evidence/` or the case root. Missing `pcap_filter` or a missing capture skips execution. A failed hunt does not fail the triggering tool. Already-attempted hunts are not retried on the same session.
 
@@ -26,7 +26,7 @@ The capture path is the triggering pcap tool's `path` when that argument has a c
 
 **Change only the methodology prompt.** Rejected: the notice already named `(eth.src)` and `ip.src ==` the LAN client.
 
-**Auto-run hunts for every issued subject, including the C2 IP.** Rejected: that persists the far-side NIC. Non-LAN identity-hunt subjects do not auto-run. `other-end` is a separate exception ([other-end](2026-08-21-other-end-hunt-on-cue-victim.md)).
+**Auto-run hunts for every issued subject, including the C2 IP.** Rejected: that persists the far-side NIC. Non-LAN identity-hunt subjects do not auto-run. `other-end` and `c2-domain` are separate exceptions ([other-end](2026-08-21-other-end-hunt-on-cue-victim.md), [c2-domain](2026-08-21-c2-domain-hunt-after-live-bind.md)).
 
 **Bake gold identities into prompts or tests.** Rejected: tests use a synthetic LAN client and MAC. Case names, IPs, and MACs are not expected answers.
 

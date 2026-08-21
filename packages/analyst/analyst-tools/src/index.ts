@@ -347,6 +347,7 @@ export function apply(ctx: Context, config: Config): void {
           where: { ...CASE_IDENTITY_SLOT_SCHEMA, required: true as const },
           why: { type: 'string', required: true },
           how: { type: 'string', required: true },
+          c2_domain: { type: 'string' },
         },
       },
       render: (_args, value) => [{
@@ -359,6 +360,7 @@ export function apply(ctx: Context, config: Config): void {
           `Where: ${renderIdentitySlot(value.where)}`,
           `Why: ${value.why}`,
           `How: ${value.how}`,
+          ...value.c2_domain === undefined ? [] : [`C2 domain: ${value.c2_domain}`],
         ].join('\n'),
       }],
     },

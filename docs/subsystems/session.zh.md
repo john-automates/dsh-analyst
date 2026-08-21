@@ -656,10 +656,16 @@ report(session: Session): CaseReport | undefined
 bind(session: Session): RelationshipBind | undefined
 
 /**
- * Append one identity when kind+value is new.
+ * Append one identity when kind+value is new, or when a later harvest
+ * supplies `evidence_id` that the first-seen row lacks, or when a later
+ * MAC harvest stamps the bound victim or a C2-talking LAN IP over a
+ * DC/peer first stamp.
+ * Unique-on-kind+value still yields one folded row. A restamp does not
+ * count as a new identity for hunt issuance. A later DC/peer stamp does
+ * not overwrite a victim or C2-talking stamp.
  * @param session - session to append to.
  * @param identity - identity to record.
- * @returns true when a new event was appended.
+ * @returns true when a new kind+value was appended.
  */
 recordIdentity(session: Session, identity: Identity): boolean
 
@@ -714,7 +720,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:208`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:267`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, completeAcceptedSlot,
-  cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON, foldBind, formatRolesCard,
-  identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON, normalizeEndpointAddr,
-  otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind,
-  roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
+  acceptedC2Domain, BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, c2DomainHuntForBind,
+  completeAcceptedSlot, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON, foldBind,
+  formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
+  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
+  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { harvestIdentities, identityOf } from '../src/harvest.ts'
@@ -118,6 +118,9 @@ describe('BindRelationship', () => {
       },
     })
     if (!live.ok) throw new Error('expected LAN victim to bind')
+    expect(c2DomainHuntForBind(live.bind)).toEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: C2,
+    })
     const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
     expect(caseReportDenyReason({ what: 'x' }, live.bind)).toBeUndefined()
     expect(requireCaseReport(live.bind, [], claims)).toEqual({
@@ -177,6 +180,51 @@ describe('BindRelationship', () => {
     expect(report?.where).toEqual(slot)
     expect(roleForIdentity(c2Ip, live, identities)).toBe('c2')
     expect(roleForIdentity(distractorHost, live, identities)).toBe('distractor')
+  })
+
+  it('persists a C2-stamped DNS name as c2_domain and does not donate it to who/where', () => {
+    const DOMAIN = 'c2.example.test'
+    const live = bind()
+    const victimHost: Identity = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const dcHost: Identity = {
+      ...identityOf('hostname', 'dc01')!,
+      evidence_id: DISTRACTOR,
+    }
+    const c2Host: Identity = {
+      ...identityOf('hostname', DOMAIN)!,
+      evidence_id: C2,
+    }
+    const lanOnC2: Identity = {
+      ...identityOf('hostname', 'desktop-lan')!,
+      evidence_id: C2,
+    }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      victimHost,
+      dcHost,
+      c2Host,
+      lanOnC2,
+    ]
+    expect(acceptedC2Domain(live, identities)).toBe(DOMAIN)
+    expect(identityDonatesToVictim(c2Host, live, identities)).toBe(false)
+    expect(identityDonatesToVictim(dcHost, live, identities)).toBe(false)
+    const slot = projectVictimSlot(live, identities)
+    expect(slot).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
+    expect(slot?.hostname).not.toBe(DOMAIN)
+    expect(slot?.hostname).not.toBe('dc01')
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_domain).toBe(DOMAIN)
+    expect(report.who).toEqual(slot)
+    expect(report.where).toEqual(slot)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(acceptedC2Domain(live, [victimHost, dcHost, lanOnC2])).toBeUndefined()
+    expect(requireCaseReport(live, [identityOf('ip', LAN)!, victimHost], {
+      what: 'a', when: 'b', why: 'c', how: 'd',
+    }).c2_domain).toBeUndefined()
   })
 
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
@@ -279,6 +327,13 @@ describe('BindRelationship', () => {
     expect(otherEndHuntForDeniedBind({
       relationship: dcRelationship,
       endpoints: dcEndpoints,
+    })).toBeUndefined()
+    expect(c2DomainHuntForBind({
+      relationship: dcRelationship,
+      endpoints: [
+        { addr: LAN, role: 'victim', because: dcBecause },
+        { addr: DISTRACTOR, role: 'c2', because: dcBecause },
+      ],
     })).toBeUndefined()
     expect(otherEndHuntForDeniedBind({
       relationship: dcRelationship,

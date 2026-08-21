@@ -1,6 +1,7 @@
 /**
- * Auto-issued hunt selection after newly recorded identities, and the
- * other-end hunt issued when bind_relationship assigns a cue as victim.
+ * Auto-issued hunt selection after newly recorded identities, the
+ * other-end hunt issued when bind_relationship assigns a cue as victim,
+ * and the c2-domain hunt issued on a successful bind with a non-LAN C2.
  * @module @deepseek-ai/dsh-investigation/hunts
  */
 
@@ -37,6 +38,28 @@ export function otherEndDisplayFilter(cue: string): string {
  */
 export function otherEndHunt(cue: string): Hunt {
   return { kind: 'other-end', subjectKind: 'ip', subject: cue }
+}
+
+/**
+ * Display filter that finds TLS SNI or DNS names on a bound C2 IPv4.
+ * @param c2 - normalized non-LAN C2 IPv4.
+ * @returns SNI/DNS filter scoped with `ip.addr == <c2>`.
+ */
+export function c2DomainDisplayFilter(c2: string): string {
+  return displayFilterFor(
+    'tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name',
+    c2DomainHunt(c2),
+  )
+}
+
+/**
+ * Hunt for a TLS SNI or DNS name evidenced on a bound C2 IPv4.
+ * Subject is that C2 IP. The filter does not invent a domain.
+ * @param c2 - normalized non-LAN C2 IPv4.
+ * @returns a `c2-domain` hunt for that C2.
+ */
+export function c2DomainHunt(c2: string): Hunt {
+  return { kind: 'c2-domain', subjectKind: 'ip', subject: c2 }
 }
 
 /**
@@ -215,6 +238,15 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
       }
     case 'other-end':
       return { display_filter: otherEndDisplayFilter(hunt.subject), fields: ['ip.src'] }
+    case 'c2-domain':
+      return {
+        display_filter: c2DomainDisplayFilter(hunt.subject),
+        fields: [
+          'tls.handshake.extensions_server_name',
+          'dns.qry.name',
+          'dns.resp.name',
+        ],
+      }
     default:
       return assertNever(hunt.kind, 'huntFilterSpec')
   }
@@ -222,16 +254,18 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
 
 /**
  * Whether an issued hunt may be auto-run against a capture.
- * Non-LAN / C2 IP subjects never run, except `other-end`, which hunts LAN
- * `ip.src` talking to that cue. When a C2-talking LAN IP is known, only
- * hunts for that IP run (and `other-end`). Otherwise LAN IP, hostname, and
- * user subjects run.
+ * Non-LAN / C2 IP subjects never run, except `other-end` (LAN `ip.src`
+ * talking to that cue) and `c2-domain` (TLS SNI / DNS on that C2). When a
+ * C2-talking LAN IP is known, only hunts for that IP run (and those two
+ * exceptions). Otherwise LAN IP, hostname, and user subjects run.
  * @param hunt - one issued hunt.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @returns true when the plugin should execute this hunt.
  */
 export function shouldAutoRunHunt(hunt: Hunt, evidenceText: string): boolean {
-  if (hunt.kind === 'other-end') return hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)
+  if (hunt.kind === 'other-end' || hunt.kind === 'c2-domain') {
+    return hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)
+  }
   if (hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)) return false
   const focus = c2TalkingLanIps(evidenceText)
   if (focus.length > 0) return hunt.subjectKind === 'ip' && focus.includes(hunt.subject)
@@ -300,6 +334,14 @@ export function huntNotice(hunt: Hunt): string {
       return [
         `Hunt issued: other-end for ${hunt.subjectKind} ${hunt.subject}.`,
         `Filter \`${spec.display_filter}\` field \`${spec.fields[0]}\`.`,
+      ].join(' ')
+    }
+    case 'c2-domain': {
+      const spec = huntFilterSpec(hunt)
+      return [
+        `Hunt issued: c2-domain for ${hunt.subjectKind} ${hunt.subject}.`,
+        `Filter \`${spec.display_filter}\``,
+        `fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`, \`${spec.fields[2]}\`.`,
       ].join(' ')
     }
     default:

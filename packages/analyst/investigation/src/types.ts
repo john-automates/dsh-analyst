@@ -38,7 +38,13 @@ export interface Identity {
 }
 
 /** Auto-issued or recorded hunt kinds. */
-export type HuntKind = 'kerberos-cname' | 'samr-userinfo' | 'eth-src' | 'name-service' | 'other-end'
+export type HuntKind =
+  | 'kerberos-cname'
+  | 'samr-userinfo'
+  | 'eth-src'
+  | 'name-service'
+  | 'other-end'
+  | 'c2-domain'
 
 /** Subject kinds a hunt can attach to. */
 export type HuntSubjectKind = 'ip' | 'hostname' | 'user'
@@ -118,6 +124,11 @@ export interface CaseReport {
   why: string
   /** How it happened, as evidenced. */
   how: string
+  /**
+   * TLS SNI or DNS name evidenced on the bound C2 IPv4. Omitted when none
+   * was harvested. Not a who/where hostname and not a victim-row donate.
+   */
+  c2_domain?: string
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -133,11 +144,13 @@ declare module '@deepseek-ai/dsh-session/types' {
      * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
      * peer, those identity hunts issue only for that C2-talking IP. Assigning
      * victim to a cue/observation address issues `other-end` for that cue IP
-     * (`ip.dst ==` the cue, field `ip.src`). A both-LAN conversation deny
-     * does not issue `other-end` and does not invent a C2. When `autoHunt` is true,
-     * outstanding issued hunts execute through `pcap_filter` with the scoped
-     * display filter; `other-end` auto-runs even though its subject is the
-     * cue. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
+     * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a non-LAN
+     * C2 issues `c2-domain` for that C2 IPv4 (TLS SNI / DNS). A both-LAN
+     * conversation deny does not issue `other-end` or `c2-domain` and does
+     * not invent a C2. When `autoHunt` is true, outstanding issued hunts
+     * execute through `pcap_filter` with the scoped display filter;
+     * `other-end` and `c2-domain` auto-run even though the subject is the
+     * cue or C2. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**
@@ -148,7 +161,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     /**
      * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
      * who/where are the projected victim entity row; omitted model keys are
-     * filled from that row after deny/coerce.
+     * filled from that row after deny/coerce. `c2_domain` is the harvested
+     * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
      */
     'investigation/report': CaseReport
   }

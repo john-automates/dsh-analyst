@@ -906,6 +906,65 @@ describe('analyst tools', () => {
     await noMac.ctx.fiber.dispose()
   })
 
+  it('persists a harvested C2 domain onto case_report after a live bind', async () => {
+    const binDir = await mkdtemp(join(tmpdir(), 'dsh-c2-domain-'))
+    const tsharkBin = await script(binDir, 'tshark', 'echo "c2.example.test"')
+    const { ctx, owner } = await setup({ tsharkBin })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'dc01', label: 'hostname', evidence_id: '10.0.10.3',
+    })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-c2-domain'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+    expect(ctx.investigation.identities(owner.session)).toContainEqual({
+      kind: 'hostname', value: 'c2.example.test', label: 'hostname', evidence_id: '198.51.100.80',
+    })
+    const result = await ctx.tools.execute({
+      signal, callId: CallId('report-c2-domain'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: 'lan-host' },
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: 'lan-host' },
+      why: 'c2',
+      how: 'https',
+      c2_domain: 'c2.example.test',
+    })
+    expect(text(result)).toContain('C2 domain: c2.example.test')
+    expect(text(result)).toContain('Who: 10.0.10.2 lan-host')
+    expect(text(result)).not.toContain('Who: 10.0.10.2 lan-host c2.example.test')
+    await rm(binDir, { recursive: true, force: true })
+  })
+
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const bind = await ctx.tools.execute({

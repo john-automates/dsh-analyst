@@ -11,7 +11,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
   BOTH_LAN_CONVERSATION_REASON, CLOSE_FILE_REASON, Config, foldHunts, foldIdentities, foldReport,
-  METHODOLOGY_SECTION, resolveCaseDir, setsWhoWhere,
+  METHODOLOGY_SECTION, requireCaseReport, resolveCaseDir, setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -1197,6 +1197,7 @@ describe('investigation service', () => {
     expect(dcText).toContain(BOTH_LAN_CONVERSATION_REASON)
     expect(dcText).not.toContain('198.51.100.80')
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
     expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     const lanC2 = await ctx.tools.execute({
       signal,
@@ -1216,6 +1217,7 @@ describe('investigation service', () => {
       'unbound: role c2 cannot be a LAN address.',
     )
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
     const coerced = await ctx.tools.execute({
       signal,
       callId: CallId('bind-cue-ok'),
@@ -1391,6 +1393,101 @@ describe('investigation service', () => {
     expect(calls).toEqual([])
     expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     expect(ctx.investigation.identities(owner.session)).toEqual([])
+  })
+
+  it('auto-issues and auto-runs c2-domain after a live bind and persists the C2 name', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const DOMAIN = 'c2.example.test'
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'dc01', label: 'hostname', evidence_id: '10.0.10.3',
+    })
+    const calls: { path?: unknown; display_filter?: unknown; fields?: unknown }[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes('198.51.100.80')) {
+          return Promise.resolve({
+            text: [
+              `tls.handshake.extensions_server_name: ${DOMAIN}`,
+              'dns.qry.name: c2.example.test',
+              'hostname: desktop-lan',
+              'NBNS Registration NB DC01<00>',
+              'BROWSER Domain/Workgroup Announcement WORKGROUP',
+            ].join('\n'),
+          })
+        }
+        return Promise.resolve({ text: '' })
+      },
+    }))
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-c2-domain'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+    expect(calls).toEqual(expect.arrayContaining([
+      {
+        path: 'evidence/a.pcap',
+        display_filter:
+          '(tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name) and ip.addr == 198.51.100.80',
+        fields: [
+          'tls.handshake.extensions_server_name',
+          'dns.qry.name',
+          'dns.resp.name',
+        ],
+      },
+    ]))
+    expect(ctx.investigation.identities(owner.session)).toContainEqual({
+      kind: 'hostname', value: DOMAIN, label: 'hostname', evidence_id: '198.51.100.80',
+    })
+    expect(ctx.investigation.identities(owner.session).some(item => (
+      item.kind === 'hostname' && item.value === 'desktop-lan' && item.evidence_id === '198.51.100.80'
+    ))).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => (
+      hunt.kind === 'kerberos-cname' && hunt.subject === DOMAIN
+    ))).toBe(false)
+    const report = requireCaseReport(
+      ctx.investigation.bind(owner.session),
+      ctx.investigation.identities(owner.session),
+      { what: 'beacon', when: 'now', why: 'c2', how: 'https' },
+    )
+    ctx.investigation.recordReport(owner.session, report)
+    expect(report.c2_domain).toBe(DOMAIN)
+    expect(report.who.hostname).toBe('lan-host')
+    expect(report.where.hostname).toBe('lan-host')
+    expect(report.who.hostname).not.toBe(DOMAIN)
+    expect(report.where.hostname).not.toBe(DOMAIN)
+    expect(report.who.entity_id).toBe('10.0.10.2')
+    expect(report.where.entity_id).toBe('10.0.10.2')
+    expect(ctx.investigation.report(owner.session)?.c2_domain).toBe(DOMAIN)
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {
