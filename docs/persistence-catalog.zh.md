@@ -490,7 +490,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/bind': RelationshipBind
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:133`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:137`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -501,15 +501,17 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
  * log order. A new IP issues `eth-src`, `name-service`, Kerberos
  * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
- * peer, those identity hunts issue only for that C2-talking IP. When
- * `autoHunt` is true, outstanding issued hunts execute through
- * `pcap_filter` with the scoped display filter. A new hostname issues
- * Kerberos then SAMR. A new user issues SAMR.
+ * peer, those identity hunts issue only for that C2-talking IP. Assigning
+ * victim to a cue/observation address issues `other-end` for that cue IP
+ * (`ip.dst ==` the cue, field `ip.src`). When `autoHunt` is true,
+ * outstanding issued hunts execute through `pcap_filter` with the scoped
+ * display filter; `other-end` auto-runs even though its subject is the
+ * cue. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
  */
 'investigation/hunt': Hunt
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:128`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:132`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -523,7 +525,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/identity': Identity
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:118`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:120`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -537,7 +539,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/report': CaseReport
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:138`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:142`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

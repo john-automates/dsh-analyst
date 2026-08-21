@@ -929,16 +929,17 @@ export interface Config {
    * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
-   * those identity hunts issue only for that C2-talking IP. Outstanding issued
-   * hunts then run through `pcap_filter` with the scoped display_filter and
-   * fields; results harvest into the ledger. Non-LAN / C2 IP subjects do not
-   * auto-run. Defaults to true.
+   * those identity hunts issue only for that C2-talking IP. A cue-as-victim
+   * bind issues `other-end` for that cue. Outstanding issued hunts then run
+   * through `pcap_filter` with the scoped display_filter and fields; results
+   * harvest into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
+   * `other-end`. Defaults to true.
    */
   autoHunt?: boolean
 }
 ```
 
-来源：[`packages/analyst/investigation/src/index.ts:87`](../packages/analyst/investigation/src/index.ts)
+来源：[`packages/analyst/investigation/src/index.ts:90`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 

@@ -655,6 +655,21 @@ describe('investigation service', () => {
       },
     })
     expect(noAgent.isError).toBe(true)
+    const noVictim = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-no-victim'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'unknown', because: 'not yet' }],
+      },
+      agent: owner,
+    })
+    expect(noVictim.isError).toBe(true)
+    expect(noVictim.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'bind_relationship requires exactly one victim',
+    )
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
     const flip = await ctx.tools.execute({
       signal,
       callId: CallId('bind-flip'),
@@ -871,7 +886,8 @@ describe('investigation service', () => {
       signal, callId: CallId('close-after-hunt'), name: 'case_report', arguments: claims, agent: owner,
     })
     expect(closed.isError).toBe(false)
-    expect(ctx.investigation.report(owner.session)?.who.entity_id).toBe('10.0.10.2')
+    expect(owner.session.events.some(event => event.type === 'investigation/bind')).toBe(true)
+    expect(ctx.investigation.bind(owner.session)?.endpoints.some(endpoint => endpoint.addr === '198.51.100.80' && endpoint.role === 'victim')).toBe(false)
   })
 
   it('records other-end on cue-as-victim when autoHunt is off and does not run pcap_filter', async () => {
