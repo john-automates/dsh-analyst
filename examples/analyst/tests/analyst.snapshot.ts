@@ -67,9 +67,13 @@ describe('analyst pcap-case snapshot', () => {
         const records = parseJsonl(await readFile(join(cwd, '.sessions', files[0]!), 'utf8'))
         const calls = records.filter(record => record.type === 'tool/call')
           .map(record => (record.data as JsonObject | undefined)?.name)
-        expect(calls).toEqual(['pcap_filter', 'bind_relationship', 'case_report'])
+        expect(calls).toEqual([
+          'pcap_filter', 'investigation_mission', 'investigation_plan', 'bind_relationship', 'case_report',
+        ])
         expect(records.some(record => record.type === 'investigation/identity')).toBe(true)
         expect(records.some(record => record.type === 'investigation/hunt')).toBe(true)
+        expect(records.some(record => record.type === 'investigation/mission')).toBe(true)
+        expect(records.some(record => record.type === 'investigation/plan')).toBe(true)
         expect(records.some(record => record.type === 'investigation/bind')).toBe(true)
         const report = records.find(record => record.type === 'investigation/report')
         const who = (report?.data as JsonObject | undefined)?.who as JsonObject | undefined

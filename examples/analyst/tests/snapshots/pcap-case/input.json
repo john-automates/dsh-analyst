@@ -2,7 +2,7 @@
   "steps": [
     {
       "op": "prompt",
-      "text": "Define the Investigation Question, hunt Kerberos CNameString in evidence/a.pcap, bind the conversation, then close with a 5W1H case_report."
+      "text": "Define the Investigation Question, hunt Kerberos CNameString in evidence/a.pcap, persist Mission and Plan, bind the conversation, then close with a 5W1H case_report."
     }
   ]
 }

@@ -14,9 +14,9 @@ Status: implemented
 
 成功的 `bind_relationship` 在唯一 LAN victim 与唯一非 LAN C2 上，下发主体为该 victim IPv4 的 `extra-wan` hunt。过滤器是 `ip.src ==` 该 victim，对非 LAN 单播目的地址讲话，且不是已经绑定的 C2（RFC1918、回环、链路本地、组播、保留地址和 `0.0.0.0` 排除在外）。字段是 `ip.dst`。两端都在 LAN 或 CDN／更新 C2 的拒绝到不了当前绑定，因此不下发该 hunt（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)，[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。
 
-当 `autoHunt` 为 true 时，即使主体是 LAN victim，且即使已有 C2 通信焦点 IP，`extra-wan` 仍通过 `pcap_filter` 自动运行。`scopeIpFromHunt` 返回该 victim，因此收割把目的 `kind=ip` 的 `evidence_id` 戳成该 victim。插件随后对每个 C2 IPv4（已绑定加上额外地址）下发 [`c2-domain`](2026-08-21-c2-domain-hunt-after-live-bind.md)。`shouldAutoRunHunt` 仍允许非 LAN 主体上的 `c2-domain`。
+当 `autoHunt` 为 true 时，即使主体是 LAN victim，且即使已有 C2 通信焦点 IP，`extra-wan` 仍通过 `pcap_filter` 自动运行，但仅在 Plan 就绪之后（线索为 `valid` 或 `open`、一条 C2 假设、一条 CDN／DC／更新替代假设，以及一份清单）。Mission 不解锁该自动运行（[在没有 5W1H 结案时持久化遗留 C2 附加项](2026-08-21-persist-c2-extras-without-close.md)）。`scopeIpFromHunt` 返回该 victim，因此收割把目的 `kind=ip` 的 `evidence_id` 戳成该 victim。插件随后对每个 C2 IPv4（已绑定加上额外地址）下发 [`c2-domain`](2026-08-21-c2-domain-hunt-after-live-bind.md)。`shouldAutoRunHunt` 仍允许非 LAN 主体上的 `c2-domain`。
 
-`acceptedC2Ips` 先放唯一已绑定 C2，再放 `evidence_id` 为该 victim 的非 LAN 单播 IP。先前转储收割到、没有戳记或戳在非 victim 上的 CDN／DNS／更新 IP 不进入。证据主机名为知名 CDN 或更新名的 IP 也被省略，包括已绑定 C2（[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。已接受的 `case_report` 把那些剩余 IPv4 复制到可选的 `c2_ips`。`acceptedC2Domain`／`projectCaseReport` 查看证据落在那些剩余 IP 上的主机名身份，仍受 `isC2DomainName` 约束，跳过 CDN／更新名，并把第一个剩余带点名持久化为 `c2_domain`。who/where 仍是受害端行。额外 C2 不捐到 who/where 的 hostname 或 ip。不会发明第二次绑定。LAN／域控／网关／组播／未绑定 WAN／`DESKTOP-*` 保持不在其上。
+`acceptedC2Ips` 先放唯一已绑定 C2，再放 `evidence_id` 为该 victim 的非 LAN 单播 IP。先前转储收割到、没有戳记或戳在非 victim 上的 CDN／DNS／更新 IP 不进入。证据主机名为知名 CDN 或更新名的 IP 也被省略，包括已绑定 C2（[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。Report 钩子把那些剩余 IPv4 复制到 `investigation/extras`，即使散文 `case_report` 保持未绑定，并复制到已接受结案包上可选的 `c2_ips`。`acceptedC2Domain`／`projectCaseReport` 查看证据落在那些剩余 IP 上的主机名身份，仍受 `isC2DomainName` 约束，跳过 CDN／更新名，并把第一个剩余带点名持久化为 `c2_domain`。who/where 仍是受害端行。额外 C2 不捐到 who/where 的 hostname 或 ip。不会发明第二次绑定。LAN／域控／网关／组播／未绑定 WAN／`DESKTOP-*` 保持不在其上。
 
 scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、额外 WAN `203.0.113.50`、干扰 WAN `203.0.113.99`、空闲／域控 LAN 对等体和 `c2.example.test`。
 

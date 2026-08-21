@@ -10,9 +10,11 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
-  BOTH_LAN_CONVERSATION_REASON, CDN_C2_REASON, CLOSE_FILE_REASON, Config, foldHunts, foldIdentities,
-  foldReport, METHODOLOGY_SECTION, requireCaseReport, resolveCaseDir, setsWhoWhere,
+  BOTH_LAN_CONVERSATION_REASON, CDN_C2_REASON, CLOSE_FILE_REASON, Config, foldActions, foldExtras,
+  foldHunts, foldIdentities, foldMission, foldPlan, foldReport, METHODOLOGY_SECTION,
+  PLAN_NOT_READY_REASON, requireCaseReport, resolveCaseDir, setsWhoWhere,
 } from '../src/index.ts'
+import { stampReadyMindset } from './mindset-fixture.ts'
 
 const signal = new AbortController().signal
 let root: string | undefined
@@ -27,7 +29,10 @@ function agent(id = 'case-1'): Agent {
   return { id: SessionId(id), session } as unknown as Agent
 }
 
-async function setup(over: Partial<ConstructorParameters<typeof Investigation>[1]> = {}): Promise<{
+async function setup(
+  over: Partial<ConstructorParameters<typeof Investigation>[1]> = {},
+  opts: { mindset?: boolean } = {},
+): Promise<{
   ctx: Context
   caseDir: string
   owner: Agent
@@ -67,7 +72,9 @@ async function setup(over: Partial<ConstructorParameters<typeof Investigation>[1
     },
     execute: () => Promise.resolve({ ok: true }),
   }))
-  return { ctx, caseDir: root, owner: agent() }
+  const owner = agent()
+  if (opts.mindset !== false) stampReadyMindset(ctx.investigation, owner.session)
+  return { ctx, caseDir: root, owner }
 }
 
 describe('investigation service', () => {
@@ -434,14 +441,26 @@ describe('investigation service', () => {
   })
 
   it('renders methodology and an empty ledger, then a populated ledger', async () => {
-    const { ctx, owner } = await setup()
+    const { ctx, owner } = await setup({}, { mindset: false })
     const empty = await ctx.systemPrompt.assemble({ agent: owner })
     expect(empty.sections.some(section => section.name === 'investigation:policy' && section.text === METHODOLOGY_SECTION)).toBe(true)
     expect(METHODOLOGY_SECTION).toContain('Before Who/Where, bind the conversation.')
     expect(METHODOLOGY_SECTION).toContain(
+      'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
+    )
+    expect(METHODOLOGY_SECTION).toContain(
       'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
     )
     expect(ctx.tools.get('bind_relationship')).toBeDefined()
+    expect(ctx.tools.get('investigation_mission')?.presentCall?.({
+      purpose: 'Scope an identity+C2 case',
+      cue_addr: '198.51.100.80',
+      cue_evidence_id: 'conv-1',
+      cue_validation: 'valid',
+    })?.title).toBe('Mission')
+    expect(ctx.tools.get('investigation_plan')?.presentCall?.({
+      inventory: ['evidence/a.pcap'],
+    })?.title).toBe('Plan')
     expect(setsWhoWhere(null)).toBe(false)
     expect(setsWhoWhere('x')).toBe(false)
     expect(setsWhoWhere({ what: 'a' })).toBe(false)
@@ -452,6 +471,10 @@ describe('investigation service', () => {
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.0.5', label: 'IP' })
     const filled = await ctx.systemPrompt.assemble({ agent: owner })
     expect(filled.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toContain('10.0.0.5')
+    stampReadyMindset(ctx.investigation, owner.session)
+    const withPlan = await ctx.systemPrompt.assemble({ agent: owner })
+    expect(withPlan.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toContain('Mission:')
+    expect(withPlan.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toContain('Plan:')
     ctx.investigation.recordBind(owner.session, {
       relationship: {
         src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
@@ -1221,6 +1244,7 @@ describe('investigation service', () => {
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
     expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(foldExtras(owner.session.events)).toBeUndefined()
     const lanC2 = await ctx.tools.execute({
       signal,
       callId: CallId('bind-lan-c2'),
@@ -1741,6 +1765,7 @@ describe('investigation service', () => {
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    expect(foldExtras(owner.session.events)).toBeUndefined()
     ctx.investigation.recordIdentity(owner.session, {
       kind: 'hostname', value: 'payload.example.test', label: 'hostname', evidence_id: '198.51.100.80',
     })
@@ -1833,6 +1858,421 @@ describe('investigation service', () => {
     expect(report.where.hostname).toBe('lan-host')
   })
 
+  it('persists leftover extras from the Report hook without an accepted close', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const PAYLOAD = 'payload.example.test'
+    const CDN_DEST = '203.0.113.80'
+    const EXTRA = '203.0.113.50'
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
+    })
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('ip.src == 10.0.10.2') && filter.includes('ip.dst')) {
+          return Promise.resolve({ text: `ip.dst: ${CDN_DEST}\nip.dst: ${EXTRA}` })
+        }
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(CDN_DEST)) {
+          return Promise.resolve({ text: 'tls.handshake.extensions_server_name: update.microsoft.com' })
+        }
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(EXTRA)) {
+          return Promise.resolve({
+            text: `tls.handshake.extensions_server_name: intranet\ntls.handshake.extensions_server_name: ${PAYLOAD}`,
+          })
+        }
+        return Promise.resolve({ text: '' })
+      },
+    }))
+    ctx.tools.register(defineTool({
+      name: 'case_report',
+      description: 'Close stand-in.',
+      parameters: {
+        what: { type: 'string', required: true },
+        when: { type: 'string', required: true },
+        why: { type: 'string', required: true },
+        how: { type: 'string', required: true },
+        who: { type: 'string' },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
+        render: () => [{ type: 'text', text: 'closed' }],
+      },
+      execute: () => Promise.resolve({ ok: true }),
+    }))
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-leftover-extras'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    const extras = foldExtras(owner.session.events)
+    expect(extras?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(extras?.c2_ips).not.toContain(CDN_DEST)
+    expect(extras?.c2_domain).toBe(PAYLOAD)
+    expect(ctx.investigation.extras(owner.session)).toEqual(extras)
+    expect(foldReport(owner.session.events)).toBeUndefined()
+    expect(owner.session.events.some(event => event.type === 'investigation/report')).toBe(false)
+    expect(ctx.investigation.report(owner.session)).toBeUndefined()
+    expect(foldActions(owner.session.events).every(action => action.hypothesis_id === 'h-c2')).toBe(true)
+    expect(foldActions(owner.session.events).some(action => action.thesis.result === 'confirm')).toBe(true)
+    const unbound = await ctx.tools.execute({
+      signal,
+      callId: CallId('close-unbound-who'),
+      name: 'case_report',
+      arguments: {
+        what: 'beacon', when: 'now', why: 'c2', how: 'https',
+        who: 'the cue at 198.51.100.80',
+      },
+      agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(foldExtras(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldExtras(owner.session.events)?.c2_domain).toBe(PAYLOAD)
+    expect(foldReport(owner.session.events)).toBeUndefined()
+    const report = requireCaseReport(
+      ctx.investigation.bind(owner.session),
+      ctx.investigation.identities(owner.session),
+      { what: 'beacon', when: 'now', why: 'c2', how: 'https' },
+    )
+    ctx.investigation.recordReport(owner.session, report)
+    expect(foldReport(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldReport(owner.session.events)?.c2_domain).toBe(PAYLOAD)
+    expect(foldReport(owner.session.events)?.what).toBe('beacon')
+    expect(foldReport(owner.session.events)?.who.entity_id).toBe('10.0.10.2')
+    expect(foldReport(owner.session.events)?.who.hostname).toBe('lan-host')
+    expect(foldReport(owner.session.events)?.where.hostname).toBe('lan-host')
+  })
+
+  it('does not auto-hunt leftover extras after Mission alone', async () => {
+    const { ctx, caseDir, owner } = await setup({}, { mindset: false })
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const calls: unknown[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        return Promise.resolve({ text: 'ip.dst: 203.0.113.50' })
+      },
+    }))
+    ctx.investigation.recordMission(owner.session, {
+      purpose: 'Scope an identity+C2 case',
+      slots: { '0a': { value: 'valid' } },
+      closedMeans: ['identity+c2'],
+      cue: { addr: '198.51.100.80', evidence_id: 'conv-1' },
+      cueValidation: 'valid',
+    })
+    const denied = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-mission-only'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(denied.isError).toBe(true)
+    expect(denied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      PLAN_NOT_READY_REASON,
+    )
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
+    expect(foldExtras(owner.session.events)).toBeUndefined()
+    ctx.investigation.recordHunt(owner.session, {
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    const echoed = await ctx.tools.execute({
+      signal, callId: CallId('echo-mission-only'), name: 'echo',
+      arguments: { text: '10.0.10.2' }, agent: owner,
+    })
+    expect(echoed.isError).toBe(false)
+    const filters = calls.map(item => (
+      typeof item === 'object' && item !== null && 'display_filter' in item
+        ? String((item as { display_filter?: unknown }).display_filter)
+        : ''
+    ))
+    expect(filters.some(filter => filter.includes('tls.handshake.extensions_server_name'))).toBe(false)
+    expect(filters.some(filter => filter.includes('not ip.dst'))).toBe(false)
+    expect(foldExtras(owner.session.events)).toBeUndefined()
+  })
+
+  it('appends Mission and Plan and denies an empty or malformed Plan', async () => {
+    const { ctx, owner } = await setup({}, { mindset: false })
+    const blank = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-blank'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: '   ',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'valid',
+      },
+      agent: owner,
+    })
+    expect(blank.isError).toBe(true)
+    const blankCue = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-blank-cue'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: 'Scope an identity+C2 case',
+        cue_addr: '   ',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'valid',
+      },
+      agent: owner,
+    })
+    expect(blankCue.isError).toBe(true)
+    const mission = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-ok'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: 'Scope an identity+C2 case',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'open',
+        closed_means: ['identity+c2', ''],
+      },
+      agent: owner,
+    })
+    expect(mission.isError).toBe(false)
+    expect(foldMission(owner.session.events)?.cueValidation).toBe('open')
+    expect(ctx.investigation.mission(owner.session)?.closedMeans).toEqual(['identity+c2'])
+    const restamp = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-no-means'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: 'Scope an identity+C2 case',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'open',
+      },
+      agent: owner,
+    })
+    expect(restamp.isError).toBe(false)
+    expect(ctx.investigation.mission(owner.session)?.closedMeans).toEqual([])
+    const noAgent = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-no-agent'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: 'Scope an identity+C2 case',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'valid',
+      },
+    })
+    expect(noAgent.isError).toBe(true)
+    const planNoAgent = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-no-agent'),
+      name: 'investigation_plan',
+      arguments: { inventory: ['evidence/a.pcap'] },
+    })
+    expect(planNoAgent.isError).toBe(true)
+    const emptyPlan = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-empty'),
+      name: 'investigation_plan',
+      arguments: {},
+      agent: owner,
+    })
+    expect(emptyPlan.isError).toBe(true)
+    const badClaim = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-claim'),
+      name: 'investigation_plan',
+      arguments: {
+        hypotheses: [{
+          id: 'h-bad',
+          claim: '198.51.100.80 is C2',
+          disconfirm: 'SNI is CDN',
+          label: 'c2',
+        }],
+      },
+      agent: owner,
+    })
+    expect(badClaim.isError).toBe(true)
+    expect(badClaim.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'I believe X because Y',
+    )
+    const plan = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-ok'),
+      name: 'investigation_plan',
+      arguments: {
+        inventory: ['evidence/a.pcap'],
+        gaps: ['C2 domain unknown'],
+        hypotheses: [{
+          id: 'h-c2',
+          claim: 'I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue',
+          disconfirm: 'SNI is a CDN or update name',
+          label: 'c2',
+        }, {
+          id: 'h-cdn',
+          claim: 'I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there',
+          disconfirm: 'a non-CDN dotted name is evidenced on that IP',
+          label: 'cdn',
+        }],
+      },
+      agent: owner,
+    })
+    expect(plan.isError).toBe(false)
+    const more = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-append'),
+      name: 'investigation_plan',
+      arguments: {
+        hypotheses: [{
+          id: 'h-c2',
+          claim: 'I believe 198.51.100.80 is C2 because a later question replaced this',
+          disconfirm: 'replaced',
+          label: 'c2',
+        }, {
+          id: 'h-dc',
+          claim: 'I believe 10.0.10.3 is a DC because it answers Kerberos',
+          disconfirm: 'it talks only to the cue',
+          label: 'dc',
+        }],
+      },
+      agent: owner,
+    })
+    expect(more.isError).toBe(false)
+    expect(foldPlan(owner.session.events).hypotheses.map(item => item.id)).toEqual(['h-c2', 'h-cdn', 'h-dc'])
+    expect(foldPlan(owner.session.events).hypotheses[0]?.disconfirm).toBe('SNI is a CDN or update name')
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-after-open-cue'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+  })
+
+  it('folds leftover extras onto an already-accepted 5W1H packet', async () => {
+    const { ctx, owner } = await setup({ autoHunt: false })
+    const EXTRA = '203.0.113.50'
+    const PAYLOAD = 'payload.example.test'
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
+    })
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-overlay-extras'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(foldExtras(owner.session.events)?.c2_ips).toEqual(['198.51.100.80'])
+    const report = requireCaseReport(
+      ctx.investigation.bind(owner.session),
+      ctx.investigation.identities(owner.session),
+      { what: 'beacon', when: 'now', why: 'c2', how: 'https' },
+    )
+    ctx.investigation.recordReport(owner.session, report)
+    expect(foldReport(owner.session.events)?.c2_ips).toEqual(['198.51.100.80'])
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'ip', value: EXTRA, label: 'IP', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: PAYLOAD, label: 'hostname', evidence_id: EXTRA,
+    })
+    const echoed = await ctx.tools.execute({
+      signal, callId: CallId('echo-overlay-extras'), name: 'echo',
+      arguments: { text: EXTRA }, agent: owner,
+    })
+    expect(echoed.isError).toBe(false)
+    expect(foldExtras(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldExtras(owner.session.events)?.c2_domain).toBe(PAYLOAD)
+    expect(foldReport(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldReport(owner.session.events)?.c2_domain).toBe(PAYLOAD)
+    expect(foldReport(owner.session.events)?.what).toBe('beacon')
+    expect(foldReport(owner.session.events)?.who.entity_id).toBe('10.0.10.2')
+  })
+
+  it('records a kill Action when c2-domain harvests only a CDN name', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('tls.handshake.extensions_server_name')) {
+          return Promise.resolve({
+            text: 'tls.handshake.extensions_server_name: intranet\ntls.handshake.extensions_server_name: update.microsoft.com',
+          })
+        }
+        return Promise.resolve({ text: 'ip.dst:' })
+      },
+    }))
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-kill-cdn-sni'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(foldActions(owner.session.events).some(action => action.thesis.result === 'kill')).toBe(true)
+    expect(foldActions(owner.session.events).some(action => action.thesis.result === 'gap')).toBe(true)
+    expect(foldExtras(owner.session.events)?.killed).toContain('h-c2')
+  })
+
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-investigation-hmr-'))
     const ctx = new Context()
@@ -1841,8 +2281,12 @@ describe('investigation service', () => {
     const fiber = await ctx.plugin(Investigation, { caseDir: root })
     expect(ctx.get('investigation')).toBeDefined()
     expect(ctx.tools.get('bind_relationship')).toBeDefined()
+    expect(ctx.tools.get('investigation_mission')).toBeDefined()
+    expect(ctx.tools.get('investigation_plan')).toBeDefined()
     await fiber.dispose()
     expect(ctx.get('investigation')).toBeUndefined()
     expect(ctx.tools.get('bind_relationship')).toBeUndefined()
+    expect(ctx.tools.get('investigation_mission')).toBeUndefined()
+    expect(ctx.tools.get('investigation_plan')).toBeUndefined()
   })
 })

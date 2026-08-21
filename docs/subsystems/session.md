@@ -130,7 +130,7 @@ interface SessionEventMap {
 
 `UserMessage` is the identified, frozen user-role value shared by ordinary prompts, injected context, steering, and live inbox events. Event wrappers add only event-local position or outcome facts; the loop adds only driver-owned routing state while an item remains pending.
 
-`investigation/identity`, `investigation/hunt`, `investigation/bind`, and `investigation/report` merge into `SessionEventMap` from [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md). They are log-only ledger events: unique labeled identities, auto-issued hunts, the live conversation bind, and the last 5W1H close packet.
+`investigation/identity`, `investigation/hunt`, `investigation/bind`, `investigation/report`, `investigation/mission`, `investigation/plan`, `investigation/action`, and `investigation/extras` merge into `SessionEventMap` from [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md). They are log-only ledger events: unique labeled identities, auto-issued hunts, the live conversation bind, the last 5W1H close packet, Mission / Plan / Action chassis rows, and leftover extras persisted without a close.
 
 ### `TodoItem` — one todo-list entry
 
@@ -676,7 +676,8 @@ recordIdentity(session: Session, identity: Identity): boolean
 recordHunt(session: Session, hunt: Hunt): boolean
 
 /**
- * Append a whole-value 5W1H close packet.
+ * Append a whole-value 5W1H close packet. Re-merges leftover extras from
+ * the Report hook so a later accepted close keeps them.
  * @param session - session to append to.
  * @param report - 5W1H fields.
  */
@@ -688,6 +689,43 @@ recordReport(session: Session, report: CaseReport): void
  * @param bind - resolved relationship and endpoints.
  */
 recordBind(session: Session, bind: RelationshipBind): void
+
+/**
+ * Append a whole-value Mission. The last Mission is live. Does not issue
+ * or auto-run hunts.
+ * @param session - session to append to.
+ * @param mission - Mission fields.
+ */
+recordMission(session: Session, mission: InvestigationMission): void
+
+/**
+ * Append one Plan entry. Inventory, gaps, and new hypothesis ids concatenate.
+ * Does not issue or auto-run hunts.
+ * @param session - session to append to.
+ * @param entry - Plan entry to append.
+ */
+recordPlan(session: Session, entry: InvestigationPlanEntry): void
+
+/**
+ * Append one Action hunt outcome.
+ * @param session - session to append to.
+ * @param action - Action row.
+ */
+recordAction(session: Session, action: InvestigationAction): void
+
+/**
+ * Latest Mission on a session log.
+ * @param session - session whose log is folded.
+ * @returns the last Mission, or undefined.
+ */
+mission(session: Session): InvestigationMission | undefined
+
+/**
+ * Leftover extras from the Report hook. Not an accepted close.
+ * @param session - session whose log is folded.
+ * @returns extras, or undefined when none exist.
+ */
+extras(session: Session): CaseReportExtras | undefined
 
 /**
  * Resolve a path and require it to stay inside the case directory.
@@ -718,7 +756,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:267`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:302`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

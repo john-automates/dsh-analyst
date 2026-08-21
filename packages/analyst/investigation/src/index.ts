@@ -1,14 +1,18 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
- * tool results, auto-issue hunts after new identities, auto-issue `other-end`
+ * tool results, persist Mission / Plan / Action / Report around DINQ
+ * (Observation → Question → Hypothesis → Answer → Bind → Who/Where),
+ * auto-issue hunts after new identities, auto-issue `other-end`
  * when bind_relationship assigns a cue as victim, auto-issue `extra-wan`
  * then `c2-domain` on a successful bind with a unique LAN victim and
- * unique non-LAN C2 that is not a well-known CDN or update destination,
- * auto-run outstanding
+ * unique non-LAN C2 that is not a well-known CDN or update destination
+ * after Plan is ready, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
- * deny write/edit of case-root close files, and persist a 5W1H close packet
- * whose who/where project from the bound victim entity row.
+ * deny write/edit of case-root close files, persist leftover extras from
+ * the Report hook even when prose case_report stays unbound, and persist a
+ * 5W1H close packet whose who/where project from the bound victim entity row.
+ * Mission does not unlock auto-hunts.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -36,12 +40,21 @@ import {
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
   c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice,
-  huntsForNewIdentities, huntsToAutoRun, huntKey,
+  huntsForNewIdentities, huntsToAutoRun, huntKey, isNonLanUnicastIpv4,
 } from './hunts.ts'
 import { formatLedger } from './ledger.ts'
+import {
+  actionForHunt, applyHuntExtras, foldActions, foldExtras, foldMission, foldPlan,
+  killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
+  requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+} from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
-import type { CaseReport, Hunt, Identity, RelationshipBind } from './types.ts'
+import { isCdnOrUpdateName } from './harvest.ts'
+import type {
+  CaseReport, CaseReportExtras, Hunt, Identity, InvestigationAction, InvestigationMission,
+  InvestigationPlanEntry, RelationshipBind,
+} from './types.ts'
 
 export type * from './types.ts'
 export type { HuntFilterSpec } from './hunts.ts'
@@ -56,6 +69,11 @@ export {
   otherEndHunt, shouldAutoRunHunt,
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
+export {
+  actionForHunt, applyHuntExtras, c2HypothesisId, foldActions, foldExtras, foldMission, foldPlan,
+  isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason,
+  PLAN_NOT_READY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+} from './mindset.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
@@ -83,6 +101,9 @@ export {
 export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
+  'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
+  'Do not skip Observation or Question or Hypothesis. Mission scopes the case and validates the cue; it does not unlock hunts.',
+  'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
   'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
@@ -112,12 +133,14 @@ export interface Config {
    * bind issues `other-end` for that cue. A successful bind with a unique LAN
    * victim and unique non-LAN C2 that is not a well-known CDN or update
    * destination issues `extra-wan` for that victim and
-   * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras). Outstanding
+   * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras)
+   * only when Plan is ready (cue valid or open, a C2 hypothesis, a
+   * CDN/DC/update alternative, and an inventory). Outstanding
    * issued hunts then run through `pcap_filter` with the scoped
    * display_filter and fields; results harvest into the ledger. Non-LAN /
    * C2 IP subjects do not auto-run, except `other-end` and `c2-domain`.
    * `extra-wan` auto-runs for the LAN victim even when a C2-talking focus
-   * IP exists. Defaults to true.
+   * IP exists. Mission does not unlock those leftover hunts. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -242,15 +265,18 @@ export function foldHunts(events: readonly SessionEvent[]): Hunt[] {
 
 /**
  * Fold the latest 5W1H report from a log prefix.
+ * Overlays leftover extras from the Report hook. Extras-only persist
+ * without a 5W1H packet is not a close: this returns undefined then.
  * @param events - session log or any prefix of it.
- * @returns the last report, or undefined when none exists.
+ * @returns the last report with extras applied, or undefined when none exists.
  */
 export function foldReport(events: readonly SessionEvent[]): CaseReport | undefined {
   let report: CaseReport | undefined
   for (const event of events) {
     if (event.type === 'investigation/report') report = event.data
   }
-  return report
+  if (report === undefined) return undefined
+  return applyHuntExtras(report, foldExtras(events))
 }
 
 /** Join rendered tool-result text blocks. */
@@ -415,6 +441,11 @@ export class Investigation extends Service {
           }
           throw new Error(resolved.reason)
         }
+        const planDeny = planReadyDenyReason(
+          foldMission(exec.agent.session.events),
+          foldPlan(exec.agent.session.events),
+        )
+        if (planDeny !== undefined) throw new Error(planDeny)
         this.recordBind(exec.agent.session, resolved.bind)
         let issued = false
         const extraWan = extraWanHuntForBind(resolved.bind)
@@ -434,6 +465,156 @@ export class Investigation extends Service {
         }
       },
       presentCall: args => ({ card: 'generic', title: 'Bind conversation', kind: 'other', rawInput: args }),
+    }))
+
+    ctx.tools.register(defineTool({
+      name: 'investigation_mission',
+      description: [
+        'Persist the Mission: purpose, cue pointer, slot 0a validate-the-cue, scored slots, and closed-means.',
+        'Mission scopes the case. It does not unlock auto-hunts and does not skip Observation then Question then Hypothesis.',
+      ].join(' '),
+      parameters: {
+        purpose: { type: 'string', required: true, description: 'Why this case is being investigated.' },
+        cue_addr: { type: 'string', required: true, description: 'Cue or observation address.' },
+        cue_evidence_id: { type: 'string', required: true, description: 'Id of the cited cue evidence.' },
+        cue_validation: {
+          type: 'string',
+          required: true,
+          enum: ['valid', 'open', 'invalid'],
+          description: 'Slot 0a: whether this observation is valid, still open, or invalid.',
+        },
+        closed_means: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Closed investigative means. identity+c2 scopes an Easy-as-123 case; no origin or family hunt.',
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            purpose: { type: 'string', required: true },
+            cue_addr: { type: 'string', required: true },
+            cue_evidence_id: { type: 'string', required: true },
+            cue_validation: { type: 'string', required: true },
+          },
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: `Mission recorded: ${value.purpose} (cue ${value.cue_validation}).`,
+        }],
+      },
+      execute: (args, exec) => {
+        if (exec.agent === undefined) throw new Error('investigation_mission requires an owning agent session')
+        const purpose = args.purpose.trim()
+        const cueAddr = args.cue_addr.trim()
+        const cueEvidence = args.cue_evidence_id.trim()
+        if (purpose === '' || cueAddr === '' || cueEvidence === '') {
+          throw new Error('investigation_mission purpose, cue_addr, and cue_evidence_id must be non-empty')
+        }
+        const mission: InvestigationMission = {
+          purpose,
+          slots: { '0a': { value: args.cue_validation } },
+          closedMeans: (args.closed_means ?? []).map(item => item.trim()).filter(item => item !== ''),
+          cue: { addr: cueAddr, evidence_id: cueEvidence },
+          cueValidation: args.cue_validation,
+        }
+        this.recordMission(exec.agent.session, mission)
+        return Promise.resolve({
+          purpose: mission.purpose,
+          cue_addr: mission.cue.addr,
+          cue_evidence_id: mission.cue.evidence_id,
+          cue_validation: mission.cueValidation,
+        })
+      },
+      presentCall: args => ({ card: 'generic', title: 'Mission', kind: 'other', rawInput: args }),
+    }))
+
+    ctx.tools.register(defineTool({
+      name: 'investigation_plan',
+      description: [
+        'Append to the live Plan: source inventory, gaps, and hypotheses.',
+        'Each hypothesis is I believe X because Y plus a disconfirm test.',
+        'Candidate labels are victim, c2, dc, cdn, update, distractor.',
+        'Answers generate more questions. This call appends; it does not replace.',
+      ].join(' '),
+      parameters: {
+        inventory: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Sources that can attest.',
+        },
+        gaps: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Known gaps.',
+        },
+        hypotheses: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', required: true, description: 'Hypothesis id. Action rows cite this id.' },
+              claim: {
+                type: 'string',
+                required: true,
+                description: 'I believe X because Y.',
+              },
+              disconfirm: { type: 'string', required: true, description: 'How this hypothesis would be killed.' },
+              label: {
+                type: 'string',
+                required: true,
+                enum: ['victim', 'c2', 'dc', 'cdn', 'update', 'distractor'],
+                description: 'Candidate role label.',
+              },
+            },
+          },
+          description: 'Hypotheses to append.',
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            inventory: { type: 'integer', required: true },
+            gaps: { type: 'integer', required: true },
+            hypotheses: { type: 'integer', required: true },
+          },
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: `Plan appended: ${value.hypotheses} hypotheses, ${value.inventory} inventory, ${value.gaps} gaps.`,
+        }],
+      },
+      execute: (args, exec) => {
+        if (exec.agent === undefined) throw new Error('investigation_plan requires an owning agent session')
+        const entry: InvestigationPlanEntry = {}
+        const inventory = (args.inventory ?? []).map(item => item.trim()).filter(item => item !== '')
+        const gaps = (args.gaps ?? []).map(item => item.trim()).filter(item => item !== '')
+        if (inventory.length > 0) entry.inventory = inventory
+        if (gaps.length > 0) entry.gaps = gaps
+        if (args.hypotheses !== undefined && args.hypotheses.length > 0) {
+          entry.hypotheses = args.hypotheses.map(item => ({
+            id: item.id.trim(),
+            claim: item.claim.trim(),
+            disconfirm: item.disconfirm.trim(),
+            label: item.label,
+          }))
+        }
+        const denied = planEntryDenyReason(entry)
+        if (denied !== undefined) throw new Error(denied)
+        this.recordPlan(exec.agent.session, entry)
+        const plan = foldPlan(exec.agent.session.events)
+        return Promise.resolve({
+          inventory: plan.inventory.length,
+          gaps: plan.gaps.length,
+          hypotheses: plan.hypotheses.length,
+        })
+      },
+      presentCall: args => ({ card: 'generic', title: 'Plan', kind: 'other', rawInput: args }),
     }))
 
     ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
@@ -460,6 +641,8 @@ export class Investigation extends Service {
           foldReport(context.agent.session.events),
           foldBind(context.agent.session.events),
           foldToolResultText(context.agent.session.events),
+          foldMission(context.agent.session.events),
+          foldPlan(context.agent.session.events),
         )
       },
     })
@@ -540,12 +723,13 @@ export class Investigation extends Service {
   }
 
   /**
-   * Append a whole-value 5W1H close packet.
+   * Append a whole-value 5W1H close packet. Re-merges leftover extras from
+   * the Report hook so a later accepted close keeps them.
    * @param session - session to append to.
    * @param report - 5W1H fields.
    */
   recordReport(session: Session, report: CaseReport): void {
-    session.append('investigation/report', report)
+    session.append('investigation/report', applyHuntExtras(report, foldExtras(session.events)))
   }
 
   /**
@@ -555,6 +739,53 @@ export class Investigation extends Service {
    */
   recordBind(session: Session, bind: RelationshipBind): void {
     session.append('investigation/bind', bind)
+  }
+
+  /**
+   * Append a whole-value Mission. The last Mission is live. Does not issue
+   * or auto-run hunts.
+   * @param session - session to append to.
+   * @param mission - Mission fields.
+   */
+  recordMission(session: Session, mission: InvestigationMission): void {
+    session.append('investigation/mission', mission)
+  }
+
+  /**
+   * Append one Plan entry. Inventory, gaps, and new hypothesis ids concatenate.
+   * Does not issue or auto-run hunts.
+   * @param session - session to append to.
+   * @param entry - Plan entry to append.
+   */
+  recordPlan(session: Session, entry: InvestigationPlanEntry): void {
+    session.append('investigation/plan', entry)
+  }
+
+  /**
+   * Append one Action hunt outcome.
+   * @param session - session to append to.
+   * @param action - Action row.
+   */
+  recordAction(session: Session, action: InvestigationAction): void {
+    session.append('investigation/action', action)
+  }
+
+  /**
+   * Latest Mission on a session log.
+   * @param session - session whose log is folded.
+   * @returns the last Mission, or undefined.
+   */
+  mission(session: Session): InvestigationMission | undefined {
+    return foldMission(session.events)
+  }
+
+  /**
+   * Leftover extras from the Report hook. Not an accepted close.
+   * @param session - session whose log is folded.
+   * @returns extras, or undefined when none exist.
+   */
+  extras(session: Session): CaseReportExtras | undefined {
+    return foldExtras(session.events)
   }
 
   /**
@@ -651,6 +882,9 @@ export class Investigation extends Service {
       await this.autoRunOutstanding(exec, session, current, (text, hunt) => {
         const before = added.length
         harvestFrom(text, `${evidence()}\n${text}`, scopeIpFromHunt(hunt))
+        if (hunt.kind === 'extra-wan' || hunt.kind === 'c2-domain') {
+          this.recordHuntAction(session, hunt, added.slice(before))
+        }
         if (hunt.kind === 'extra-wan') {
           const bind = foldBind(session.events)
           if (bind !== undefined) {
@@ -667,7 +901,60 @@ export class Investigation extends Service {
         if (hunt.kind !== 'c2-domain') issueFrom(added.slice(before))
       })
     }
+    this.persistReportExtras(session)
     return { added, issued }
+  }
+
+  /**
+   * Report hook: persist leftover extras from proven extra-wan / c2-domain
+   * hunts. Not an accepted close. Who/where are not invented. A later
+   * accepted case_report re-merges these extras.
+   * @param session - session whose bind, identities, and Actions are folded.
+   */
+  private persistReportExtras(session: Session): void {
+    const bind = foldBind(session.events)
+    if (bind === undefined) return
+    const extras = projectHuntExtras(
+      bind,
+      foldIdentities(session.events),
+      foldToolResultText(session.events),
+      killedHypothesisIds(foldActions(session.events)),
+    )
+    if (extras === undefined) return
+    if (sameHuntExtras(foldExtras(session.events), extras)) return
+    session.append('investigation/extras', extras)
+    const existing = lastAcceptedReport(session.events)
+    if (existing !== undefined) {
+      session.append('investigation/report', applyHuntExtras(existing, extras))
+    }
+  }
+
+  /**
+   * Record one Action row for an extra-wan or c2-domain dump.
+   * @param session - session to append to.
+   * @param hunt - hunt that just ran.
+   * @param harvested - identities harvested from that dump.
+   */
+  private recordHuntAction(session: Session, hunt: Hunt, harvested: readonly Identity[]): void {
+    const hypothesisId = requireC2HypothesisId(foldPlan(session.events))
+    let confirm = false
+    let killed = false
+    for (const identity of harvested) {
+      if (hunt.kind === 'extra-wan' && identity.kind === 'ip' && isNonLanUnicastIpv4(identity.value)) {
+        confirm = true
+      }
+      if (hunt.kind === 'c2-domain' && identity.kind === 'hostname') {
+        if (isCdnOrUpdateName(identity.value)) killed = true
+        else confirm = true
+      }
+    }
+    if (confirm) killed = false
+    this.recordAction(session, actionForHunt(
+      hunt,
+      hypothesisId,
+      thesisForHuntDump(hunt.kind, confirm, killed),
+      hunt.subject,
+    ))
   }
 
   /**
@@ -690,10 +977,12 @@ export class Investigation extends Service {
     const executed = executedSet(this.executedHuntKeys, session)
     const runContext = autoRunContext(exec)
     for (;;) {
+      const extrasReady = planReady(foldMission(session.events), foldPlan(session.events))
       const hunt = huntsToAutoRun(
         foldHunts(session.events),
         evidenceTextForHunts(session.events, current),
         executed,
+        extrasReady,
       )[0]
       if (hunt === undefined) break
       executed.add(huntKey(hunt))
@@ -854,6 +1143,7 @@ const BIND_RELATIONSHIP_DESCRIPTION = [
   'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
   'Cue and observation addresses default to c2 and cannot be victim.',
   'Exactly one victim.',
+  'Name a C2 hypothesis and check CDN/DC/update alternatives on the Plan before this bind.',
 ].join(' ')
 
 /**
@@ -864,4 +1154,17 @@ const BIND_RELATIONSHIP_DESCRIPTION = [
 export function setsWhoWhere(args: unknown): boolean {
   if (typeof args !== 'object' || args === null) return false
   return 'who' in args || 'where' in args
+}
+
+/**
+ * Last accepted 5W1H packet, without overlaying extras.
+ * @param events - session log or any prefix of it.
+ * @returns the last report payload, or undefined.
+ */
+function lastAcceptedReport(events: readonly SessionEvent[]): CaseReport | undefined {
+  let report: CaseReport | undefined
+  for (const event of events) {
+    if (event.type === 'investigation/report') report = event.data
+  }
+  return report
 }

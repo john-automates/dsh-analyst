@@ -326,14 +326,22 @@ export function shouldAutoRunHunt(hunt: Hunt, evidenceText: string): boolean {
  * @param hunts - hunts already on the session log.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @param executed - hunt keys already auto-run (or attempted) on this service.
+ * @param extrasReady - when false, `extra-wan` and `c2-domain` stay off.
+ *   The service passes Plan-ready. Default false so Mission alone cannot
+ *   unlock those leftover hunts.
  * @returns eligible hunts in issue order.
  */
 export function huntsToAutoRun(
   hunts: readonly Hunt[],
   evidenceText: string,
   executed: ReadonlySet<string>,
+  extrasReady = false,
 ): Hunt[] {
-  return hunts.filter(hunt => !executed.has(huntKey(hunt)) && shouldAutoRunHunt(hunt, evidenceText))
+  return hunts.filter((hunt) => {
+    if (executed.has(huntKey(hunt))) return false
+    if ((hunt.kind === 'extra-wan' || hunt.kind === 'c2-domain') && !extrasReady) return false
+    return shouldAutoRunHunt(hunt, evidenceText)
+  })
 }
 
 /**

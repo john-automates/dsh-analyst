@@ -10,6 +10,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import Investigation from '@deepseek-ai/dsh-investigation'
+import { stampReadyMindset } from '../../investigation/tests/mindset-fixture.ts'
 import * as tools from '../src/index.ts'
 import { clipOutput, formatFieldRows, helperFailureText, runHelper } from '../src/index.ts'
 
@@ -60,7 +61,9 @@ async function setup(over: Partial<tools.Config> = {}): Promise<{
     capinfosBin,
     ...over,
   })
-  return { ctx, caseDir, owner: agent(), toolsFiber }
+  const owner = agent()
+  stampReadyMindset(ctx.investigation, owner.session)
+  return { ctx, caseDir, owner, toolsFiber }
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -2018,6 +2021,15 @@ describe('analyst tools', () => {
       src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'e',
       endpoints: [{ addr: '10.0.10.2', role: 'victim', because: 'conversation' }],
     })?.title).toBe('Bind conversation')
+    expect(ctx.tools.get('investigation_mission')?.presentCall?.({
+      purpose: 'Scope an identity+C2 case',
+      cue_addr: '198.51.100.80',
+      cue_evidence_id: 'conv-1',
+      cue_validation: 'valid',
+    })?.title).toBe('Mission')
+    expect(ctx.tools.get('investigation_plan')?.presentCall?.({
+      inventory: ['evidence/a.pcap'],
+    })?.title).toBe('Plan')
     expect(ctx.tools.get('pcap_info')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
     expect(ctx.tools.get('pcap_filter')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
     expect(ctx.tools.get('logs')?.isConcurrencySafe?.({ path: 'a.log' })).toBe(true)
@@ -2033,6 +2045,7 @@ describe('analyst tools', () => {
     const names = ctx.tools.schemas().map(schema => schema.name)
     expect(names).toEqual(expect.arrayContaining([
       'pcap_info', 'pcap_filter', 'logs', 'case_report', 'bind_relationship',
+      'investigation_mission', 'investigation_plan',
     ]))
     await toolsFiber.dispose()
     expect(ctx.tools.schemas().some(schema => schema.name === 'pcap_filter')).toBe(false)
