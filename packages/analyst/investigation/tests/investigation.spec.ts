@@ -666,6 +666,21 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(flip.isError).toBe(true)
+    const citedFlip = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cited-flip'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{
+          addr: '198.51.100.80',
+          role: 'victim',
+          because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1 dport 443',
+        }],
+      },
+      agent: owner,
+    })
+    expect(citedFlip.isError).toBe(true)
     const bound = await ctx.tools.execute({
       signal,
       callId: CallId('bind-ok'),

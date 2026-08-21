@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseReportDenyReason, citesConversation, defaultRoleForAddr, foldBind, formatRolesCard,
+  caseReportDenyReason, defaultRoleForAddr, foldBind, formatRolesCard,
   identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, projectCaseReport,
   projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
-  victimOf, VICTIM_COUNT_REASON,
+  VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { identityOf } from '../src/harvest.ts'
@@ -45,6 +45,7 @@ describe('BindRelationship', () => {
   it('defaults a cue/external IP to c2 and requires exactly one victim', () => {
     expect(isCueObservationAddr(C2)).toBe(true)
     expect(isCueObservationAddr(LAN)).toBe(false)
+    expect(isCueObservationAddr(HOST)).toBe(false)
     expect(defaultRoleForAddr(C2)).toBe('c2')
     expect(defaultRoleForAddr(LAN)).toBe('unknown')
     const completed = resolveBind({
@@ -81,21 +82,41 @@ describe('BindRelationship', () => {
     })).toEqual({ ok: false, reason: VICTIM_COUNT_REASON })
   })
 
-  it('denies flipping the cue IP to victim without a conversation-cited because', () => {
-    expect(citesConversation('the alert named this IP', relationship)).toBe(false)
-    expect(citesConversation(conversationBecause, relationship)).toBe(true)
-    expect(citesConversation('packet flow on port 443', relationship)).toBe(true)
-    expect(resolveBind({
+  it('denies assigning victim to a cue/observation address', () => {
+    const denied = (because: string) => resolveBind({
       relationship,
-      endpoints: [{ addr: C2, role: 'victim', because: 'the alert named this IP' }],
-    })).toEqual({ ok: false, reason: UNBOUND_REASON })
-    const flipped = resolveBind({
-      relationship,
-      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+      endpoints: [{ addr: C2, role: 'victim', because }],
     })
-    expect(flipped.ok).toBe(true)
-    if (!flipped.ok) throw new Error('expected a conversation-cited flip to succeed')
-    expect(victimOf(flipped.bind)?.addr).toBe(C2)
+    expect(denied('the alert named this IP')).toEqual({ ok: false, reason: UNBOUND_REASON })
+    expect(denied(conversationBecause)).toEqual({ ok: false, reason: UNBOUND_REASON })
+    expect(denied('evidence conv-1')).toEqual({ ok: false, reason: UNBOUND_REASON })
+    expect(denied(`${LAN} ${C2}`)).toEqual({ ok: false, reason: UNBOUND_REASON })
+    expect(denied('dport 443')).toEqual({ ok: false, reason: UNBOUND_REASON })
+    const live = resolveBind({
+      relationship,
+      endpoints: [{ addr: LAN, role: 'victim', because: conversationBecause }],
+    })
+    expect(live).toEqual({
+      ok: true,
+      bind: {
+        relationship,
+        endpoints: [
+          { addr: LAN, role: 'victim', because: conversationBecause },
+          { addr: C2, role: 'c2', because: 'cue/observation address' },
+        ],
+      },
+    })
+    if (!live.ok) throw new Error('expected LAN victim to bind')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(caseReportDenyReason({ what: 'x' }, live.bind)).toBeUndefined()
+    expect(requireCaseReport(live.bind, [], claims)).toEqual({
+      who: { entity_id: LAN, ip: LAN },
+      what: 'a',
+      when: 'b',
+      where: { entity_id: LAN, ip: LAN },
+      why: 'c',
+      how: 'd',
+    })
   })
 
   it('projects who/where from the victim row and refuses distractor donation', () => {
@@ -205,11 +226,6 @@ describe('BindRelationship', () => {
       relationship,
       endpoints: [{ addr: LAN, role: 'not-a-role' as 'victim', because: conversationBecause }],
     }).ok).toBe(false)
-    expect(citesConversation(`${LAN}:${443} peer`, relationship)).toBe(true)
-    expect(citesConversation('dport 443', relationship)).toBe(true)
-    expect(citesConversation('port 80', relationship)).toBe(false)
-    expect(citesConversation(`${LAN} ${C2}`, relationship)).toBe(true)
-    expect(citesConversation('talking', { ...relationship, src: '', dst: '' })).toBe(true)
     expect(normalizeEndpointAddr('LAN-HOST')).toBe('lan-host')
     expect(projectVictimSlot(bind(), [])).toEqual({ entity_id: LAN, ip: LAN })
     expect(caseReportDenyReason('x', bind())).toBeUndefined()

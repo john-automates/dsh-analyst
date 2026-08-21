@@ -2231,7 +2231,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `bind_relationship`
 
-在 Who/Where 之前绑定被引用的会话。为每个端点指定 victim 与 c2（或 infra、distractor、unknown）。告警与观测地址默认角色为 c2。恰好一个 victim。把告警或观测地址翻成 victim 时，because 必须引用该会话，而不是告警字符串。
+在 Who/Where 之前绑定被引用的会话。为每个端点指定 victim 与 c2（或 infra、distractor、unknown）。告警与观测地址默认角色为 c2，且不能作为 victim。恰好一个 victim。
 
 ```json
 {
@@ -2281,7 +2281,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           },
           "because": {
             "type": "string",
-            "description": "Why this role. Flipping a cue address to victim must cite the conversation, not the alert."
+            "description": "Why this role. A cue/observation address cannot be victim."
           }
         },
         "required": [

@@ -23,7 +23,6 @@ export const UNBOUND_REASON = 'unbound: assign victim vs c2 on the cited convers
 export const VICTIM_COUNT_REASON = 'bind_relationship requires exactly one victim'
 
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
-const CONVERSATION_CUE = /\b(conversation|talking|packet|flow|peer|cited conversation)\b/i
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 
 /** Model or fold input before defaults and role checks. */
@@ -72,12 +71,12 @@ export function normalizeEndpointAddr(addr: string): string | undefined {
 
 /**
  * Whether an address is a cue/observation (external / detector) IP.
- * Those addresses default to role `c2`.
+ * Those addresses default to role `c2` and cannot be assigned `victim`.
  * @param addr - normalized address.
  * @returns true for a unicast non-LAN IPv4.
  */
 export function isCueObservationAddr(addr: string): boolean {
-  return isNonLanUnicastIpv4(addr)
+  return isIpv4(addr) && isNonLanUnicastIpv4(addr)
 }
 
 /**
@@ -88,27 +87,6 @@ export function isCueObservationAddr(addr: string): boolean {
  */
 export function defaultRoleForAddr(addr: string): EndpointRole {
   return isCueObservationAddr(addr) ? 'c2' : 'unknown'
-}
-
-/**
- * Whether `because` cites the conversation rather than only the alert string.
- * A citation names `evidence_id`, both endpoints, the destination port, or a
- * conversation token (talking, packet, flow, peer).
- * @param because - role justification.
- * @param relationship - cited conversation.
- * @returns true when the text cites conversation evidence.
- */
-export function citesConversation(because: string, relationship: Relationship): boolean {
-  const text = because.toLowerCase()
-  if (text.includes(relationship.evidence_id.toLowerCase())) return true
-  const src = relationship.src.toLowerCase()
-  const dst = relationship.dst.toLowerCase()
-  if (src !== '' && dst !== '' && text.includes(src) && text.includes(dst)) return true
-  if (text.includes(`:${relationship.dport}`) || /\b(?:d)?port\s+(\d+)\b/i.test(because)) {
-    const port = /\b(?:d)?port\s+(\d+)\b/i.exec(because)?.[1]
-    if (port === String(relationship.dport) || text.includes(`:${relationship.dport}`)) return true
-  }
-  return CONVERSATION_CUE.test(because)
 }
 
 /**
@@ -137,8 +115,8 @@ export function victimOf(bind: RelationshipBind): BoundEndpoint | undefined {
 /**
  * Resolve and validate a BindRelationship request.
  * Missing src/dst endpoints are completed with default roles. Cue/observation
- * addresses default to `c2`. Assigning `victim` to a cue address requires a
- * `because` that cites the conversation. Zero or two victims fail.
+ * addresses default to `c2`. Assigning `victim` to a cue/observation address
+ * is always unbound. Zero or two victims fail.
  * @param request - relationship plus submitted endpoints.
  * @returns the bind, or a deny reason.
  */
@@ -149,7 +127,7 @@ export function resolveBind(request: BindRequest): BindResolution {
   const seen = new Set<string>()
   const endpoints: BoundEndpoint[] = []
   for (const input of request.endpoints) {
-    const resolved = resolveEndpoint(input, relationship, seen)
+    const resolved = resolveEndpoint(input, seen)
     if (typeof resolved === 'string') return { ok: false, reason: resolved }
     endpoints.push(resolved)
   }
@@ -422,7 +400,6 @@ function normalizeRelationship(raw: Relationship): Relationship | string {
 
 function resolveEndpoint(
   input: BindEndpointInput,
-  relationship: Relationship,
   seen: Set<string>,
 ): BoundEndpoint | string {
   const addr = normalizeEndpointAddr(input.addr)
@@ -432,9 +409,7 @@ function resolveEndpoint(
   if (because === '') return 'bind_relationship endpoint because must be a non-empty string'
   const role = input.role ?? defaultRoleForAddr(addr)
   if (!ROLE_SET.has(role)) return `bind_relationship endpoint role ${JSON.stringify(input.role)} is not valid`
-  if (role === 'victim' && isCueObservationAddr(addr) && !citesConversation(because, relationship)) {
-    return UNBOUND_REASON
-  }
+  if (role === 'victim' && isCueObservationAddr(addr)) return UNBOUND_REASON
   seen.add(addr)
   return { addr, role, because }
 }

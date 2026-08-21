@@ -14,7 +14,7 @@ A silent rewrite of `who`/`where` onto the C2-talking LAN IP hid inversion inste
 
 ## Decision
 
-`bind_relationship` is the thinking primitive. It records `investigation/bind` with `{src, dst, dport, t, evidence_id}` and endpoints `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`. Exactly one victim. A cue or observation address (non-LAN unicast) defaults to `c2`; every other unassigned address defaults to `unknown`. The model may flip a cue address to victim only when `because` cites the conversation (`evidence_id`, both endpoints, the destination port, or a conversation token such as talking, packet, flow, or peer), not the alert string.
+`bind_relationship` is the thinking primitive. It records `investigation/bind` with `{src, dst, dport, t, evidence_id}` and endpoints `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`. Exactly one victim. A cue or observation address (non-LAN unicast) defaults to `c2` and cannot be victim ([refuse cue-as-victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)); every other unassigned address defaults to `unknown`.
 
 The live bind publishes a focus/roles card through `investigation:ledger`. That card is not another inbox splice. Hunt notices name the filter that already ran.
 
@@ -48,7 +48,7 @@ The live bind publishes a focus/roles card through `investigation:ledger`. That 
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET peer (`198.51.100.80`), and idle distractor. It checks cue-default `c2`, conversation-cited flip, two/zero victims denied, projection from the victim row, distractor non-donation, unique sourced-MAC affiliation, unbound/inverted/free-text deny, and a victim-row user handle (`who.entity_id` = username) that closes with the victim address. `packages/analyst/investigation/tests/investigation.spec.ts` records `bind_relationship`, denies `case_report` until a live victim exists, and renders the roles card on the ledger. `packages/analyst/analyst-tools/tests/tools.spec.ts` requires the bind before close and projects who/where from the victim, including a username handle on that row. The keyless `examples/analyst` pcap-case snapshot is `pcap_filter` then `bind_relationship` then `case_report`.
+`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET peer (`198.51.100.80`), and idle distractor. It checks cue-default `c2`, cue-as-victim denied, two/zero victims denied, projection from the victim row, distractor non-donation, unique sourced-MAC affiliation, unbound/inverted/free-text deny, and a victim-row user handle (`who.entity_id` = username) that closes with the victim address. `packages/analyst/investigation/tests/investigation.spec.ts` records `bind_relationship`, denies `case_report` until a live victim exists, and renders the roles card on the ledger. `packages/analyst/analyst-tools/tests/tools.spec.ts` requires the bind before close and projects who/where from the victim, including a username handle on that row. The keyless `examples/analyst` pcap-case snapshot is `pcap_filter` then `bind_relationship` then `case_report`.
 
 ## Consequences
 
