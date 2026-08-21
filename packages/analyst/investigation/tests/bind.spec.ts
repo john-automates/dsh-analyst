@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   caseReportDenyReason, citesConversation, defaultRoleForAddr, foldBind, formatRolesCard,
-  identityDonatesToVictim, isCueObservationAddr, projectCaseReport, projectVictimSlot,
-  resolveBind, roleForIdentity, UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
+  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, projectCaseReport,
+  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
+  victimOf, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { identityOf } from '../src/harvest.ts'
@@ -203,13 +204,35 @@ describe('BindRelationship', () => {
       endpoints: [{ addr: LAN, role: 'not-a-role' as 'victim', because: conversationBecause }],
     }).ok).toBe(false)
     expect(citesConversation(`${LAN}:${443} peer`, relationship)).toBe(true)
+    expect(citesConversation('dport 443', relationship)).toBe(true)
+    expect(citesConversation('port 80', relationship)).toBe(false)
+    expect(citesConversation(`${LAN} ${C2}`, relationship)).toBe(true)
+    expect(citesConversation('talking', { ...relationship, src: '', dst: '' })).toBe(true)
+    expect(normalizeEndpointAddr('LAN-HOST')).toBe('lan-host')
+    expect(projectVictimSlot(bind(), [])).toEqual({ entity_id: LAN, ip: LAN })
     expect(caseReportDenyReason('x', bind())).toBeUndefined()
     expect(caseReportDenyReason({ who: 1 }, bind())).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: { entity_id: 1 } }, bind())).toBe(UNBOUND_REASON)
     const noVictim = { ...bind(), endpoints: [{ addr: C2, role: 'c2' as const, because: 'cue' }] }
+    expect(identityDonatesToVictim(
+      { ...identityOf('ip', LAN)!, evidence_id: 'slot-x' },
+      noVictim,
+      [],
+    )).toBe(false)
     expect(identityDonatesToVictim(identityOf('ip', LAN)!, noVictim, [])).toBe(false)
     expect(projectVictimSlot(noVictim, [])).toBeUndefined()
     expect(projectCaseReport(noVictim, [], { what: 'a', when: 'b', why: 'c', how: 'd' })).toBeUndefined()
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(() => requireCaseReport(undefined, [], claims)).toThrow(UNBOUND_REASON)
+    expect(() => requireCaseReport(noVictim, [], claims)).toThrow(UNBOUND_REASON)
+    expect(requireCaseReport(bind(), [], claims)).toEqual({
+      who: { entity_id: LAN, ip: LAN },
+      what: 'a',
+      when: 'b',
+      where: { entity_id: LAN, ip: LAN },
+      why: 'c',
+      how: 'd',
+    })
     const mixed = bind({
       endpoints: [
         { addr: LAN, role: 'victim', because: conversationBecause },

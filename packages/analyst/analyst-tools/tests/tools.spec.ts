@@ -8,7 +8,7 @@ import { CallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import Investigation from '@deepseek-ai/dsh-investigation'
 import * as tools from '../src/index.ts'
 import { clipOutput, formatFieldRows, helperFailureText, runHelper } from '../src/index.ts'
@@ -169,7 +169,7 @@ describe('analyst tools', () => {
   it('spawns tshark -e when fields is the string kerberos.CNameString', async () => {
     const binDir = await mkdtemp(join(tmpdir(), 'dsh-tshark-argv-'))
     const tsharkBin = await script(binDir, 'tshark', [
-      'printf "%s\\n" "$@" > argv.log',
+      'printf "%s\\n" "$@" >> argv.log',
       'echo brolf',
     ].join('\n'))
     const { ctx, owner, caseDir } = await setup({ tsharkBin })
@@ -388,6 +388,29 @@ describe('analyst tools', () => {
     })
     expect(noAgent.isError).toBe(true)
     expect(text(noAgent)).toMatch(/owning agent session|unbound/)
+    const tool = ctx.tools.get('case_report')
+    if (tool === undefined) throw new Error('expected case_report')
+    await expect(tool.execute(report, {
+      signal,
+      callId: CallId('report-direct'),
+      rootCallId: CallId('report-direct'),
+      token: Symbol('report-direct') as ToolExecutionToken,
+      name: 'case_report',
+      arguments: report,
+      deferContext() {},
+      concludeTurn() {},
+    })).rejects.toThrow('owning agent session')
+    await expect(tool.execute(report, {
+      signal,
+      callId: CallId('report-unbound-direct'),
+      rootCallId: CallId('report-unbound-direct'),
+      token: Symbol('report-unbound-direct') as ToolExecutionToken,
+      name: 'case_report',
+      arguments: report,
+      agent: agent('unbound-direct'),
+      deferContext() {},
+      concludeTurn() {},
+    })).rejects.toThrow('unbound: assign victim vs c2 on the cited conversation.')
     const blank = await ctx.tools.execute({
       signal,
       callId: CallId('report3'),

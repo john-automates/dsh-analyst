@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
-  caseReportDenyReason, foldToolResultText, projectCaseReport, UNBOUND_REASON,
+  caseReportDenyReason, foldToolResultText, requireCaseReport,
 } from '@deepseek-ai/dsh-investigation'
 import { coercePcapFilterFields, rejectInvalidTsharkFields, unwrapPcapDisplayFilter } from './fields.ts'
 
@@ -353,9 +353,7 @@ export function apply(ctx: Context, config: Config): void {
       const identities = ctx.investigation.identities(session)
       const denied = caseReportDenyReason(args, bind, identities)
       if (denied !== undefined) throw new Error(denied)
-      if (bind === undefined) throw new Error(UNBOUND_REASON)
-      const report = projectCaseReport(bind, identities, claims, foldToolResultText(session.events))
-      if (report === undefined) throw new Error(UNBOUND_REASON)
+      const report = requireCaseReport(bind, identities, claims, foldToolResultText(session.events))
       ctx.investigation.recordReport(session, report)
       return Promise.resolve(report)
     },

@@ -478,6 +478,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ### `investigation/*`
 
+<a id="investigationbind--log-only"></a>
+
+#### `investigation/bind` — log-only
+
+```ts persistence-catalog
+/**
+ * Live conversation bind. The last `investigation/bind` wins. case_report
+ * is denied until this event exists with exactly one victim.
+ */
+'investigation/bind': RelationshipBind
+```
+
+来源：[`packages/analyst/investigation/src/types.ts:133`](../packages/analyst/investigation/src/types.ts)
+
 <a id="investigationhunt--log-only"></a>
 
 #### `investigation/hunt` — log-only
@@ -495,7 +509,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/hunt': Hunt
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:69`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:128`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -509,7 +523,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/identity': Identity
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:59`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:118`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -518,11 +532,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```ts persistence-catalog
 /**
  * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
+ * who/where are projections of the bound victim entity row.
  */
 'investigation/report': CaseReport
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:73`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:138`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

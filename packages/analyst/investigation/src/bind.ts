@@ -66,10 +66,7 @@ export type BindResolution =
  * @returns trimmed canonical address, or undefined when empty.
  */
 export function normalizeEndpointAddr(addr: string): string | undefined {
-  const trimmed = addr.trim()
-  if (trimmed === '') return undefined
-  const ip = normalizeIdentityValue('ip', trimmed)
-  return ip === undefined ? trimmed.toLowerCase() : ip
+  return normalizeIdentityValue('ip', addr)
 }
 
 /**
@@ -218,9 +215,9 @@ export function identityDonatesToVictim(
   identities: readonly Identity[],
   evidenceText = '',
 ): boolean {
+  if (pointsAtNonVictim(identity.evidence_id, bind)) return false
   const victim = victimOf(bind)
   if (victim === undefined) return false
-  if (pointsAtNonVictim(identity.evidence_id, bind)) return false
   return entityIdForIdentity(identity, bind, identities, evidenceText) === victim.addr
 }
 
@@ -280,6 +277,26 @@ export function projectCaseReport(
     why: claims.why,
     how: claims.how,
   }
+}
+
+/**
+ * Project the close packet or throw when the bind has no unique victim.
+ * @param bind - live bind, or undefined when unbound.
+ * @param identities - folded ledger identities.
+ * @param claims - what / when / why / how.
+ * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @returns the projected report.
+ */
+export function requireCaseReport(
+  bind: RelationshipBind | undefined,
+  identities: readonly Identity[],
+  claims: CaseReportClaims,
+  evidenceText = '',
+): CaseReport {
+  if (bind === undefined) throw new Error(UNBOUND_REASON)
+  const report = projectCaseReport(bind, identities, claims, evidenceText)
+  if (report === undefined) throw new Error(UNBOUND_REASON)
+  return report
 }
 
 /**

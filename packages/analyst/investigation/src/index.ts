@@ -53,8 +53,8 @@ export type { C2TalkingLanVictim } from './report.ts'
 export {
   caseReportDenyReason, citesConversation, defaultRoleForAddr, ENDPOINT_ROLES, entityIdForIdentity,
   foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
-  projectCaseReport, projectVictimSlot, resolveBind, roleForIdentity, UNBOUND_REASON,
-  victimOf, VICTIM_COUNT_REASON,
+  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
+  UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
 } from './bind.ts'
 export type { BindEndpointInput, BindRequest, BindResolution, CaseReportClaims } from './bind.ts'
 export {
@@ -665,7 +665,7 @@ const BIND_RELATIONSHIP_DESCRIPTION = [
  * @param args - parsed tool arguments.
  * @returns true when who or where is present.
  */
-function setsWhoWhere(args: unknown): boolean {
+export function setsWhoWhere(args: unknown): boolean {
   if (typeof args !== 'object' || args === null) return false
   return 'who' in args || 'where' in args
 }

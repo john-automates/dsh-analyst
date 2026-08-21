@@ -11,6 +11,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
   Config, foldHunts, foldIdentities, foldReport, METHODOLOGY_SECTION, resolveCaseDir,
+  setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -346,6 +347,10 @@ describe('investigation service', () => {
     expect(empty.sections.some(section => section.name === 'investigation:policy' && section.text === METHODOLOGY_SECTION)).toBe(true)
     expect(METHODOLOGY_SECTION).toContain('Before Who/Where, bind the conversation.')
     expect(ctx.tools.get('bind_relationship')).toBeDefined()
+    expect(setsWhoWhere(null)).toBe(false)
+    expect(setsWhoWhere('x')).toBe(false)
+    expect(setsWhoWhere({ what: 'a' })).toBe(false)
+    expect(setsWhoWhere({ where: { entity_id: '10.0.10.2' } })).toBe(true)
     expect(empty.contexts.some(entry => entry.name === 'investigation:ledger' && entry.text === '')).toBe(true)
     const noAgent = await ctx.systemPrompt.assemble({})
     expect(noAgent.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toBe('')

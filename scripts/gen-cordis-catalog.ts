@@ -534,6 +534,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   Identity: 'investigation ledger identity is owned by packages/analyst/investigation/src/types.ts',
   Hunt: 'investigation ledger hunt is owned by packages/analyst/investigation/src/types.ts',
   CaseReport: 'investigation 5W1H report is owned by packages/analyst/investigation/src/types.ts',
+  RelationshipBind: 'investigation conversation bind is owned by packages/analyst/investigation/src/types.ts',
   PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
   BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
