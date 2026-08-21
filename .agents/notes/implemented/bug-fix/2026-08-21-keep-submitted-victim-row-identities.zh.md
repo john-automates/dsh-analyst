@@ -18,7 +18,7 @@ Status: implemented
 
 漏洞在 `completeAcceptedSlot` 中 `projected[key]` 为空的分支。
 
-[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍从该行补全省略的键。[用户／全名会话客户端戳记](2026-08-21-stamp-user-fullname-from-conversation-client.md) 仍拥有捐出。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2 和空闲或域控 LAN 行。
+[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍从该行补全省略的键。[补全省略的受害端行 mac 与 user](2026-08-21-complete-omitted-victim-mac-user.md) 仍在唯一性让该行为空时，持久化省略的会话客户端 user。[用户／全名会话客户端戳记](2026-08-21-stamp-user-fullname-from-conversation-client.md) 仍拥有捐出。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2 和空闲或域控 LAN 行。
 
 ## 备选方案
 
@@ -40,4 +40,4 @@ Status: implemented
 
 ## 后果
 
-当前绑定加上提交的受害端行 user 会写出该 user，即使投影行没有捐出它。域控 MAC 仍保持不在。捐给其他实体的 user 不会持久化。省略的 user 仍不会被编造。已捐出的槽位保留。
+当前绑定加上提交的受害端行 user 会写出该 user，即使投影行没有捐出它。域控 MAC 仍保持不在。捐给其他实体的 user 不会持久化。没有会话客户端证据时，省略的 user 仍不会被编造。已捐出的槽位保留。

@@ -18,7 +18,7 @@ A model-offered IP the row did not donate stays off. Submitted mac keep is [keep
 
 The hole is the empty-`projected[key]` branch in `completeAcceptedSlot`.
 
-[Persist omitted victim-row keys](2026-08-21-persist-projected-victim-slot.md) still fills omitted keys from the row. [User/full_name conversation-client stamp](2026-08-21-stamp-user-fullname-from-conversation-client.md) still owns donate. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, and idle or DC LAN row.
+[Persist omitted victim-row keys](2026-08-21-persist-projected-victim-slot.md) still fills omitted keys from the row. [Complete omitted victim-row mac and user](2026-08-21-complete-omitted-victim-mac-user.md) still persists an omitted conversation-client user when uniqueness left the row empty. [User/full_name conversation-client stamp](2026-08-21-stamp-user-fullname-from-conversation-client.md) still owns donate. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, and idle or DC LAN row.
 
 ## Alternatives considered
 
@@ -40,4 +40,4 @@ The hole is the empty-`projected[key]` branch in `completeAcceptedSlot`.
 
 ## Consequences
 
-A live bind plus a submitted victim-row user writes that user even when the projected row did not donate it. A DC MAC still stays off. A user that donates to another entity does not persist. An omitted user is still not invented. Donated slots stay.
+A live bind plus a submitted victim-row user writes that user even when the projected row did not donate it. A DC MAC still stays off. A user that donates to another entity does not persist. An omitted user is still not invented when no conversation-client evidence exists. Donated slots stay.

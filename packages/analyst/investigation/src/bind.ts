@@ -4,9 +4,11 @@
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
- * A submitted user, hostname, or full_name is kept when the row has no
- * donated value and that identity does not donate to a different entity.
- * A submitted mac is kept unless that MAC only appears on DC/gateway frames.
+ * Omitted mac and user also persist from victim-IP evidence when a sticky
+ * DC donate or uniqueness left the projected row empty. A submitted user,
+ * hostname, or full_name is kept when the row has no donated value and that
+ * identity does not donate to a different entity. A submitted mac is kept
+ * unless that MAC only appears on DC/gateway frames.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
@@ -428,21 +430,29 @@ export function projectVictimSlot(
  * Persist the projected victim row after deny/coerce.
  * Keys the model omitted are filled from that row. A donated victim-IP-sourced
  * MAC — including a field-only `eth.src` dump scoped to that IP — is copied
- * even when the model omits `mac`. A submitted user, hostname, or full_name
- * is kept when the row has no donated value and that identity does not
- * donate to a different entity. A submitted mac is kept unless that MAC
- * only appears on DC/gateway frames (never as eth.src on the bound victim
- * IP, and never in a victim-IP-scoped dump). A sticky DC `evidence_id` or
- * donate does not override that submitted victim MAC. A model-offered IP
- * does not replace the bound victim ip. Slots the model never submitted
- * are not invented.
+ * even when the model omits `mac`. When the row did not donate `mac` or
+ * `user`, an omitted key still persists from victim-IP evidence: a MAC
+ * sourced from the bound victim IP (`ip.src`, outbound `ip → peer`, or ARP
+ * `is at`) or a victim-IP-scoped `eth.src` dump, and a user evidenced on
+ * that victim (conversation-client stamp). A sticky DC `entity_id` or
+ * `evidence_id` does not veto that omitted persist. Uniqueness does not
+ * block an omitted conversation-client user. A user that donates to a
+ * non-victim and is not evidenced on the victim stays off. A submitted
+ * user, hostname, or full_name is kept when the row has no donated value
+ * and that identity does not donate to a different entity. A submitted mac
+ * is kept unless that MAC only appears on DC/gateway frames (never as
+ * eth.src on the bound victim IP, and never in a victim-IP-scoped dump).
+ * A sticky DC `evidence_id` or donate does not override that submitted
+ * victim MAC. A model-offered IP does not replace the bound victim ip.
+ * Slots the row and frames do not evidence are not invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
  * @param bind - live bind used to reject a value that donates elsewhere.
  * @param identities - folded ledger identities for that donate check.
  * @param evidenceText - tool-result text for victim-IP scope and conversation-client donate.
- * @returns the accepted slot: entity_id, ip, donated or kept submitted mac,
- * donated hostname/user/full_name, and kept submitted user/hostname/full_name.
+ * @returns the accepted slot: entity_id, ip, donated or evidenced omitted
+ * mac/user, donated hostname/full_name, kept submitted mac unless DC-only,
+ * and kept submitted user/hostname/full_name.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
@@ -460,27 +470,39 @@ export function completeAcceptedSlot(
       continue
     }
     const offered = model?.[key]
-    if (typeof offered !== 'string' || offered.trim() === '') continue
-    if (key === 'ip') continue
-    const normalized = normalizeIdentityValue(key, offered)
-    if (normalized === undefined) continue
-    if (key === 'mac') {
+    if (typeof offered === 'string' && offered.trim() !== '') {
+      if (key === 'ip') continue
+      const normalized = normalizeIdentityValue(key, offered)
+      if (normalized === undefined) continue
+      if (key === 'mac') {
+        if (
+          bind === undefined
+          || !offeredMacEvidencedOnVictim(normalized, bind, identities, evidenceText)
+        ) {
+          continue
+        }
+        accepted.mac = normalized
+        continue
+      }
       if (
-        bind === undefined
-        || !offeredMacEvidencedOnVictim(normalized, bind, identities, evidenceText)
+        bind !== undefined
+        && offeredDonatesToNonVictim(key, normalized, bind, identities, evidenceText)
       ) {
         continue
       }
-      accepted.mac = normalized
+      accepted[key] = normalized
       continue
     }
-    if (
-      bind !== undefined
-      && offeredDonatesToNonVictim(key, normalized, bind, identities, evidenceText)
-    ) {
+    if (bind === undefined) continue
+    if (key === 'mac') {
+      const evidenced = omittedMacEvidencedOnVictim(bind, identities, evidenceText)
+      if (evidenced !== undefined) accepted.mac = evidenced
       continue
     }
-    accepted[key] = normalized
+    if (key === 'user') {
+      const evidenced = omittedUserEvidencedOnVictim(bind, identities, evidenceText)
+      if (evidenced !== undefined) accepted.user = evidenced
+    }
   }
   return accepted
 }
@@ -488,11 +510,13 @@ export function completeAcceptedSlot(
 /**
  * Build the persisted case_report packet. who/where are the victim row.
  * Model-supplied who/where go through deny/coerce first; omitted keys are
- * filled from that projected row. A submitted user, hostname, or full_name
- * is kept when the row has no donated value and that identity does not
- * donate to a different entity. A submitted mac is kept unless that MAC
- * only appears on DC/gateway frames. A harvested C2 DNS/SNI name persists as
- * `c2_domain` and does not fill who/where hostname.
+ * filled from that projected row. Omitted mac and user also persist from
+ * victim-IP evidence when a sticky DC donate or uniqueness left the row
+ * empty. A submitted user, hostname, or full_name is kept when the row has
+ * no donated value and that identity does not donate to a different entity.
+ * A submitted mac is kept unless that MAC only appears on DC/gateway
+ * frames. A harvested C2 DNS/SNI name persists as `c2_domain` and does not
+ * fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -882,6 +906,56 @@ function pointsAtNonVictim(
 
 function isIpv4(addr: string): boolean {
   return /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(addr)
+}
+
+/**
+ * First ledger MAC evidenced on the bound victim IP.
+ * Talking-IP frames and a victim-IP-scoped `eth.src` dump qualify. A sticky
+ * DC `entity_id` or `evidence_id` does not skip that MAC. A DC/gateway-only
+ * MAC is not returned.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns the first evidenced MAC, or undefined when none exists.
+ */
+function omittedMacEvidencedOnVictim(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): string | undefined {
+  const victim = victimOf(bind)
+  if (victim === undefined) return undefined
+  for (const identity of identities) {
+    if (identity.kind !== 'mac') continue
+    if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return identity.value
+  }
+  return undefined
+}
+
+/**
+ * First ledger user evidenced on the bound victim.
+ * A Kerberos/SAMR conversation whose client is that IP, or a
+ * conversation-client `evidence_id` of that IP, qualifies. Uniqueness does
+ * not block. A sticky DC `entity_id` does not skip that user. A user that
+ * only donates to a non-victim is not returned.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns the first evidenced user, or undefined when none exists.
+ */
+function omittedUserEvidencedOnVictim(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): string | undefined {
+  const victim = victimOf(bind)
+  if (victim === undefined) return undefined
+  for (const identity of identities) {
+    if (identity.kind !== 'user') continue
+    if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return identity.value
+    if (ipv4EvidenceId(identity.evidence_id) === victim.addr) return identity.value
+  }
+  return undefined
 }
 
 /**

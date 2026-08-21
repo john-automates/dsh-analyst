@@ -22,7 +22,7 @@ Status: implemented
 
 漏洞在 `completeAcceptedSlot` 中 `projected[key]` 为空的分支——`ip`／`mac` 的 continue。IP 保持不变：不要把模型提供的非 victim IP 复制到被绑定的 victim ip 上。
 
-[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍从该行补全省略的键。[覆盖域控／对等体第一次戳记](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md) 仍拥有改戳。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行，以及合成 `CLIENT_MAC` 与域控／网关 `DISTRACTOR_MAC`。
+[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍从该行补全省略的键。[补全省略的受害端行 mac 与 user](2026-08-21-complete-omitted-victim-mac-user.md) 仍在粘滞的域控捐出让该行为空时，从受害端 IP 证据持久化省略的 mac。[覆盖域控／对等体第一次戳记](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md) 仍拥有改戳。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行，以及合成 `CLIENT_MAC` 与域控／网关 `DISTRACTOR_MAC`。
 
 ## 备选方案
 
@@ -32,7 +32,7 @@ Status: implemented
 
 **即使受害端 IP 帧来源于该 MAC，仍把粘滞的域控 `evidence_id` 当作仅域控。** 否决：域控范围保持不在由帧范围决定，而不是第一次 hunt 主体或第一次捐出。
 
-**模型省略该键且该行未捐出时编造 MAC。** 否决：模型从未提交的槽位不会被编造。
+**模型省略该键且该行和帧都无法证明时编造 MAC。** 否决：不会编造槽位。从受害端 IP 证据补全省略的 mac 见[补全省略的受害端行 mac 与 user](2026-08-21-complete-omitted-victim-mac-user.md)。
 
 **把模型提供的非 victim IP 复制到被绑定的 victim ip 上。** 否决：IP 保持使用被绑定的 victim 地址。
 
@@ -46,4 +46,4 @@ Status: implemented
 
 ## 后果
 
-当前绑定加上提交的受害端 MAC 会写出该 mac，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。省略的 mac 仍不会被编造。被绑定的 victim ip 保持不变。提交的 user／hostname／`full_name` 和已捐出的槽位保留。
+当前绑定加上提交的受害端 MAC 会写出该 mac，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。没有受害端 IP 证据时，省略的 mac 仍不会被编造。被绑定的 victim ip 保持不变。提交的 user／hostname／`full_name` 和已捐出的槽位保留。
