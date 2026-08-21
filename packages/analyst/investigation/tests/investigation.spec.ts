@@ -10,8 +10,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
-  CLOSE_FILE_REASON, Config, foldHunts, foldIdentities, foldReport, METHODOLOGY_SECTION,
-  resolveCaseDir, setsWhoWhere,
+  BOTH_LAN_CONVERSATION_REASON, CLOSE_FILE_REASON, Config, foldHunts, foldIdentities, foldReport,
+  METHODOLOGY_SECTION, resolveCaseDir, setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -356,6 +356,9 @@ describe('investigation service', () => {
     const empty = await ctx.systemPrompt.assemble({ agent: owner })
     expect(empty.sections.some(section => section.name === 'investigation:policy' && section.text === METHODOLOGY_SECTION)).toBe(true)
     expect(METHODOLOGY_SECTION).toContain('Before Who/Where, bind the conversation.')
+    expect(METHODOLOGY_SECTION).toContain(
+      'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address.',
+    )
     expect(ctx.tools.get('bind_relationship')).toBeDefined()
     expect(setsWhoWhere(null)).toBe(false)
     expect(setsWhoWhere('x')).toBe(false)
@@ -948,6 +951,65 @@ describe('investigation service', () => {
       agent: other.owner,
     })
     expect(high.isError).toBe(true)
+  })
+
+  it('denies a both-LAN bind_relationship and does not issue other-end', async () => {
+    const { ctx, owner } = await setup()
+    const dc = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-dc'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '10.0.10.3', dport: 88, t: 't', evidence_id: 'conv-dc',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 10.0.10.3' },
+          { addr: '10.0.10.3', role: 'c2', because: '10.0.10.2 talking to 10.0.10.3' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(dc.isError).toBe(true)
+    const dcText = dc.content.map(block => 'text' in block ? block.text : '').join('')
+    expect(dcText).toContain(BOTH_LAN_CONVERSATION_REASON)
+    expect(dcText).not.toContain('198.51.100.80')
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    const lanC2 = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-lan-c2'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+          { addr: '10.0.10.3', role: 'c2', because: 'LAN DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(lanC2.isError).toBe(true)
+    expect(lanC2.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: role c2 cannot be a LAN address.',
+    )
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    const coerced = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cue-ok'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: '443', t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: JSON.stringify([
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        ]),
+      },
+      agent: owner,
+    })
+    expect(coerced.isError).toBe(false)
+    expect(ctx.investigation.bind(owner.session)?.endpoints).toEqual([
+      { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+      { addr: '198.51.100.80', role: 'c2', because: 'cue/observation address' },
+    ])
   })
 
   it('auto-runs other-end after a cue-as-victim deny and harvests the LAN peer', async () => {

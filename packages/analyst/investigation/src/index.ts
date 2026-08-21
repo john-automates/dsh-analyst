@@ -53,11 +53,11 @@ export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  caseReportDenyReason, coerceBindRequest, cueVictimUnboundReason, defaultRoleForAddr,
-  ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON, entityIdForIdentity, foldBind, formatRolesCard,
-  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, otherEndHuntForDeniedBind,
-  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
-  UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
+  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, coerceBindRequest, cueVictimUnboundReason,
+  defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON, entityIdForIdentity, foldBind,
+  formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
+  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
+  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
@@ -76,7 +76,7 @@ export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
-  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. Cue and observation addresses default to c2 and cannot be victim.',
+  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
   'Work evidence-first and question-driven: every tool call answers a named question.',
   'Label unverified ideas as hunches and verify them in this case.',
@@ -269,6 +269,7 @@ export class Investigation extends Service {
           required: true,
           description: [
             'Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.',
+            'Cite the LAN host talking to the cue/observation address, not a LAN DC/AD service.',
             'A JSON array string of endpoint objects is the same list.',
           ].join(' '),
           oneOf: [
@@ -287,7 +288,7 @@ export class Investigation extends Service {
                   because: {
                     type: 'string',
                     required: true,
-                    description: 'Why this role. A cue/observation address cannot be victim.',
+                    description: 'Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address.',
                   },
                 },
               },
@@ -730,6 +731,7 @@ export default Investigation
 const BIND_RELATIONSHIP_DESCRIPTION = [
   'Bind the cited conversation before Who/Where.',
   'Assign victim vs c2 (or infra, distractor, unknown) on each endpoint.',
+  'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address.',
   'Cue and observation addresses default to c2 and cannot be victim.',
   'Exactly one victim.',
 ].join(' ')

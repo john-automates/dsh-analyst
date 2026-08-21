@@ -2227,7 +2227,7 @@ web_search and web_fetch keep provider selection behind ctx.web so model-visible
 
 ### `bind_relationship`
 
-Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, distractor, unknown) on each endpoint. Cue and observation addresses default to c2 and cannot be victim. Exactly one victim.
+Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, distractor, unknown) on each endpoint. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address. Cue and observation addresses default to c2 and cannot be victim. Exactly one victim.
 
 ```json
 {
@@ -2285,7 +2285,7 @@ Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, dis
               },
               "because": {
                 "type": "string",
-                "description": "Why this role. A cue/observation address cannot be victim."
+                "description": "Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address."
               }
             },
             "required": [
@@ -2298,7 +2298,7 @@ Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, dis
           "type": "string"
         }
       ],
-      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim. A JSON array string of endpoint objects is the same list."
+      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim. Cite the LAN host talking to the cue/observation address, not a LAN DC/AD service. A JSON array string of endpoint objects is the same list."
     }
   },
   "required": [

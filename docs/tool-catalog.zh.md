@@ -2231,7 +2231,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `bind_relationship`
 
-在 Who/Where 之前绑定被引用的会话。为每个端点指定 victim 与 c2（或 infra、distractor、unknown）。告警与观测地址默认角色为 c2，且不能作为 victim。恰好一个 victim。
+在 Who/Where 之前绑定被引用的会话。为每个端点指定 victim 与 c2（或 infra、distractor、unknown）。被引用的会话必须包含告警／观测地址。角色 c2 不能是 LAN 地址。告警与观测地址默认角色为 c2，且不能作为 victim。恰好一个 victim。
 
 ```json
 {
@@ -2289,7 +2289,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
               },
               "because": {
                 "type": "string",
-                "description": "Why this role. A cue/observation address cannot be victim."
+                "description": "Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address."
               }
             },
             "required": [
@@ -2302,7 +2302,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           "type": "string"
         }
       ],
-      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim. A JSON array string of endpoint objects is the same list."
+      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim. Cite the LAN host talking to the cue/observation address, not a LAN DC/AD service. A JSON array string of endpoint objects is the same list."
     }
   },
   "required": [

@@ -14,7 +14,7 @@ The detector IP is a hypothesis about the other end. Stopping at `UNBOUND_REASON
 
 When `bind_relationship` is rejected because the assigned victim is a cue/observation address (`isCueObservationAddr` / non-LAN unicast), the plugin issues an `other-end` hunt whose subject is that cue IP. The filter is `ip.dst == <cue>` and the field is `ip.src`. Tokens are not swapped. The LAN peer is not invented.
 
-The deny text names that hunt and filter: `unbound: hunt LAN ip.src talking to <cue> (ip.dst == <cue>).` A later bind that still assigns that cue, or any cue, as victim stays denied and repeats the hunt name. Cue-as-victim never becomes a live bind.
+The deny text names that hunt and filter: `unbound: hunt LAN ip.src talking to <cue> (ip.dst == <cue>).` A later bind that still assigns that cue, or any cue, as victim stays denied and repeats the hunt name. Cue-as-victim never becomes a live bind. A both-LAN conversation deny does not issue `other-end` and does not invent a C2 ([refuse both-LAN bind](2026-08-21-refuse-both-lan-bind.md)).
 
 When `autoHunt` is true, `other-end` auto-runs through `pcap_filter` like other issued hunts, even though its subject is the cue. [Identity-hunt auto-run](2026-08-21-auto-run-outstanding-identity-hunts.md) still skips non-LAN subjects for `eth-src`, `name-service`, Kerberos, and SAMR.
 

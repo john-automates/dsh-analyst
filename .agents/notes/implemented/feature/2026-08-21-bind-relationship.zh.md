@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；该拒绝点名为该线索猎取 LAN `ip.src` 的 [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md)。其余未指定地址默认 `unknown`。
+`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。被引用的会话必须包含线索或观测地址（[拒绝两端都在 LAN 的绑定](../bug-fix/2026-08-21-refuse-both-lan-bind.md)）。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；该拒绝点名为该线索猎取 LAN `ip.src` 的 [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md)。角色 `c2` 不能是 LAN 地址。不会对调 token。两端都在 LAN 的拒绝不下发 hunt。其余未指定地址默认 `unknown`。
 
 当前绑定通过 `investigation:ledger` 发布焦点／角色卡片。那张卡片不是又一条收件箱拼接。hunt 通知点名已经跑过的过滤器。
 
@@ -48,7 +48,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、线索作为 victim 被拒绝、两个／零个 victim 被拒绝、JSON 字符串 `endpoints` 加上数字字符串 `dport` 与原生数组加上整数 `dport` 解析为同一绑定、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、唯一未归属的 mac／hostname／user／full_name 捐出、另一行存在时受害端 IP 范围内的 mac／hostname 捐出、两个未归属用户或 MAC 都不捐出、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄以及未归属的收割行。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor／LAN 域控（`10.0.10.3`）。它检查线索默认 `c2`、线索作为 victim 被拒绝、两端都在 LAN 的会话被拒绝且不下发 `other-end` hunt、LAN `c2` 被拒绝、两个／零个 victim 被拒绝、JSON 字符串 `endpoints` 加上数字字符串 `dport` 与原生数组加上整数 `dport` 解析为同一绑定、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、唯一未归属的 mac／hostname／user／full_name 捐出、另一行存在时受害端 IP 范围内的 mac／hostname 捐出、两个未归属用户或 MAC 都不捐出、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄以及未归属的收割行。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
 
 ## 后果
 

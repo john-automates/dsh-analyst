@@ -1,12 +1,13 @@
 /**
  * BindRelationship: assign victim vs c2 on a cited conversation before
- * Who/Where. Cue/observation addresses default to c2. A live bind is
- * required to close; who/where project from the victim entity row.
+ * Who/Where. The conversation must include a cue/observation address.
+ * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
+ * A live bind is required to close; who/where project from the victim entity row.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
 import { ipsEvidencingIdentity, normalizeIdentityValue } from './harvest.ts'
-import { isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt } from './hunts.ts'
+import { isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt } from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
   BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Hunt, Identity, IdentityKind,
@@ -30,13 +31,18 @@ export function cueVictimUnboundReason(cue: string): string {
 }
 
 /**
- * Other-end hunt for a denied cue-as-victim bind, when one was submitted.
+ * Other-end hunt for a denied cue-as-victim bind, when one was submitted
+ * on a conversation that includes a cue/observation address. A both-LAN
+ * conversation deny does not issue this hunt and does not invent a C2.
  * @param request - the bind request that failed.
  * @returns the hunt for the first cue assigned victim, or undefined.
  */
 export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefined {
   const coerced = coerceBindRequest(request)
   if (typeof coerced === 'string') return undefined
+  const relationship = normalizeRelationship(coerced.relationship)
+  if (typeof relationship === 'string') return undefined
+  if (!conversationIncludesCue(relationship.src, relationship.dst)) return undefined
   for (const input of coerced.endpoints) {
     const addr = normalizeEndpointAddr(input.addr)
     if (addr !== undefined && input.role === 'victim' && isCueObservationAddr(addr)) {
@@ -51,6 +57,16 @@ export const VICTIM_COUNT_REASON = 'bind_relationship requires exactly one victi
 
 /** Deny text when endpoints is not an array after JSON-string coerce. */
 export const ENDPOINTS_ARRAY_REASON = 'bind_relationship endpoints must be an array'
+
+/**
+ * Deny text when the cited conversation has no cue/observation address.
+ * A workstation↔DC Kerberos/SAMR/LDAP flow is unbound. Does not invent a C2.
+ */
+export const BOTH_LAN_CONVERSATION_REASON =
+  'unbound: cite the LAN host talking to the cue/observation address, not a LAN DC/AD service.'
+
+/** Deny text when bind_relationship assigns c2 to a LAN address. Tokens are not swapped. */
+export const LAN_C2_REASON = 'unbound: role c2 cannot be a LAN address.'
 
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
@@ -197,10 +213,13 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
 /**
  * Resolve and validate a BindRelationship request.
  * Missing src/dst endpoints are completed with default roles. Cue/observation
- * addresses default to `c2`. Assigning `victim` to a cue/observation address
- * is always unbound and names the other-end hunt for that cue. Zero or two
- * victims fail. A JSON array string of endpoint objects and a numeric-string
- * dport are coerced first; a missing dport is not invented.
+ * addresses default to `c2`. The cited conversation must include a
+ * cue/observation address; a both-LAN conversation is unbound and does not
+ * issue a hunt. Role `c2` cannot be a LAN address; tokens are not swapped.
+ * Assigning `victim` to a cue/observation address is always unbound and names
+ * the other-end hunt for that cue. Zero or two victims fail. A JSON array
+ * string of endpoint objects and a numeric-string dport are coerced first;
+ * a missing dport is not invented. These checks run on the coerced request.
  * @param request - relationship plus submitted endpoints.
  * @returns the bind, or a deny reason.
  */
@@ -209,6 +228,9 @@ export function resolveBind(request: BindRequest): BindResolution {
   if (typeof coerced === 'string') return { ok: false, reason: coerced }
   const relationship = normalizeRelationship(coerced.relationship)
   if (typeof relationship === 'string') return { ok: false, reason: relationship }
+  if (!conversationIncludesCue(relationship.src, relationship.dst)) {
+    return { ok: false, reason: BOTH_LAN_CONVERSATION_REASON }
+  }
 
   const seen = new Set<string>()
   const endpoints: BoundEndpoint[] = []
@@ -519,6 +541,16 @@ function normalizeRelationship(raw: BindRelationshipInput): Relationship | strin
 }
 
 /**
+ * Whether the cited conversation includes a cue/observation address.
+ * @param src - normalized conversation source.
+ * @param dst - normalized conversation destination.
+ * @returns true when src or dst is a unicast non-LAN IPv4.
+ */
+function conversationIncludesCue(src: string, dst: string): boolean {
+  return isCueObservationAddr(src) || isCueObservationAddr(dst)
+}
+
+/**
  * Coerce `endpoints` from a JSON array string into that array.
  * A native array is used as given. A string that is not a JSON array stays
  * rejected so resolveBind does not invent endpoints.
@@ -564,6 +596,7 @@ function resolveEndpoint(
   const role = input.role ?? defaultRoleForAddr(addr)
   if (!ROLE_SET.has(role)) return `bind_relationship endpoint role ${JSON.stringify(input.role)} is not valid`
   if (role === 'victim' && isCueObservationAddr(addr)) return cueVictimUnboundReason(addr)
+  if (role === 'c2' && isLanIpv4(addr)) return LAN_C2_REASON
   seen.add(addr)
   return { addr, role, because }
 }
