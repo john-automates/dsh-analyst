@@ -2,7 +2,8 @@
  * Extract unique labeled identities from tool-result text, including hostnames
  * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries. After a
  * C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
- * that IP.
+ * that IP. An `eth-src` / `name-service` hunt subject stamps `evidence_id` on
+ * harvested MAC and hostname.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
@@ -14,6 +15,8 @@ const MAC = /(?<![0-9a-fA-F]:)(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}(?![:-][0-9
 const SKIP_IPS = new Set(['0.0.0.0', '255.255.255.255'])
 const DOTTED_IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/
 const IP_SRC_LABEL = /(?:^|[\s,;|])ip\.src\s*[:=]\s*(\d{1,3}(?:\.\d{1,3}){3})/i
+const IP_ADDR_LABEL = /(?:^|[\s,;|])ip\.addr\s*[:=]\s*(\d{1,3}(?:\.\d{1,3}){3})/i
+const IP_EQ_LABEL = /ip\.(?:src|addr)\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/i
 const ETH_SRC_LABEL = /(?:^|[\s,;|])eth\.src\s*[:=]\s*((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
 const IP_CONVERSATION = /(\d{1,3}(?:\.\d{1,3}){3})\s*(?:→|->)\s*(\d{1,3}(?:\.\d{1,3}){3})/
 const ARP_IS_AT = /(\d{1,3}(?:\.\d{1,3}){3})\s+is at\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
@@ -102,19 +105,24 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
  * After `c2TalkingLanIps` finds a focus IP, a MAC is recorded only when it is
  * sourced from that IP (`ip.src`, outbound `focus → peer`, or ARP `is at`).
  * A bidirectional dump cannot persist the far-side NIC.
+ * When `scopeIp` is an IPv4 (an `eth-src` / `name-service` hunt subject),
+ * harvested MAC and hostname records carry that IP as `evidence_id`.
  * @param text - rendered tool output being harvested.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
+ * @param scopeIp - hunt-subject IPv4 that scoped this dump, when known.
  * @returns identities in first-seen order, unique on kind+value.
  */
-export function harvestIdentities(text: string, evidenceText = text): Identity[] {
+export function harvestIdentities(text: string, evidenceText = text, scopeIp?: string): Identity[] {
   const seen = new Set<string>()
   const out: Identity[] = []
+  const scope = scopeIp === undefined ? undefined : normalizeIdentityValue('ip', scopeIp)
   const add = (kind: IdentityKind, value: string): void => {
     const identity = identityOf(kind, value)
     if (identity === undefined) return
     const key = `${identity.kind}\0${identity.value}`
     if (seen.has(key)) return
     seen.add(key)
+    if (scope !== undefined && (kind === 'mac' || kind === 'hostname')) identity.evidence_id = scope
     out.push(identity)
   }
 
@@ -166,6 +174,21 @@ export function harvestIdentities(text: string, evidenceText = text): Identity[]
  */
 export function identityKey(identity: Identity): string {
   return `${identity.kind}\0${identity.value}`
+}
+
+/**
+ * IPv4s a MAC or hostname is evidenced on in tool-result text.
+ * A MAC is sourced from `ip.src`, outbound `ip → peer`, or ARP `is at`.
+ * A hostname is on a labeled or tshark-summary host line that also names
+ * `ip.src` / `ip.addr` (including `==`). Other kinds return no IPs.
+ * @param identity - ledger identity.
+ * @param text - tool-result text.
+ * @returns unique IPv4s in first-seen order.
+ */
+export function ipsEvidencingIdentity(identity: Identity, text: string): string[] {
+  if (identity.kind === 'mac') return ipsEvidencingMac(identity.value, text)
+  if (identity.kind === 'hostname') return ipsEvidencingHostname(identity.value, text)
+  return []
 }
 
 /**
@@ -264,6 +287,56 @@ function labeledField(line: string, pattern: RegExp): string | undefined {
 
 function firstMac(line: string): string | undefined {
   return new RegExp(MAC.source).exec(line)?.[0]
+}
+
+function ipsEvidencingMac(mac: string, text: string): string[] {
+  const ips: string[] = []
+  const seen = new Set<string>()
+  for (const match of text.matchAll(IPV4)) {
+    const ip = match[0]
+    if (SKIP_IPS.has(ip) || seen.has(ip)) continue
+    seen.add(ip)
+    const focus = new Set([ip])
+    for (const line of text.split(/\r?\n/)) {
+      const sourced = macSourcedFromFocusIp(line, focus)
+      if (sourced === undefined) continue
+      if (normalizeIdentityValue('mac', sourced) === mac) {
+        ips.push(ip)
+        break
+      }
+    }
+  }
+  return ips
+}
+
+function ipsEvidencingHostname(hostname: string, text: string): string[] {
+  const ips: string[] = []
+  const seen = new Set<string>()
+  for (const line of text.split(/\r?\n/)) {
+    if (!lineNamesHostname(line, hostname)) continue
+    const ip = labeledIpv4(line, IP_SRC_LABEL)
+      ?? labeledIpv4(line, IP_ADDR_LABEL)
+      ?? labeledIpv4(line, IP_EQ_LABEL)
+    if (ip === undefined || seen.has(ip)) continue
+    seen.add(ip)
+    ips.push(ip)
+  }
+  return ips
+}
+
+function lineNamesHostname(line: string, hostname: string): boolean {
+  HOST_LABEL.lastIndex = 0
+  for (const match of line.matchAll(HOST_LABEL)) {
+    const host = regexCapture(match)
+    if (host !== '' && normalizeIdentityValue('hostname', host) === hostname) return true
+  }
+  for (const pattern of SUMMARY_HOST_PATTERNS) {
+    pattern.lastIndex = 0
+    for (const match of line.matchAll(pattern)) {
+      if (normalizeIdentityValue('hostname', regexCapture(match)) === hostname) return true
+    }
+  }
+  return false
 }
 
 /**

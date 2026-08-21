@@ -16,7 +16,7 @@ After a live bind, complete the victim-row projection.
 
 `CaseIdentitySlot` has optional `full_name`. `projectVictimSlot` copies it with mac/hostname/user.
 
-An unaffiliated ledger identity (no `entity_id`, `evidence_id` does not point at a non-victim) donates to the bound victim when it is the only identity of that kind that is not affiliated with a different entity. Identities whose `entity_id` is already the victim still donate. A distractor with `entity_id` of another endpoint still does not. Slots are not invented. A kind with two unaffiliated values donates neither.
+An unaffiliated ledger identity (no `entity_id`, `evidence_id` does not point at a non-victim) donates to the bound victim when it is the only identity of that kind that is not affiliated with a different entity. Identities whose `entity_id` is already the victim still donate. A distractor with `entity_id` of another endpoint still does not. Slots are not invented. A kind with two unaffiliated values donates neither. A MAC or hostname evidenced on the bound victim IP still donates when other values of that kind exist ([victim-IP-scoped donate](2026-08-21-donate-victim-ip-scoped-mac-hostname.md)).
 
 The persisted `investigation/report` who/where carry ip/mac/hostname/user/full_name from that projection. Handle-string coerce still maps to `{ entity_id: victim.addr }`; the row fills from the ledger, not from free text.
 

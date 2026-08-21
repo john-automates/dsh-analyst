@@ -381,9 +381,10 @@ export function apply(ctx: Context, config: Config): void {
       const session = exec.agent.session
       const bind = ctx.investigation.bind(session)
       const identities = ctx.investigation.identities(session)
-      const denied = caseReportDenyReason(args, bind, identities)
+      const evidenceText = foldToolResultText(session.events)
+      const denied = caseReportDenyReason(args, bind, identities, evidenceText)
       if (denied !== undefined) throw new Error(denied)
-      const report = requireCaseReport(bind, identities, claims, foldToolResultText(session.events))
+      const report = requireCaseReport(bind, identities, claims, evidenceText)
       ctx.investigation.recordReport(session, report)
       return Promise.resolve(report)
     },

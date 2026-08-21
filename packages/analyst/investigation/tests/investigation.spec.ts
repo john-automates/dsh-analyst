@@ -413,7 +413,9 @@ describe('investigation service', () => {
         if (filter.includes('eth.src')) {
           return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' })
         }
-        if (filter.includes('llmnr')) return Promise.resolve('name-service dump' as unknown as { text: string })
+        if (filter.includes('llmnr')) {
+          return Promise.resolve({ text: 'hostname: lan-host\tip.addr: 10.0.10.2' })
+        }
         if (filter.includes('kerberos.CNameString')) {
           return Promise.reject(new Error('tshark missing'))
         }
@@ -451,7 +453,10 @@ describe('investigation service', () => {
       && Array.isArray(call.fields)
     ))).toBe(true)
     expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
     ])
     expect(result.additionalContexts?.[0]?.content).toEqual([
       expect.objectContaining({
@@ -468,6 +473,83 @@ describe('investigation service', () => {
     })
     expect(again.additionalContexts).toBeUndefined()
     expect(calls.filter(call => call.display_filter === '(eth.src) and ip.src == 10.0.10.2')).toHaveLength(1)
+  })
+
+  it('stamps hunt-subject evidence_id from a scoped pcap_filter display filter', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('ip.src ==')) return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a' })
+        if (filter.includes('ip.addr ==')) return Promise.resolve({ text: 'hostname: lan-host' })
+        if (filter.includes('eth.src')) return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0c' })
+        if (filter.includes('llmnr')) return Promise.resolve({ text: 'hostname: other-host' })
+        return Promise.resolve({ text: 'tcp' })
+      },
+    }))
+    const mac = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-scoped'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.src == 10.0.10.2',
+        fields: ['eth.src'],
+      },
+      agent: owner,
+    })
+    expect(mac.isError).toBe(false)
+    const host = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-name-scoped'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(llmnr or nbns or browser) and ip.addr == 10.0.10.2',
+      },
+      agent: owner,
+    })
+    expect(host.isError).toBe(false)
+    await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-unscoped'),
+      name: 'pcap_filter',
+      arguments: { path: 'evidence/a.pcap', display_filter: 'eth.src', fields: ['eth.src'] },
+      agent: owner,
+    })
+    await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-name-unscoped'),
+      name: 'pcap_filter',
+      arguments: { path: 'evidence/a.pcap', display_filter: 'llmnr or nbns or browser' },
+      agent: owner,
+    })
+    await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-tcp'),
+      name: 'pcap_filter',
+      arguments: { path: 'evidence/a.pcap', display_filter: 'tcp' },
+      agent: owner,
+    })
+    expect(ctx.investigation.identities(owner.session)).toEqual(expect.arrayContaining([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+      { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
+      { kind: 'mac', value: '02:00:00:00:00:0c', label: 'MAC' },
+      { kind: 'hostname', value: 'other-host', label: 'hostname' },
+    ]))
   })
 
   it('does not auto-run an eth-src whose subject is a non-LAN C2 IP', async () => {

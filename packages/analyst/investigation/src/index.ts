@@ -31,7 +31,7 @@ import {
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
-  evidenceTextForHunts, huntFilterSpec, huntNotice, huntsForNewIdentities,
+  evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice, huntsForNewIdentities,
   huntsToAutoRun, huntKey,
 } from './hunts.ts'
 import { formatLedger } from './ledger.ts'
@@ -238,6 +238,7 @@ export class Investigation extends Service {
           exec.arguments,
           session === undefined ? undefined : foldBind(session.events),
           session === undefined ? [] : foldIdentities(session.events),
+          session === undefined ? '' : foldToolResultText(session.events),
         )
         if (close !== undefined) return Promise.resolve({ kind: 'deny', reason: close })
       }
@@ -360,6 +361,7 @@ export class Investigation extends Service {
           foldHunts(context.agent.session.events),
           foldReport(context.agent.session.events),
           foldBind(context.agent.session.events),
+          foldToolResultText(context.agent.session.events),
         )
       },
     })
@@ -521,8 +523,8 @@ export class Investigation extends Service {
     const added: Identity[] = []
     const issued: Hunt[] = []
     const evidence = (): string => evidenceTextForHunts(session.events, current)
-    const harvestFrom = (text: string, evidenceText: string): void => {
-      for (const identity of harvestIdentities(text, evidenceText)) {
+    const harvestFrom = (text: string, evidenceText: string, scopeIp?: string): void => {
+      for (const identity of harvestIdentities(text, evidenceText, scopeIp)) {
         if (this.recordIdentity(session, identity)) added.push(identity)
       }
     }
@@ -533,12 +535,12 @@ export class Investigation extends Service {
         issued.push(hunt)
       }
     }
-    harvestFrom(current, evidence())
+    harvestFrom(current, evidence(), scopeIpFromPcapFilter(exec.arguments))
     issueFrom(added)
     if (this.autoHunt) {
-      await this.autoRunOutstanding(exec, session, current, (text) => {
+      await this.autoRunOutstanding(exec, session, current, (text, hunt) => {
         const before = added.length
-        harvestFrom(text, `${evidence()}\n${text}`)
+        harvestFrom(text, `${evidence()}\n${text}`, scopeIpFromHunt(hunt))
         issueFrom(added.slice(before))
       })
     }
@@ -556,7 +558,7 @@ export class Investigation extends Service {
     exec: ToolExecution,
     session: Session,
     current: string,
-    onText: (text: string) => void,
+    onText: (text: string, hunt: Hunt) => void,
   ): Promise<void> {
     const tool = this.ctx.tools.get('pcap_filter', exec.agent)
     if (tool === undefined) return
@@ -583,9 +585,36 @@ export class Investigation extends Service {
         continue
       }
       const text = huntResultText(value)
-      if (text !== '') onText(text)
+      if (text !== '') onText(text, hunt)
     }
   }
+}
+
+/**
+ * Hunt-subject IPv4 for an `eth-src` or `name-service` dump.
+ * @param hunt - issued hunt whose dump is being harvested.
+ * @returns the IP subject, or undefined when the hunt is not IP-scoped.
+ */
+function scopeIpFromHunt(hunt: Hunt): string | undefined {
+  if (hunt.subjectKind !== 'ip') return undefined
+  if (hunt.kind === 'eth-src' || hunt.kind === 'name-service') return hunt.subject
+  return undefined
+}
+
+/**
+ * Hunt-subject IPv4 implied by a `pcap_filter` display filter.
+ * `eth.src` with `ip.src ==` scopes a MAC dump; `llmnr` / `nbns` / `browser`
+ * with `ip.addr ==` scopes a name-service dump.
+ * @param args - tool arguments that may include `display_filter`.
+ * @returns the scoped IPv4, or undefined when the filter is not those hunts.
+ */
+function scopeIpFromPcapFilter(args: unknown): string | undefined {
+  const filter = stringArg(args, ['display_filter'])
+  if (filter === undefined) return undefined
+  const eth = /\beth\.src\b/.test(filter) ? /ip\.src\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter) : null
+  if (eth?.[1] !== undefined) return eth[1]
+  if (!/\b(?:llmnr|nbns|browser)\b/.test(filter)) return undefined
+  return /ip\.addr\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)?.[1]
 }
 
 /** Capture suffixes auto-run will open. `.log` is evidence but not a pcap. */

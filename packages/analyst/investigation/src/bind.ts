@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
-import { normalizeIdentityValue } from './harvest.ts'
+import { ipsEvidencingIdentity, normalizeIdentityValue } from './harvest.ts'
 import { isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt } from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
@@ -173,15 +173,18 @@ export function resolveBind(request: BindRequest): BindResolution {
 
 /**
  * Entity id an identity may donate for. IPs donate as themselves. An explicit
- * `entity_id` wins. A MAC sourced from the C2-talking LAN IP donates to that IP
- * when it matches the bound victim. After a live bind, an unaffiliated identity
+ * `entity_id` wins. A MAC or hostname evidenced on an IPv4 (hunt-subject
+ * `evidence_id`, or a tool-result line scoped to that IP) affiliates to that
+ * IP. Whole-ledger uniqueness does not block a victim-IP-scoped MAC or
+ * hostname. A MAC sourced from the C2-talking LAN IP donates to that IP when
+ * it matches the bound victim. After a live bind, an unaffiliated identity
  * (no `entity_id`, `evidence_id` does not point at a non-victim) donates to the
  * bound victim when it is the only identity of that kind that is not affiliated
  * with a different entity. Distractors never donate.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger, used to resolve a sourced MAC and uniqueness.
- * @param evidenceText - tool-result text for C2-talking detection.
+ * @param evidenceText - tool-result text for victim-IP scope and C2-talking.
  * @returns the entity id, or undefined when the identity is unaffiliated.
  */
 export function entityIdForIdentity(
@@ -193,6 +196,8 @@ export function entityIdForIdentity(
   if (identity.entity_id !== undefined && identity.entity_id !== '') return identity.entity_id
   if (identity.kind === 'ip') return identity.value
   const victim = victimOf(bind)
+  const scoped = scopedIpForIdentity(identity, evidenceText)
+  if (scoped !== undefined) return scoped
   if (identity.kind === 'mac') {
     const sourced = c2TalkingLanVictim(identities, evidenceText)
     if (
@@ -216,13 +221,14 @@ export function entityIdForIdentity(
 /**
  * Whether an identity may donate a who/where slot for the bound victim.
  * Distractors and other non-victim entities cannot donate. An `evidence_id`
- * that names a non-victim entity also blocks donation. After a live bind, a
- * unique unaffiliated identity of a kind donates; two unaffiliated values of
- * that kind donate neither.
+ * that names a non-victim entity also blocks donation. A MAC or hostname
+ * evidenced on the bound victim IP donates even when other values of that
+ * kind exist on the ledger. After a live bind, a unique unaffiliated identity
+ * of a kind donates; two unaffiliated values of that kind donate neither.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger.
- * @param evidenceText - tool-result text for C2-talking detection.
+ * @param evidenceText - tool-result text for victim-IP scope and C2-talking.
  * @returns true when the identity belongs to the unique victim.
  */
 export function identityDonatesToVictim(
@@ -241,7 +247,7 @@ export function identityDonatesToVictim(
  * Project the victim entity row (IP / MAC / hostname / user / full_name).
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns the projected slot, or undefined when the bind has no unique victim.
  */
 export function projectVictimSlot(
@@ -272,7 +278,7 @@ export function projectVictimSlot(
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns the report, or undefined when the bind has no unique victim.
  */
 export function projectCaseReport(
@@ -298,7 +304,7 @@ export function projectCaseReport(
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns the projected report.
  */
 export function requireCaseReport(
@@ -328,19 +334,21 @@ export function requireCaseReport(
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for victim-IP-scoped handle donation.
  * @returns the deny reason, or undefined when the close may proceed.
  */
 export function caseReportDenyReason(
   args: unknown,
   bind: RelationshipBind | undefined,
   identities: readonly Identity[] = [],
+  evidenceText = '',
 ): string | undefined {
   const victim = bind === undefined ? undefined : victimOf(bind)
   if (bind === undefined || victim === undefined) return UNBOUND_REASON
   if (typeof args !== 'object' || args === null) return undefined
   const record = args as Record<string, unknown>
   for (const field of ['who', 'where'] as const) {
-    const value = coerceIdentitySlotArg(record[field], bind, identities, victim)
+    const value = coerceIdentitySlotArg(record[field], bind, identities, victim, evidenceText)
     if (value === undefined) continue
     if (typeof value === 'string') return UNBOUND_REASON
     if (typeof value !== 'object' || value === null) return UNBOUND_REASON
@@ -403,7 +411,7 @@ export function formatRolesCard(bind: RelationshipBind): string {
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns the role, or undefined when the identity is unaffiliated.
  */
 export function roleForIdentity(
@@ -459,7 +467,7 @@ function resolveEndpoint(
  * @param victim - unique victim endpoint on the live bind.
  * @param bind - live bind.
  * @param identities - full ledger.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns true when this identity is the unique non-foreign value of its kind.
  */
 function uniqueUnaffiliatedOfKind(
@@ -480,12 +488,12 @@ function uniqueUnaffiliatedOfKind(
 
 /**
  * Whether an identity already belongs to an entity other than the bound victim.
- * Explicit `entity_id` wins. A MAC sourced from a C2-talking LAN IP belongs to
- * that IP.
+ * Explicit `entity_id` wins. A MAC or hostname evidenced on another IPv4 belongs
+ * to that IP. A MAC sourced from a C2-talking LAN IP belongs to that IP.
  * @param identity - ledger identity.
  * @param victimAddr - bound victim address.
  * @param identities - full ledger.
- * @param evidenceText - tool-result text for sourced-MAC affiliation.
+ * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
  * @returns true when the identity is already tied to a different entity.
  */
 function affiliatedWithDifferentEntity(
@@ -497,6 +505,8 @@ function affiliatedWithDifferentEntity(
   if (identity.entity_id !== undefined && identity.entity_id !== '') {
     return identity.entity_id !== victimAddr
   }
+  const scoped = scopedIpForIdentity(identity, evidenceText)
+  if (scoped !== undefined) return scoped !== victimAddr
   if (identity.kind === 'mac') {
     const sourced = c2TalkingLanVictim(identities, evidenceText)
     if (sourced !== undefined && sourced.mac === identity.value) {
@@ -504,6 +514,33 @@ function affiliatedWithDifferentEntity(
     }
   }
   return false
+}
+
+/**
+ * IPv4 a MAC or hostname is evidenced on. Hunt-subject `evidence_id` wins.
+ * Otherwise a unique tool-result line scoped to one IPv4 (`eth.src` with
+ * `ip.src`, `name-service` with `ip.addr` / `ip.src`).
+ * @param identity - ledger identity.
+ * @param evidenceText - tool-result text.
+ * @returns the scoped IPv4, or undefined when none is unique.
+ */
+function scopedIpForIdentity(identity: Identity, evidenceText: string): string | undefined {
+  if (identity.kind !== 'mac' && identity.kind !== 'hostname') return undefined
+  const fromId = ipv4EvidenceId(identity.evidence_id)
+  if (fromId !== undefined) return fromId
+  const ips = ipsEvidencingIdentity(identity, evidenceText)
+  return ips.length === 1 ? ips[0] : undefined
+}
+
+/**
+ * Whether `evidence_id` is an IPv4 used as a hunt subject or entity scope.
+ * @param evidenceId - identity evidence id.
+ * @returns the normalized IPv4, or undefined when the id is not an IPv4.
+ */
+function ipv4EvidenceId(evidenceId: string | undefined): string | undefined {
+  if (evidenceId === undefined || evidenceId === '') return undefined
+  const ip = normalizeEndpointAddr(evidenceId)
+  return ip !== undefined && isIpv4(ip) ? ip : undefined
 }
 
 function pointsAtNonVictim(
@@ -539,6 +576,7 @@ function isIpv4(addr: string): boolean {
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param victim - unique victim endpoint on that bind.
+ * @param evidenceText - tool-result text for victim-IP-scoped handles.
  * @returns the parsed or projected object, or the original value.
  */
 function coerceIdentitySlotArg(
@@ -546,6 +584,7 @@ function coerceIdentitySlotArg(
   bind: RelationshipBind,
   identities: readonly Identity[],
   victim: BoundEndpoint,
+  evidenceText = '',
 ): unknown {
   if (typeof value !== 'string') return value
   const text = value.trim()
@@ -557,7 +596,7 @@ function coerceIdentitySlotArg(
       return value
     }
   }
-  if (!isVictimHandleText(text, bind, identities, victim)) return value
+  if (!isVictimHandleText(text, bind, identities, victim, evidenceText)) return value
   return { entity_id: victim.addr }
 }
 
@@ -569,6 +608,7 @@ function coerceIdentitySlotArg(
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param victim - unique victim endpoint on that bind.
+ * @param evidenceText - tool-result text for victim-IP-scoped handles.
  * @returns true when the string names only the bound victim row.
  */
 function isVictimHandleText(
@@ -576,8 +616,9 @@ function isVictimHandleText(
   bind: RelationshipBind,
   identities: readonly Identity[],
   victim: BoundEndpoint,
+  evidenceText = '',
 ): boolean {
-  const handles = victimRowHandles(bind, identities, victim)
+  const handles = victimRowHandles(bind, identities, victim, evidenceText)
   if (matchesVictimHandle(text, handles)) return true
   const tokens = identityLikeTokens(text)
   return tokens.length > 0 && tokens.every(token => matchesVictimHandle(token, handles))
@@ -589,16 +630,18 @@ function isVictimHandleText(
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param victim - unique victim endpoint on that bind.
+ * @param evidenceText - tool-result text for victim-IP-scoped donation.
  * @returns normalized handle values.
  */
 function victimRowHandles(
   bind: RelationshipBind,
   identities: readonly Identity[],
   victim: BoundEndpoint,
+  evidenceText = '',
 ): Set<string> {
   const handles = new Set<string>([victim.addr])
   for (const identity of identities) {
-    if (identityDonatesToVictim(identity, bind, identities)) handles.add(identity.value)
+    if (identityDonatesToVictim(identity, bind, identities, evidenceText)) handles.add(identity.value)
   }
   return handles
 }

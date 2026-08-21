@@ -13,6 +13,7 @@ import type { CaseReport, Hunt, Identity, RelationshipBind } from './types.ts'
  * @param hunts - folded hunts.
  * @param report - latest 5W1H report, when present.
  * @param bind - latest conversation bind, when present.
+ * @param evidenceText - tool-result text for victim-IP-scoped role labels.
  * @returns ledger text, or empty when the ledger has nothing to show.
  */
 export function formatLedger(
@@ -20,6 +21,7 @@ export function formatLedger(
   hunts: readonly Hunt[],
   report: CaseReport | { who: unknown } | undefined,
   bind?: RelationshipBind,
+  evidenceText = '',
 ): string {
   if (identities.length === 0 && hunts.length === 0 && report === undefined && bind === undefined) {
     return ''
@@ -29,7 +31,9 @@ export function formatLedger(
   if (identities.length > 0) {
     lines.push('Identities:')
     for (const identity of identities) {
-      const role = bind === undefined ? undefined : roleForIdentity(identity, bind, identities)
+      const role = bind === undefined
+        ? undefined
+        : roleForIdentity(identity, bind, identities, evidenceText)
       lines.push(role === undefined
         ? `- ${identity.label} ${identity.value}`
         : `- [${role}] ${identity.label} ${identity.value}`)
