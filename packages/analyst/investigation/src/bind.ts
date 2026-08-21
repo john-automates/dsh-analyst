@@ -6,7 +6,10 @@
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, a who/where string whose leftover identity tokens are
  * victim-row handles is coerced to `{ entity_id: victim }` even when labels
- * or a sentence wrap those handles. A leftover MAC that talking-IP frames
+ * or a sentence wrap those handles. Locator leftovers (client / ip /
+ * located / at / on / network) are wrappers. A leftover CIDR that contains
+ * the bound victim IP is dropped so `/` does not shatter it into a
+ * non-victim IPv4 plus a prefix. A leftover MAC that talking-IP frames
  * source only from a non-victim is dropped so remaining victim-row handles
  * still coerce. Omitted mac persists the unique ledger MAC that is not
  * DC/gateway-only when a sticky DC donate or uniqueness left the projected
@@ -118,14 +121,20 @@ const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const sat
 const SLOT_KEYS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 const INTEGER_STRING = /^-?\d+$/
 const MAC_HANDLE = /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/i
+const IPV4_DOTTED = String.raw`(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)`
+const IPV4_EXACT = new RegExp(`^${IPV4_DOTTED}$`)
+const CIDR_PREFIX = String.raw`(?:3[0-2]|[12]?\d)`
+const CIDR_EXACT = new RegExp(`^(${IPV4_DOTTED})/(${CIDR_PREFIX})$`)
 /**
- * Field labels and sentence wrappers that are not identity tokens.
- * A leftover word outside this set still denies when it is not a handle,
- * except a leftover MAC that talking-IP frames source only from a non-victim.
+ * Field labels, locator words, and sentence wrappers that are not identity
+ * tokens. A leftover word outside this set still denies when it is not a
+ * handle, except a leftover MAC that talking-IP frames source only from a
+ * non-victim, and a leftover CIDR that contains the bound victim IP.
  */
 const HANDLE_WRAPPER_WORDS = new Set([
   'user', 'account', 'full', 'name', 'mac', 'address', 'hostname', 'host',
   'the', 'infected', 'was', 'identified', 'as',
+  'client', 'ip', 'located', 'at', 'on', 'network',
 ])
 /** Who/where delimiters: whitespace, punctuation, and ASCII quotes. */
 const HANDLE_TOKEN_DELIMITERS = String.raw`\s,;:|/'"`
@@ -137,6 +146,16 @@ const HANDLE_TOKEN_DELIMITERS = String.raw`\s,;:|/'"`
 const LEFTOVER_MAC_TOKEN = new RegExp(
   `(?<![^${HANDLE_TOKEN_DELIMITERS}])[0-9a-f]{2}(?:[:\\-][0-9a-f]{2}){5}(?![^${HANDLE_TOKEN_DELIMITERS}])`,
   'gi',
+)
+/**
+ * Leftover CIDR token. `/` is a who/where delimiter, so a word split would
+ * shatter `10.0.10.0/24` into a non-victim IPv4 plus a prefix number.
+ * Extracted as one token; the handle-text check drops it when it contains
+ * the bound victim IP.
+ */
+const LEFTOVER_CIDR_TOKEN = new RegExp(
+  `(?<![^${HANDLE_TOKEN_DELIMITERS}])${IPV4_DOTTED}/${CIDR_PREFIX}(?![^${HANDLE_TOKEN_DELIMITERS}])`,
+  'g',
 )
 
 /** Model-supplied who/where after deny/coerce, before the row fills omitted keys. */
@@ -610,14 +629,18 @@ export function requireCaseReport(
  * string whose leftover identity tokens are all victim-row handles (bound
  * victim IP, or a ledger user / full_name / hostname / MAC that donates to
  * that victim or is evidenced on that victim the same way omitted mac/user
- * persist) is coerced to `{ entity_id: victim.addr }`. Label words, sentence
- * wrappers, wrapping ASCII quotes, and a leftover MAC that talking-IP frames
- * source only from a non-victim are not identity tokens. A multi-word
- * full_name is one handle. A user, hostname, MAC, or full_name is a
- * victim-row handle, not an entity id; the persisted packet still uses the
- * victim address. A string that names the c2, a distractor user or hostname,
- * another IPv4, or unmatched leftover words stays unbound. A string that is
- * only that DC/gateway-only MAC stays unbound.
+ * persist) is coerced to `{ entity_id: victim.addr }`. Label words, locator
+ * leftovers (client / ip / located / at / on / network), sentence wrappers,
+ * wrapping ASCII quotes, a leftover MAC that talking-IP frames source only
+ * from a non-victim, and a leftover CIDR that contains the bound victim IP
+ * are not identity tokens. A multi-word full_name is one handle. A user,
+ * hostname, MAC, or full_name is a victim-row handle, not an entity id; the
+ * persisted packet still uses the victim address. A string that names the
+ * c2, a distractor user or hostname, another IPv4 that is not that
+ * victim-containing CIDR, a CIDR that does not contain the victim, or
+ * unmatched leftover words stays unbound. A string that is only that
+ * DC/gateway-only MAC, or that has no remaining victim-row handle, stays
+ * unbound.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -943,7 +966,7 @@ function pointsAtNonVictim(
 }
 
 function isIpv4(addr: string): boolean {
-  return /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(addr)
+  return IPV4_EXACT.test(addr)
 }
 
 /**
@@ -1087,9 +1110,11 @@ function submittedSlotRecord(submitted: unknown): Record<string, unknown> | unde
  * parameters as trimmed JSON text, so who/where can arrive as strings. After a
  * live bind, a string whose leftover identity tokens are all victim-row
  * handles projects through the existing victim-row path, including labeled or
- * sentence-wrapped handles. A leftover MAC that talking-IP frames source only
- * from a non-victim is dropped. A string that is not a JSON object and not a
- * victim-row handle stays a string for the free-text deny.
+ * sentence-wrapped handles. Locator leftovers are wrappers. A leftover CIDR
+ * that contains the bound victim IP is dropped. A leftover MAC that
+ * talking-IP frames source only from a non-victim is dropped. A string that
+ * is not a JSON object and not a victim-row handle stays a string for the
+ * free-text deny.
  * @param value - raw who/where argument.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1121,11 +1146,13 @@ function coerceIdentitySlotArg(
 /**
  * Whether leftover identity tokens in `text` are all victim-row handles.
  * The whole trimmed string may itself be one handle (user, full_name,
- * hostname, MAC, or bound victim IP). Label words, sentence wrappers,
- * wrapping ASCII quotes, and a leftover MAC that talking-IP frames source
- * only from a non-victim are ignored. A multi-word full_name is one handle.
+ * hostname, MAC, or bound victim IP). Label words, locator leftovers,
+ * sentence wrappers, wrapping ASCII quotes, a leftover MAC that talking-IP
+ * frames source only from a non-victim, and a leftover CIDR that contains
+ * the bound victim IP are ignored. A multi-word full_name is one handle.
  * An empty leftover set, including a string that is only that
- * DC/gateway-only MAC, is not a victim-row handle.
+ * DC/gateway-only MAC or only that victim-containing CIDR, is not a
+ * victim-row handle.
  * @param text - trimmed who/where string.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1144,6 +1171,7 @@ function isVictimHandleText(
   if (matchesVictimHandle(text, handles)) return true
   const tokens = identityLikeTokens(text, handles)
     .filter(token => !dcOrGatewayOnlyMacToken(token, victim.addr, evidenceText))
+    .filter(token => !leftoverCidrContainsVictim(token, victim.addr))
   return tokens.length > 0 && tokens.every(token => matchesVictimHandle(token, handles))
 }
 
@@ -1159,6 +1187,35 @@ function isVictimHandleText(
 function dcOrGatewayOnlyMacToken(token: string, victimAddr: string, evidenceText: string): boolean {
   const mac = normalizeIdentityValue('mac', token)
   return mac !== undefined && MAC_HANDLE.test(mac) && macIsDcOrGatewayOnly(mac, victimAddr, evidenceText)
+}
+
+/**
+ * Whether one leftover token is an IPv4/prefix CIDR that contains the bound
+ * victim IP. `/` is a who/where delimiter, so the CIDR must already be one
+ * token. A CIDR that does not contain the victim stays unmatched. ip,
+ * hostname, user, and full_name are never dropped here.
+ * @param token - one leftover identity-like token.
+ * @param victimAddr - bound victim IPv4.
+ * @returns true when the token may be ignored during handle-string coerce.
+ */
+function leftoverCidrContainsVictim(token: string, victimAddr: string): boolean {
+  const match = token.match(CIDR_EXACT)
+  if (match === null) return false
+  const prefix = Number(match[2])
+  // `<< 32` wraps to `<< 0` in JavaScript, so prefix 0 cannot use that shift.
+  const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
+  return (ipv4ToInt(victimAddr) & mask) === (ipv4ToInt(match[1] as string) & mask)
+}
+
+/**
+ * Unsigned 32-bit value of a dotted IPv4.
+ * @param ip - dotted IPv4 already proven by {@link isIpv4}.
+ * @returns the integer.
+ */
+function ipv4ToInt(ip: string): number {
+  let value = 0
+  for (const part of ip.split('.')) value = (value << 8) + Number(part)
+  return value >>> 0
 }
 
 /**
@@ -1236,10 +1293,12 @@ function matchesVictimHandle(token: string, handles: Set<string>): boolean {
  * Identity tokens: parenthesized groups, then victim-row handles in the
  * remaining text (longest match, so a multi-word full_name stays one
  * token), then leftover MAC-shaped tokens (colon or dash), then leftover
- * words that are not field labels, sentence wrappers, or wrapping ASCII
- * quotes. A leftover DC/gateway-only MAC is dropped by the handle-text
- * check, not here. Unmatched leftover tokens fail the victim-row handle
- * check.
+ * CIDR tokens (IPv4/prefix, extracted before `/` can shatter them), then
+ * leftover words that are not field labels, locator leftovers, sentence
+ * wrappers, or wrapping ASCII quotes. A leftover DC/gateway-only MAC and a
+ * leftover CIDR that contains the bound victim IP are dropped by the
+ * handle-text check, not here. Unmatched leftover tokens fail the
+ * victim-row handle check.
  * @param text - trimmed who/where string.
  * @param handles - victim-row handle values used for longest-match extract.
  * @returns tokens in encounter order.
@@ -1267,6 +1326,12 @@ function identityLikeTokens(text: string, handles: ReadonlySet<string> = new Set
   }
   const remainder = mask.join('')
   for (const match of remainder.matchAll(LEFTOVER_MAC_TOKEN)) {
+    const start = match.index as number
+    tokens.push(match[0])
+    mask.fill(' ', start, start + match[0].length)
+  }
+  const afterMac = mask.join('')
+  for (const match of afterMac.matchAll(LEFTOVER_CIDR_TOKEN)) {
     const start = match.index as number
     tokens.push(match[0])
     mask.fill(' ', start, start + match[0].length)

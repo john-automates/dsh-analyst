@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-当前绑定之后，当 `who` / `where` 字符串里的每个身份 token 都是受害端行句柄（被绑定的 victim IP，或捐给该 victim、或证据落在该 victim 上的账本用户 / 全名 / 主机名 / MAC）时，`caseReportDenyReason` 把它强制转换成 `{ entity_id: victim.addr }`。随后由已有的受害端行投影写出结案包。JSON 对象字符串强制转换仍优先。没有当前绑定仍会拒绝。点名 c2、干扰项、另一个 IPv4 或无法匹配的身份 token 的字符串仍保持未绑定。不会对调 token。不会解析 `report.md`。不会编造槽位。字段标签、句子包裹、多词 `full_name` 匹配，以及未捐出但证据落在 victim 上的句柄见[带标签的句柄字符串](2026-08-21-case-report-labeled-victim-handle-strings.md)。剩余的仅域控／网关 MAC 会被[丢弃](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md)。
+当前绑定之后，当 `who` / `where` 字符串里的每个身份 token 都是受害端行句柄（被绑定的 victim IP，或捐给该 victim、或证据落在该 victim 上的账本用户 / 全名 / 主机名 / MAC）时，`caseReportDenyReason` 把它强制转换成 `{ entity_id: victim.addr }`。随后由已有的受害端行投影写出结案包。JSON 对象字符串强制转换仍优先。没有当前绑定仍会拒绝。点名 c2、干扰项、另一个 IPv4 或无法匹配的身份 token 的字符串仍保持未绑定。不会对调 token。不会解析 `report.md`。不会编造槽位。字段标签、句子包裹、多词 `full_name` 匹配，以及未捐出但证据落在 victim 上的句柄见[带标签的句柄字符串](2026-08-21-case-report-labeled-victim-handle-strings.md)。剩余的仅域控／网关 MAC 会被[丢弃](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md)。定位剩余词和包含被绑定 victim IP 的剩余 CIDR 会被[丢弃](2026-08-21-drop-locator-cidr-from-handle-string-coerce.md)。
 
 scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体，以及该受害端行上的句柄。
 

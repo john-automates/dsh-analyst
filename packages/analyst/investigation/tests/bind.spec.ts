@@ -11,6 +11,8 @@ import { harvestIdentities, identityOf } from '../src/harvest.ts'
 import type { Identity, Relationship, RelationshipBind } from '../src/types.ts'
 
 const LAN = '10.0.10.2'
+const LAN_CIDR = '10.0.10.0/24'
+const OTHER_CIDR = '172.16.0.0/12'
 const C2 = '198.51.100.80'
 const DISTRACTOR = '10.0.10.3'
 const CLIENT_MAC = '02:00:00:00:00:0a'
@@ -682,6 +684,75 @@ describe('BindRelationship', () => {
     expect(report.who).toMatchObject({
       ip: LAN, hostname: HOST,
     })
+  })
+
+  it('coerces locator leftovers and a victim-containing CIDR onto the victim after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const dcDonated = {
+      ...identityOf('mac', CLIENT_MAC)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimUser = {
+      ...identityOf('user', USER)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const identities = [
+      identityOf('ip', LAN)!, identityOf('ip', C2)!, dcDonated, dcMac, victimUser,
+    ]
+    const evidence = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+      `${LAN} → ${DISTRACTOR}  kerberos.CNameString: ${USER}`,
+    ].join('\n')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const locatorWho = `Client IP: ${LAN} / MAC Address: ${CLIENT_MAC}`
+    const locatorWhere = `The client was located at ${LAN} on the ${LAN_CIDR} network`
+    expect(caseReportDenyReason({
+      who: locatorWho,
+      where: locatorWhere,
+    }, undefined, identities, evidence)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({
+      who: locatorWho,
+      where: locatorWhere,
+    }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ who: `${locatorWho} / ${C2}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${locatorWhere} / ${OTHER_CIDR}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: `${locatorWho} leftover` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: `${locatorWho} / ${DISTRACTOR}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: LAN_CIDR }, live, identities, evidence)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: `${locatorWho} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBeUndefined()
+    expect(caseReportDenyReason({ where: `The client was located at ${LAN} on 0.0.0.0/0` }, live, identities, evidence))
+      .toBeUndefined()
+    const report = requireCaseReport(live, identities, claims, evidence, {
+      who: locatorWho,
+      where: locatorWhere,
+    })
+    expect(report.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      user: USER,
+    })
+    expect(report.where).toEqual(report.who)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
   })
 
   it('completes the victim row from unique unaffiliated ledger identities after a live bind', () => {

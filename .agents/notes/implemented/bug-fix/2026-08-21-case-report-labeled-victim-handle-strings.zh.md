@@ -21,7 +21,7 @@ Status: implemented
 
 标签词和句子包裹不是身份 token。ASCII 单引号和双引号是 who/where 分隔符，所以带引号的主机名仍作为一句柄匹配。多词 `full_name` 作为一句柄匹配。MAC、用户、主机名或 `full_name` 在捐给被绑定 victim，或按省略 mac／user 持久化的同一方式（受害端 IP 帧／会话客户端戳记）证据落在该 victim 上时，是受害端行句柄。粘滞的域控捐出不会让受害端 IP 送来的 MAC 通不过句柄检查。
 
-通信 IP 帧只从非 victim 来源的剩余 MAC 会被丢弃而不是保持未绑定（[仅域控／网关 MAC 剩余项](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md)）。点名 C2、干扰项用户或主机名、另一个 IPv4 或无法匹配剩余词的字符串仍保持未绑定。无法匹配的身份 token 仍拒绝。不编造身份。不对调 token。将线索指定为 victim 仍被拒绝。
+通信 IP 帧只从非 victim 来源的剩余 MAC 会被丢弃而不是保持未绑定（[仅域控／网关 MAC 剩余项](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md)）。定位剩余词和包含被绑定 victim IP 的剩余 CIDR 会被丢弃（[定位／CIDR 剩余项](2026-08-21-drop-locator-cidr-from-handle-string-coerce.md)）。点名 C2、干扰项用户或主机名、另一个 IPv4 或无法匹配剩余词的字符串仍保持未绑定。无法匹配的身份 token 仍拒绝。不编造身份。不对调 token。将线索指定为 victim 仍被拒绝。
 
 漏洞在 `packages/analyst/investigation/src/bind.ts` 的 `isVictimHandleText`／`identityLikeTokens`／`victimRowHandles`。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行、合成 `CLIENT_MAC` 对 `DISTRACTOR_MAC`，以及 `lan-user`／`Lan User`。
 

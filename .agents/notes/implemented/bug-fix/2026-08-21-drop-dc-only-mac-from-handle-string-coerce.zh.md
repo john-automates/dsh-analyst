@@ -14,7 +14,7 @@ Status: implemented
 
 当前绑定之后，`identityLikeTokens` 把剩余的冒号或短横线 MAC 抽成一个 token（冒号是 who/where 分隔符，按词切分会把它拆碎）。`isVictimHandleText` 随后丢弃通信 IP 帧只从非 victim 来源的剩余 MAC——与[持久化](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md)相同的仅域控／网关测试（`macIsDcOrGatewayOnly`）。剩余的受害端行句柄仍把字符串强制转换成 `{ entity_id: victim }`。随后已有的省略 mac 路径可以补上唯一不是仅域控／网关的客户端 MAC。
 
-只含该仅域控／网关 MAC 的字符串仍保持未绑定。剩余的 C2 IPv4、干扰项用户或主机名、另一个非 victim IPv4，或不是字段标签／句子包裹／引号的无法匹配词仍保持未绑定。域控／网关网卡不会持久化到 who/where。不丢弃 ip、hostname、user 或 `full_name`。收割戳记、绑定接受／拒绝和 C2-domain 持久化保持不变。
+只含该仅域控／网关 MAC 的字符串仍保持未绑定。定位剩余词和包含被绑定 victim IP 的剩余 CIDR 会被[另行丢弃](2026-08-21-drop-locator-cidr-from-handle-string-coerce.md)。剩余的 C2 IPv4、干扰项用户或主机名、另一个非 victim IPv4，或不是字段标签／句子包裹／引号的无法匹配词仍保持未绑定。域控／网关网卡不会持久化到 who/where。不丢弃 ip、hostname、user 或 `full_name`。收割戳记、绑定接受／拒绝和 C2-domain 持久化保持不变。
 
 漏洞在 `packages/analyst/investigation/src/bind.ts` 的 `isVictimHandleText`／`identityLikeTokens`／`coerceIdentitySlotArg`。将线索指定为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行，以及合成 `CLIENT_MAC` 对 `DISTRACTOR_MAC`。
 
