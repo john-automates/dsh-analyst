@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-persist-harvested-human-on-omitted-who.md
+2026-08-21-persist-harvested-human-on-omitted-who.md: 0f73a19728dbfa19a28196c7fb1edf4a0e34c484
+2026-08-21-persist-harvested-human-on-omitted-who.zh.md: 28945923903432a397bc5c0c5272a21cebf0d6d7

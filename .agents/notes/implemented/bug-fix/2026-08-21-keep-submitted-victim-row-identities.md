@@ -40,4 +40,4 @@ The hole is the empty-`projected[key]` branch in `completeAcceptedSlot`.
 
 ## Consequences
 
-A live bind plus a submitted victim-row user writes that user even when the projected row did not donate it. A DC MAC still stays off. A user that donates to another entity does not persist. An omitted user is still not invented when no conversation-client evidence exists. Donated slots stay.
+A live bind plus a submitted victim-row user writes that user even when the projected row did not donate it. A DC MAC still stays off. A user that donates to another entity does not persist. An omitted user is still not invented when the ledger has no unique harvested human and no conversation-client evidence ([persist harvested human on omitted who](2026-08-21-persist-harvested-human-on-omitted-who.md)). Donated slots stay.

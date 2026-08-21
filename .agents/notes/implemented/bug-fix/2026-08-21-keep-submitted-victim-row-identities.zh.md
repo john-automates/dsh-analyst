@@ -40,4 +40,4 @@ Status: implemented
 
 ## 后果
 
-当前绑定加上提交的受害端行 user 会写出该 user，即使投影行没有捐出它。域控 MAC 仍保持不在。捐给其他实体的 user 不会持久化。没有会话客户端证据时，省略的 user 仍不会被编造。已捐出的槽位保留。
+当前绑定加上提交的受害端行 user 会写出该 user，即使投影行没有捐出它。域控 MAC 仍保持不在。捐给其他实体的 user 不会持久化。账本没有唯一已收割的人类 user、也没有会话客户端证据时，省略的 user 仍不会被编造（[在省略的 who 上持久化已收割的人类 user](2026-08-21-persist-harvested-human-on-omitted-who.md)）。已捐出的槽位保留。

@@ -16,7 +16,7 @@ Status: implemented
 
 当前绑定之后，当 who 和／或 where 被省略时，`projectCaseReport` 把同一 `case_report` 参数上的同级顶层身份键（`ip`、`mac`、`hostname`、`user`、`full_name`）折入该提交槽位，让 `completeAcceptedSlot` 把它们看成提交键。`case_report` execute 把这些同级键与 who/where 一起传入。
 
-即使账本上也有机器账户、唯一性会挡住省略 user 持久化，仍保留提交的人类 user（不是以 `$` 结尾的机器 SAM）。模型已经点名该人类 SAM 时，不要求会话客户端戳记。机器 SAM 不作为 who/where user 持久化。模型提供的 IP 不替换被绑定的 victim ip。已捐出的 ip／hostname／mac／`full_name` 保留。域控／网关网卡保持不在。
+即使账本上也有机器账户、唯一性捐出让投影行为空，仍保留提交的人类 user（不是以 `$` 结尾的机器 SAM）。模型已经点名该人类 SAM 时，不要求会话客户端戳记。机器 SAM 挡住唯一性捐出时，省略的 who/where 也持久化该唯一已收割的人类 user（[在省略的 who 上持久化已收割的人类 user](2026-08-21-persist-harvested-human-on-omitted-who.md)）。机器 SAM 不作为 who/where user 持久化。模型提供的 IP 不替换被绑定的 victim ip。已捐出的 ip／hostname／mac／`full_name` 保留。域控／网关网卡保持不在。
 
 漏洞在 `packages/analyst/investigation/src/bind.ts` 中省略的 who/where 加上同级 `SLOT_KEYS`，以及 `case_report` execute 路径。收割戳记、绑定接受／拒绝、省略 mac 持久化、仅域控 MAC 剩余项丢弃、定位／CIDR 包裹和 C2-domain 持久化保持不变。将线索指定为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行、合成 `CLIENT_MAC` 对 `DISTRACTOR_MAC`、`lan-user`／`Lan User`，以及合成机器 SAM `lan-host$`。
 
