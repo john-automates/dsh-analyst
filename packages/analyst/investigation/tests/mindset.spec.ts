@@ -7,7 +7,8 @@ import {
   isBelieveBecauseClaim, killedHypothesisIds, namedLiveCue, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras,
-  thesisForHuntDump,
+  thesisForHuntDump, completeDenyReason, COMPLETE_CUE_PENDING_REASON,
+  COMPLETE_PLAN_NOT_READY_REASON,
 } from '../src/mindset.ts'
 import type {
   CaseReport, Hunt, Identity, InvestigationAction, InvestigationMission, InvestigationPlanEntry,
@@ -203,6 +204,16 @@ describe('analyst mindset chassis', () => {
     expect(planReadyDenyReason(undefined, { inventory: [], gaps: [], hypotheses: [] }))
       .toBe(CUE_PENDING_REASON)
     expect(planReadyDenyReason(mission(), readyPlan)).toBeUndefined()
+    expect(completeDenyReason(undefined, readyPlan)).toBe(COMPLETE_CUE_PENDING_REASON)
+    expect(completeDenyReason(chassisMission(), readyPlan)).toBe(COMPLETE_CUE_PENDING_REASON)
+    expect(completeDenyReason(chassisMission(), { inventory: [], gaps: [], hypotheses: [] }))
+      .toBe(COMPLETE_CUE_PENDING_REASON)
+    expect(completeDenyReason(mission(), { inventory: [], gaps: [], hypotheses: [] }))
+      .toBe(COMPLETE_PLAN_NOT_READY_REASON)
+    expect(completeDenyReason(mission({ cueValidation: 'invalid' }), readyPlan))
+      .toBe(COMPLETE_PLAN_NOT_READY_REASON)
+    expect(completeDenyReason(mission({ cueValidation: 'open' }), readyPlan)).toBeUndefined()
+    expect(completeDenyReason(mission(), readyPlan)).toBeUndefined()
     expect(c2HypothesisId({ inventory: [], gaps: [], hypotheses: [] })).toBeUndefined()
     expect(c2HypothesisId(readyPlan)).toBe('h-c2')
     expect(requireC2HypothesisId(readyPlan)).toBe('h-c2')

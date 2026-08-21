@@ -822,8 +822,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'investigation',
-    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.',
-    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.',
+    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.',
+    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.',
     methods: [
       {
         signature: 'readonly caseDir: string',
@@ -888,8 +888,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'recordMission(session: Session, mission: InvestigationMission): void',
-        description: 'Append a whole-value Mission. The last Mission is live. Does not issue or auto-run hunts.',
-        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'mission', description: 'Mission fields.' }],
+        description: 'Append a whole-value Mission. The last Mission is live. Purpose and closed-means stay the chassis values. Does not issue or auto-run hunts.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'mission', description: 'Mission fields (cue and slot 0a may update).' }],
+      },
+      {
+        signature: 'ensureChassisMission(session: Session): boolean',
+        description: 'Stamp the chassis Mission when the session has none. Scopes the case only. Does not stamp Plan and does not unlock auto-hunts. Bind still needs a named C2 hypothesis on the Plan.',
+        parameters: [{ name: 'session', description: 'session to stamp.' }],
+        returns: 'true when a Mission event was appended.',
       },
       {
         signature: 'recordPlan(session: Session, entry: InvestigationPlanEntry): void',

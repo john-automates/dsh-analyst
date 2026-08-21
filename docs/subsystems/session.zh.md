@@ -624,7 +624,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.investigation` — `Investigation`
 
-`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.
+`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.
 
 ```ts cordis-catalog
 /**
@@ -693,12 +693,21 @@ recordReport(session: Session, report: CaseReport): void
 recordBind(session: Session, bind: RelationshipBind): void
 
 /**
- * Append a whole-value Mission. The last Mission is live. Does not issue
- * or auto-run hunts.
+ * Append a whole-value Mission. The last Mission is live. Purpose and
+ * closed-means stay the chassis values. Does not issue or auto-run hunts.
  * @param session - session to append to.
- * @param mission - Mission fields.
+ * @param mission - Mission fields (cue and slot 0a may update).
  */
 recordMission(session: Session, mission: InvestigationMission): void
+
+/**
+ * Stamp the chassis Mission when the session has none. Scopes the case
+ * only. Does not stamp Plan and does not unlock auto-hunts. Bind still
+ * needs a named C2 hypothesis on the Plan.
+ * @param session - session to stamp.
+ * @returns true when a Mission event was appended.
+ */
+ensureChassisMission(session: Session): boolean
 
 /**
  * Append one Plan entry. Inventory, gaps, and new hypothesis ids concatenate.
@@ -758,7 +767,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:302`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:317`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 
