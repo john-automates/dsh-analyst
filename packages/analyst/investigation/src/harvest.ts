@@ -163,6 +163,7 @@ const CDN_OR_UPDATE_SUFFIXES = [
   'akamai.net',
   'akamaiedge.net',
   'akamaihd.net',
+  'akamaized.net',
   'akadns.net',
   'edgesuite.net',
   'edgekey.net',
@@ -181,9 +182,10 @@ const CONVERSATION_HOST_LABEL = new RegExp(
  * Whether a hostname is a well-known public CDN or software-update domain.
  * Matches the registrable suffix and its subdomains
  * (`update.microsoft.com`, `windows.msn.com`, `www.bing.com`,
- * `login.microsoftonline.com`, `sfx.ms`, `a1.akamai.net`). IPv4
- * ranges are not this test; published Cloudflare prefixes use
- * {@link isCloudflareIpv4}. Live-case gold names are not listed.
+ * `login.microsoftonline.com`, `sfx.ms`, `a1.akamai.net`,
+ * `img-s-msn-com.akamaized.net`). IPv4 ranges are not this test;
+ * published Cloudflare prefixes use {@link isCloudflareIpv4}.
+ * Live-case gold names are not listed.
  * `evilcloudflare.com` is false.
  * @param value - raw or normalized hostname.
  * @returns true when the hostname is that suffix or a subdomain of it.
