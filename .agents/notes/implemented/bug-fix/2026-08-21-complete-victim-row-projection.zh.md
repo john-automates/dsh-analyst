@@ -18,7 +18,7 @@ Status: implemented
 
 未归属的账本身份（没有 `entity_id`，且 `evidence_id` 不指向非 victim）在它是该种类中唯一未归属到其他实体的身份时，捐给被绑定的 victim。`entity_id` 已经是 victim 的身份仍捐出。`entity_id` 是另一端点的 distractor 仍不捐出。不会编造槽位。同一种类有两个未归属值时，两者都不捐出。证据落在被绑定 victim IP 上的 MAC 或主机名在同一种类还有其他值时仍捐出（[受害端 IP 范围捐出](2026-08-21-donate-victim-ip-scoped-mac-hostname.md)）。
 
-持久化的 `investigation/report` who/where 从该投影携带 ip／mac／hostname／user／full_name。句柄字符串强制转换仍映射到 `{ entity_id: victim.addr }`；行从账本填充，不从自由文本填充。
+持久化的 `investigation/report` who/where 从该投影携带 ip／mac／hostname／user／full_name。句柄字符串强制转换仍映射到 `{ entity_id: victim.addr }`；行从账本填充，不从自由文本填充。模型省略的键（包括 `mac`）从同一行补全（[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md)）。
 
 [BindRelationship](../feature/2026-08-21-bind-relationship.md) 仍拥有结案前绑定。[受害端行句柄](2026-08-21-case-report-victim-row-entity-id.md) 仍持久化 victim 地址。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端和 TEST-NET 对等体。
 

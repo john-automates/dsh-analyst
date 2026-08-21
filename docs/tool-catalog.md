@@ -2347,6 +2347,26 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
             "entity_id": {
               "type": "string",
               "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+            },
+            "ip": {
+              "type": "string",
+              "description": "Victim IPv4 when known. Omitted after a live bind is filled from the victim row."
+            },
+            "mac": {
+              "type": "string",
+              "description": "Victim MAC when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "hostname": {
+              "type": "string",
+              "description": "Victim hostname when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "user": {
+              "type": "string",
+              "description": "Victim user when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "full_name": {
+              "type": "string",
+              "description": "Victim full name when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
             }
           }
         },
@@ -2354,7 +2374,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Unmatched free-text who is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Unmatched free-text who or where is denied."
     },
     "where": {
       "oneOf": [
@@ -2365,6 +2385,26 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
             "entity_id": {
               "type": "string",
               "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+            },
+            "ip": {
+              "type": "string",
+              "description": "Victim IPv4 when known. Omitted after a live bind is filled from the victim row."
+            },
+            "mac": {
+              "type": "string",
+              "description": "Victim MAC when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "hostname": {
+              "type": "string",
+              "description": "Victim hostname when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "user": {
+              "type": "string",
+              "description": "Victim user when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
+            },
+            "full_name": {
+              "type": "string",
+              "description": "Victim full name when it belongs to the victim entity. Omitted after a live bind is filled from the victim row."
             }
           }
         },
@@ -2372,7 +2412,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Unmatched free-text where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Unmatched free-text who or where is denied."
     }
   },
   "required": [

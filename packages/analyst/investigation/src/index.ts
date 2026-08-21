@@ -53,15 +53,16 @@ export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, coerceBindRequest, cueVictimUnboundReason,
-  defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON, entityIdForIdentity, foldBind,
-  formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
-  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
-  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
+  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, coerceBindRequest, completeAcceptedSlot,
+  cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON,
+  entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
+  LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
+  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf,
+  VICTIM_COUNT_REASON,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
-  CoercedBindRequest,
+  CoercedBindRequest, SubmittedIdentitySlots,
 } from './bind.ts'
 export {
   CLOSE_FILE_REASON, denyCommand, denyReason, stringArg, tokenizeCommand,
