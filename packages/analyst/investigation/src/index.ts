@@ -1,6 +1,7 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
- * tool results, auto-issue hunts after new identities, auto-run outstanding
+ * tool results, auto-issue hunts after new identities, auto-issue `other-end`
+ * when bind_relationship assigns a cue as victim, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
  * deny write/edit of case-root close files, and persist a 5W1H close packet
@@ -25,7 +26,8 @@ import {
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
-  caseReportDenyReason, ENDPOINT_ROLES, foldBind, formatRolesCard, resolveBind,
+  caseReportDenyReason, ENDPOINT_ROLES, foldBind, formatRolesCard,
+  otherEndHuntForDeniedBind, resolveBind,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
@@ -45,16 +47,16 @@ export {
 export {
   c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
   huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
-  isNonLanUnicastIpv4, shouldAutoRunHunt,
+  isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  caseReportDenyReason, defaultRoleForAddr, ENDPOINT_ROLES, entityIdForIdentity,
-  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
-  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
-  UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
+  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES,
+  entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
+  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
+  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
 } from './bind.ts'
 export type { BindEndpointInput, BindRequest, BindResolution, CaseReportClaims } from './bind.ts'
 export {
@@ -94,10 +96,11 @@ export interface Config {
    * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
-   * those identity hunts issue only for that C2-talking IP. Outstanding issued
-   * hunts then run through `pcap_filter` with the scoped display_filter and
-   * fields; results harvest into the ledger. Non-LAN / C2 IP subjects do not
-   * auto-run. Defaults to true.
+   * those identity hunts issue only for that C2-talking IP. A cue-as-victim
+   * bind issues `other-end` for that cue. Outstanding issued hunts then run
+   * through `pcap_filter` with the scoped display_filter and fields; results
+   * harvest into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
+   * `other-end`. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -308,20 +311,28 @@ export class Investigation extends Service {
           }),
         }],
       },
-      execute: (args, exec) => {
+      execute: async (args, exec) => {
         if (exec.agent === undefined) throw new Error('bind_relationship requires an owning agent session')
-        const resolved = resolveBind({
+        const request = {
           relationship: {
             src: args.src, dst: args.dst, dport: args.dport, t: args.t, evidence_id: args.evidence_id,
           },
           endpoints: args.endpoints,
-        })
-        if (!resolved.ok) throw new Error(resolved.reason)
+        }
+        const resolved = resolveBind(request)
+        if (!resolved.ok) {
+          const hunt = otherEndHuntForDeniedBind(request)
+          if (hunt !== undefined) {
+            this.recordHunt(exec.agent.session, hunt)
+            if (this.autoHunt) await this.harvestIssueAutoRun(exec, exec.agent.session, '')
+          }
+          throw new Error(resolved.reason)
+        }
         this.recordBind(exec.agent.session, resolved.bind)
-        return Promise.resolve({
+        return {
           ...resolved.bind.relationship,
           endpoints: resolved.bind.endpoints,
-        })
+        }
       },
       presentCall: args => ({ card: 'generic', title: 'Bind conversation', kind: 'other', rawInput: args }),
     }))
@@ -473,8 +484,40 @@ export class Investigation extends Service {
   /** Harvest identities, issue hunts, and auto-run outstanding issued hunts. */
   private async observe(exec: ToolExecution, result: ToolExecutionResult): Promise<UserMessage | undefined> {
     if (result.isError || exec.agent === undefined) return undefined
-    const session = exec.agent.session
-    const current = resultText(result)
+    const { added, issued } = await this.harvestIssueAutoRun(exec, exec.agent.session, resultText(result))
+    if (added.length === 0) return undefined
+    const lines = [
+      ...added.map(identity => `New identity: ${identity.label} ${identity.value}.`),
+      ...issued.map(huntNotice),
+    ]
+    const first = added[0]
+    const headline = first !== undefined && added.length === 1
+      ? `New identity: ${first.label} ${first.value}`
+      : `New identities: ${added.map(identity => identity.label).join(', ')}`
+    return createUserMessage({
+      content: [{ type: 'text', text: lines.join('\n') }],
+      source: {
+        kind: 'plugin',
+        plugin: 'investigation',
+        form: 'notice',
+        summary: boundContextSummary(headline),
+      },
+    })
+  }
+
+  /**
+   * Harvest identities from `current`, issue identity hunts, and auto-run
+   * outstanding issued hunts (including `other-end`).
+   * @param exec - triggering execution (path and cancellation).
+   * @param session - session whose ledger is folded.
+   * @param current - text of the triggering tool result, or empty on a denied bind.
+   * @returns identities and hunts recorded on this pass.
+   */
+  private async harvestIssueAutoRun(
+    exec: ToolExecution,
+    session: Session,
+    current: string,
+  ): Promise<{ added: Identity[]; issued: Hunt[] }> {
     const added: Identity[] = []
     const issued: Hunt[] = []
     const evidence = (): string => evidenceTextForHunts(session.events, current)
@@ -499,24 +542,7 @@ export class Investigation extends Service {
         issueFrom(added.slice(before))
       })
     }
-    if (added.length === 0) return undefined
-    const lines = [
-      ...added.map(identity => `New identity: ${identity.label} ${identity.value}.`),
-      ...issued.map(huntNotice),
-    ]
-    const first = added[0]
-    const headline = first !== undefined && added.length === 1
-      ? `New identity: ${first.label} ${first.value}`
-      : `New identities: ${added.map(identity => identity.label).join(', ')}`
-    return createUserMessage({
-      content: [{ type: 'text', text: lines.join('\n') }],
-      source: {
-        kind: 'plugin',
-        plugin: 'investigation',
-        form: 'notice',
-        summary: boundContextSummary(headline),
-      },
-    })
+    return { added, issued }
   }
 
   /**

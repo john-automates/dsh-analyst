@@ -12,7 +12,7 @@ Live lumma-r7 (`ac6f879`) Bind #1 denied correctly: victim was the cue/observati
 
 ## Decision
 
-A cue/observation address cannot be victim. `role === 'victim' && isCueObservationAddr(addr)` always returns `UNBOUND_REASON`. `isCueObservationAddr` is a unicast non-LAN IPv4; a hostname is not a cue. Cue/observation addresses still default to `c2`. Tokens are not swapped. Exactly one victim. An inverted `case_report` is refused. Victim-row handle-string coerce remains for a live non-inverted bind.
+A cue/observation address cannot be victim. `role === 'victim' && isCueObservationAddr(addr)` always returns `cueVictimUnboundReason`, which names the [other-end hunt](2026-08-21-other-end-hunt-on-cue-victim.md) for that cue. `isCueObservationAddr` is a unicast non-LAN IPv4; a hostname is not a cue. Cue/observation addresses still default to `c2`. Tokens are not swapped. Exactly one victim. An inverted `case_report` is refused. Victim-row handle-string coerce remains for a live non-inverted bind.
 
 [BindRelationship](../feature/2026-08-21-bind-relationship.md) still owns bind-before-close. Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client and a TEST-NET peer.
 
@@ -30,7 +30,7 @@ A cue/observation address cannot be victim. `role === 'victim' && isCueObservati
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`) and TEST-NET peer (`198.51.100.80`). Assigning `victim` to the TEST-NET address is denied when `because` is an alert string and when it cites the conversation, `evidence_id`, both endpoints, or `dport`. LAN victim plus TEST-NET `c2` still binds, and `case_report` still closes. `packages/analyst/investigation/tests/investigation.spec.ts` denies a conversation-cited cue-as-victim bind through `tools.execute`.
+`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`) and TEST-NET peer (`198.51.100.80`). Assigning `victim` to the TEST-NET address is denied when `because` is an alert string and when it cites the conversation, `evidence_id`, both endpoints, or `dport`; the deny names the other-end hunt for that TEST-NET address. LAN victim plus TEST-NET `c2` still binds, and `case_report` still closes. `packages/analyst/investigation/tests/investigation.spec.ts` denies a conversation-cited cue-as-victim bind through `tools.execute`.
 
 ## Consequences
 

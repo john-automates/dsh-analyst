@@ -29,7 +29,7 @@ export interface Identity {
 }
 
 /** Auto-issued or recorded hunt kinds. */
-export type HuntKind = 'kerberos-cname' | 'samr-userinfo' | 'eth-src' | 'name-service'
+export type HuntKind = 'kerberos-cname' | 'samr-userinfo' | 'eth-src' | 'name-service' | 'other-end'
 
 /** Subject kinds a hunt can attach to. */
 export type HuntSubjectKind = 'ip' | 'hostname' | 'user'
@@ -122,10 +122,12 @@ declare module '@deepseek-ai/dsh-session/types' {
      * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
      * log order. A new IP issues `eth-src`, `name-service`, Kerberos
      * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
-     * peer, those identity hunts issue only for that C2-talking IP. When
-     * `autoHunt` is true, outstanding issued hunts execute through
-     * `pcap_filter` with the scoped display filter. A new hostname issues
-     * Kerberos then SAMR. A new user issues SAMR.
+     * peer, those identity hunts issue only for that C2-talking IP. Assigning
+     * victim to a cue/observation address issues `other-end` for that cue IP
+     * (`ip.dst ==` the cue, field `ip.src`). When `autoHunt` is true,
+     * outstanding issued hunts execute through `pcap_filter` with the scoped
+     * display filter; `other-end` auto-runs even though its subject is the
+     * cue. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**

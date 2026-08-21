@@ -7,7 +7,7 @@ import { ENDPOINT_ROLES } from './bind.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-investigation'
 const IDENTITY_KINDS = new Set(['ip', 'mac', 'hostname', 'user', 'full_name'])
-const HUNT_KINDS = new Set(['kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service'])
+const HUNT_KINDS = new Set(['kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service', 'other-end'])
 const HUNT_SUBJECTS = new Set(['ip', 'hostname', 'user'])
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const CLAIM_FIELDS = ['what', 'when', 'why', 'how'] as const

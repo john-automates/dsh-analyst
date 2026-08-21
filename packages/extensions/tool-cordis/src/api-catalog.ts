@@ -3366,7 +3366,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HuntKind',
-    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\';',
+    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\' | \'other-end\';',
   },
   {
     name: 'HuntSubjectKind',

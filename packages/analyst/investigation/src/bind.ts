@@ -6,10 +6,10 @@
  */
 
 import { normalizeIdentityValue } from './harvest.ts'
-import { isNonLanUnicastIpv4 } from './hunts.ts'
+import { isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt } from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
-  BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Identity, IdentityKind,
+  BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Hunt, Identity, IdentityKind,
   Relationship, RelationshipBind,
 } from './types.ts'
 
@@ -18,6 +18,31 @@ export const ENDPOINT_ROLES = ['victim', 'c2', 'infra', 'distractor', 'unknown']
 
 /** Deny text when case_report runs without a live victim-vs-c2 bind. */
 export const UNBOUND_REASON = 'unbound: assign victim vs c2 on the cited conversation.'
+
+/**
+ * Deny text when bind_relationship assigns victim to a cue/observation address.
+ * Names the other-end hunt and filter. Does not invent a LAN peer.
+ * @param cue - normalized cue/observation IPv4.
+ * @returns unbound reason naming `other-end` for that cue.
+ */
+export function cueVictimUnboundReason(cue: string): string {
+  return `unbound: hunt LAN ip.src talking to ${cue} (${otherEndDisplayFilter(cue)}).`
+}
+
+/**
+ * Other-end hunt for a denied cue-as-victim bind, when one was submitted.
+ * @param request - the bind request that failed.
+ * @returns the hunt for the first cue assigned victim, or undefined.
+ */
+export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefined {
+  for (const input of request.endpoints) {
+    const addr = normalizeEndpointAddr(input.addr)
+    if (addr !== undefined && input.role === 'victim' && isCueObservationAddr(addr)) {
+      return otherEndHunt(addr)
+    }
+  }
+  return undefined
+}
 
 /** Deny text when bind_relationship does not have exactly one victim. */
 export const VICTIM_COUNT_REASON = 'bind_relationship requires exactly one victim'
@@ -116,7 +141,8 @@ export function victimOf(bind: RelationshipBind): BoundEndpoint | undefined {
  * Resolve and validate a BindRelationship request.
  * Missing src/dst endpoints are completed with default roles. Cue/observation
  * addresses default to `c2`. Assigning `victim` to a cue/observation address
- * is always unbound. Zero or two victims fail.
+ * is always unbound and names the other-end hunt for that cue. Zero or two
+ * victims fail.
  * @param request - relationship plus submitted endpoints.
  * @returns the bind, or a deny reason.
  */
@@ -418,7 +444,7 @@ function resolveEndpoint(
   if (because === '') return 'bind_relationship endpoint because must be a non-empty string'
   const role = input.role ?? defaultRoleForAddr(addr)
   if (!ROLE_SET.has(role)) return `bind_relationship endpoint role ${JSON.stringify(input.role)} is not valid`
-  if (role === 'victim' && isCueObservationAddr(addr)) return UNBOUND_REASON
+  if (role === 'victim' && isCueObservationAddr(addr)) return cueVictimUnboundReason(addr)
   seen.add(addr)
   return { addr, role, because }
 }

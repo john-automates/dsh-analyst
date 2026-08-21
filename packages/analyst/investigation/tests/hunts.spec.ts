@@ -3,7 +3,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
   huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
-  isNonLanUnicastIpv4, shouldAutoRunHunt,
+  isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
 } from '../src/hunts.ts'
 import { formatLedger } from '../src/ledger.ts'
 import type { Hunt, Identity } from '../src/types.ts'
@@ -228,5 +228,25 @@ describe('auto-issued hunts', () => {
     expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([lanMac])
     expect(huntsToAutoRun(issued, '', new Set())).toEqual([idleMac, lanMac, hostHunt])
     expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]))).toEqual([])
+  })
+
+  it('issues other-end for a cue IP and auto-runs that hunt', () => {
+    const hunt = otherEndHunt(C2)
+    expect(hunt).toEqual({ kind: 'other-end', subjectKind: 'ip', subject: C2 })
+    expect(otherEndDisplayFilter(C2)).toBe(`ip.dst == ${C2}`)
+    expect(huntFilterSpec(hunt)).toEqual({
+      display_filter: `ip.dst == ${C2}`,
+      fields: ['ip.src'],
+    })
+    const notice = huntNotice(hunt)
+    expect(notice).toContain('other-end')
+    expect(notice).toContain(`ip.dst == ${C2}`)
+    expect(notice).toContain('ip.src')
+    expect(notice).not.toContain(LAN_A)
+    expect(shouldAutoRunHunt(hunt, '')).toBe(true)
+    expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
+    expect(shouldAutoRunHunt({ kind: 'other-end', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
   })
 })
