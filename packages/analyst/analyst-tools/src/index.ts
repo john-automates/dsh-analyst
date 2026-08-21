@@ -298,8 +298,9 @@ export function apply(ctx: Context, config: Config): void {
         description: [
           'Optional victim-row handle.',
           'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
+          'A victim-row handle string is the same handle after a live bind.',
           'A JSON object string with entity_id is the same handle.',
-          'Free-text who is denied.',
+          'Unmatched free-text who is denied.',
         ].join(' '),
         oneOf: [
           {
@@ -319,8 +320,9 @@ export function apply(ctx: Context, config: Config): void {
         description: [
           'Optional victim-row handle.',
           'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
+          'A victim-row handle string is the same handle after a live bind.',
           'A JSON object string with entity_id is the same handle.',
-          'Free-text where is denied.',
+          'Unmatched free-text where is denied.',
         ].join(' '),
         oneOf: [
           {

@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`caseReportDenyReason` 在自由文本检查之前，把作为 JSON 对象字符串的 `who` / `where` 强制转换成该对象。当前绑定随后可以从受害端行用户句柄投影 `who.entity_id`。`case_report` schema 接受对象或字符串，让这些参数到达拒绝检查而不是 `INVALID_ARGS`。不是 JSON 对象的字符串仍是自由文本，并保持未绑定。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
+`caseReportDenyReason` 在自由文本检查之前，把作为 JSON 对象字符串的 `who` / `where` 强制转换成该对象。当前绑定随后可以从受害端行用户句柄投影 `who.entity_id`。`case_report` schema 接受对象或字符串，让这些参数到达拒绝检查而不是 `INVALID_ARGS`。不是 JSON 对象的字符串随后按受害端行句柄文本检查（[句柄字符串](2026-08-21-case-report-victim-handle-strings.md)）。无法匹配的自由文本仍保持未绑定。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
 
 scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体，以及该受害端行上的用户。
 
@@ -28,8 +28,8 @@ scout、遗留报告禁令、收割归属和新评测不在本次变更内。测
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 把合成 LAN 客户端（`10.0.10.2`）绑到 TEST-NET 对等体，并把 `lan-user` 放在该受害端行上。`who` / `where` 为 `JSON.stringify({ entity_id })` 时，未绑定会被拒绝，`entity_id` 为 c2 地址会被拒绝，绑定后允许。非 JSON 字符串仍视为未绑定。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一 JSON 字符串 `case_report` 先跑 `bind_relationship` 再跑 `case_report`，并记录 `entity_id` 为 victim 地址、用户已捐出的 `investigation/report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 把合成 LAN 客户端（`10.0.10.2`）绑到 TEST-NET 对等体，并把 `lan-user` 放在该受害端行上。`who` / `where` 为 `JSON.stringify({ entity_id })` 时，未绑定会被拒绝，`entity_id` 为 c2 地址会被拒绝，绑定后允许。不是受害端行句柄的非 JSON 字符串仍视为未绑定。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一 JSON 字符串 `case_report` 先跑 `bind_relationship` 再跑 `case_report`，并记录 `entity_id` 为 victim 地址、用户已捐出的 `investigation/report`。
 
 ## 后果
 
-当前绑定加上 XML 字符串化或 JSON 字符串 who/where，在 `entity_id` 为 victim 地址或受害端行句柄时会写出 5W1H 结案包。自由文本 who/where 仍以未绑定失败。未绑定和对调结案仍以未绑定原因失败。
+当前绑定加上 XML 字符串化或 JSON 字符串 who/where，在 `entity_id` 为 victim 地址或受害端行句柄时会写出 5W1H 结案包。无法匹配的自由文本 who/where 仍以未绑定失败。未绑定和对调结案仍以未绑定原因失败。

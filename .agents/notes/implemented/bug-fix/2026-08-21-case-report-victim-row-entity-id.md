@@ -12,7 +12,7 @@ Live lumma-r3 (`aa1c361`) bound the cited conversation correctly (LAN victim / e
 
 ## Decision
 
-After a live bind with exactly one victim, `who.entity_id` and `where.entity_id` may be the bound victim address or a victim-row handle (user, hostname, MAC, or full_name). Those handles are not entity ids. `projectCaseReport` still persists `entity_id` as the victim address and fills donated row fields. A non-victim conversation endpoint or another IPv4 stays unbound. Free-text who/where stay unbound. No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
+After a live bind with exactly one victim, `who.entity_id` and `where.entity_id` may be the bound victim address or a victim-row handle (user, hostname, MAC, or full_name). Those handles are not entity ids. `projectCaseReport` still persists `entity_id` as the victim address and fills donated row fields. A non-victim conversation endpoint or another IPv4 stays unbound. Unmatched or inverted free-text who/where stay unbound. A victim-row handle string is coerced after a live bind ([handle strings](2026-08-21-case-report-victim-handle-strings.md)). No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
 
 Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET peer, and a user on that victim row.
 

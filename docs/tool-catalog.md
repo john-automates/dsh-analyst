@@ -2340,7 +2340,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A JSON object string with entity_id is the same handle. Free-text who is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Unmatched free-text who is denied."
     },
     "where": {
       "oneOf": [
@@ -2358,7 +2358,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A JSON object string with entity_id is the same handle. Free-text where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Unmatched free-text where is denied."
     }
   },
   "required": [

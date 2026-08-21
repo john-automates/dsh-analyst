@@ -488,6 +488,104 @@ describe('analyst tools', () => {
     expect(text(result)).toContain('Who: 10.0.10.2 lan-user')
   })
 
+  it('closes case_report when who/where are victim-row handle strings after a live bind', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user', entity_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name', entity_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user', value: 'idle-user', label: 'user', entity_id: '10.0.10.3',
+    })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const handleSlots = {
+      ...claims,
+      who: 'lan-user (Lan User)',
+      where: '10.0.10.2 (lan-host)',
+    }
+    const unbound = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-handle-unbound'),
+      name: 'case_report',
+      arguments: handleSlots,
+      agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(text(unbound)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-handle-slots'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const inverted = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-handle-c2'),
+      name: 'case_report',
+      arguments: { ...claims, who: '198.51.100.80' },
+      agent: owner,
+    })
+    expect(inverted.isError).toBe(true)
+    expect(text(inverted)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const distractor = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-handle-distractor'),
+      name: 'case_report',
+      arguments: { ...claims, who: 'idle-user' },
+      agent: owner,
+    })
+    expect(distractor.isError).toBe(true)
+    expect(text(distractor)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const prose = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-handle-prose'),
+      name: 'case_report',
+      arguments: { ...claims, who: 'the workstation on the LAN' },
+      agent: owner,
+    })
+    expect(prose.isError).toBe(true)
+    expect(text(prose)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-handle-slots'),
+      name: 'case_report',
+      arguments: handleSlots,
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: 'lan-host', user: 'lan-user' },
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: 'lan-host', user: 'lan-user' },
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 lan-host lan-user')
+  })
+
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const bind = await ctx.tools.execute({

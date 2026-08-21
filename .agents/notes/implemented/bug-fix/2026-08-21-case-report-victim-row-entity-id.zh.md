@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-在恰好有一个 victim 的当前绑定之后，`who.entity_id` 与 `where.entity_id` 可以是被绑定的 victim 地址，或受害端行句柄（用户、主机名、MAC 或全名）。这些句柄不是实体 id。`projectCaseReport` 仍把 `entity_id` 持久化为 victim 地址，并填入已捐出的行字段。非 victim 会话端点或另一个 IPv4 仍视为未绑定。自由文本 who/where 仍视为未绑定。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
+在恰好有一个 victim 的当前绑定之后，`who.entity_id` 与 `where.entity_id` 可以是被绑定的 victim 地址，或受害端行句柄（用户、主机名、MAC 或全名）。这些句柄不是实体 id。`projectCaseReport` 仍把 `entity_id` 持久化为 victim 地址，并填入已捐出的行字段。非 victim 会话端点或另一个 IPv4 仍视为未绑定。无法匹配或对调的自由文本 who/where 仍视为未绑定。当前绑定之后会强制转换受害端行句柄字符串（[句柄字符串](2026-08-21-case-report-victim-handle-strings.md)）。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
 
 scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体，以及该受害端行上的用户。
 

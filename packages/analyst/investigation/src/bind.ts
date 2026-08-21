@@ -9,8 +9,8 @@ import { normalizeIdentityValue } from './harvest.ts'
 import { isNonLanUnicastIpv4 } from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
-  BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Identity, Relationship,
-  RelationshipBind,
+  BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Identity, IdentityKind,
+  Relationship, RelationshipBind,
 } from './types.ts'
 
 /** Closed role set accepted by bind_relationship. */
@@ -24,6 +24,7 @@ export const VICTIM_COUNT_REASON = 'bind_relationship requires exactly one victi
 
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const CONVERSATION_CUE = /\b(conversation|talking|packet|flow|peer|cited conversation)\b/i
+const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 
 /** Model or fold input before defaults and role checks. */
 export interface BindRequest {
@@ -304,9 +305,13 @@ export function requireCaseReport(
  * Missing bind, a non-victim or other IPv4 entity_id, free-text who/where,
  * and identity slots whose evidence_id points at a non-victim all return
  * {@link UNBOUND_REASON}. A JSON object string with `entity_id` is coerced to
- * that object before the free-text check. A user, hostname, MAC, or full_name
- * is a victim-row handle, not an entity id; the persisted packet still uses
- * the victim address.
+ * that object before the free-text check. After a live bind, a who/where
+ * string whose identity-like tokens are all victim-row handles (bound victim
+ * IP, or a ledger user / full_name / hostname / MAC that donates to that
+ * victim) is coerced to `{ entity_id: victim.addr }`. A user, hostname, MAC,
+ * or full_name is a victim-row handle, not an entity id; the persisted packet
+ * still uses the victim address. A string that names the c2, a distractor,
+ * another IPv4, or unmatched prose stays unbound.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -322,7 +327,7 @@ export function caseReportDenyReason(
   if (typeof args !== 'object' || args === null) return undefined
   const record = args as Record<string, unknown>
   for (const field of ['who', 'where'] as const) {
-    const value = coerceIdentitySlotArg(record[field])
+    const value = coerceIdentitySlotArg(record[field], bind, identities, victim)
     if (value === undefined) continue
     if (typeof value === 'string') return UNBOUND_REASON
     if (typeof value !== 'object' || value === null) return UNBOUND_REASON
@@ -457,20 +462,112 @@ function isIpv4(addr: string): boolean {
 }
 
 /**
- * Coerce a JSON object string into that object. Hermes XML recovery stores
- * object parameters as trimmed JSON text, so who/where can arrive as strings.
- * A string that is not a JSON object stays a string for the free-text deny.
+ * Coerce a JSON object string into that object, or a victim-row handle string
+ * into `{ entity_id: victim.addr }`. Hermes XML recovery stores object
+ * parameters as trimmed JSON text, so who/where can arrive as strings. After a
+ * live bind, a string whose identity-like tokens are all victim-row handles
+ * projects through the existing victim-row path. A string that is not a JSON
+ * object and not a victim-row handle stays a string for the free-text deny.
  * @param value - raw who/where argument.
- * @returns the parsed object, or the original value.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param victim - unique victim endpoint on that bind.
+ * @returns the parsed or projected object, or the original value.
  */
-function coerceIdentitySlotArg(value: unknown): unknown {
+function coerceIdentitySlotArg(
+  value: unknown,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  victim: BoundEndpoint,
+): unknown {
   if (typeof value !== 'string') return value
   const text = value.trim()
-  if (!text.startsWith('{')) return value
-  try {
-    return JSON.parse(text) as unknown
-  } catch {
-    // JSON.parse SyntaxError: not a JSON object. Keep the string for the free-text deny.
-    return value
+  if (text.startsWith('{')) {
+    try {
+      return JSON.parse(text) as unknown
+    } catch {
+      // JSON.parse SyntaxError: not a JSON object. Keep the string for the free-text deny.
+      return value
+    }
   }
+  if (!isVictimHandleText(text, bind, identities, victim)) return value
+  return { entity_id: victim.addr }
+}
+
+/**
+ * Whether every identity-like token in `text` is a victim-row handle.
+ * The whole trimmed string may itself be one handle (user, full_name,
+ * hostname, MAC, or bound victim IP).
+ * @param text - trimmed who/where string.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param victim - unique victim endpoint on that bind.
+ * @returns true when the string names only the bound victim row.
+ */
+function isVictimHandleText(
+  text: string,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  victim: BoundEndpoint,
+): boolean {
+  const handles = victimRowHandles(bind, identities, victim)
+  if (matchesVictimHandle(text, handles)) return true
+  const tokens = identityLikeTokens(text)
+  return tokens.length > 0 && tokens.every(token => matchesVictimHandle(token, handles))
+}
+
+/**
+ * Bound victim address plus donated ledger user / full_name / hostname / MAC
+ * (and donated IP) values on that row.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param victim - unique victim endpoint on that bind.
+ * @returns normalized handle values.
+ */
+function victimRowHandles(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  victim: BoundEndpoint,
+): Set<string> {
+  const handles = new Set<string>([victim.addr])
+  for (const identity of identities) {
+    if (identityDonatesToVictim(identity, bind, identities)) handles.add(identity.value)
+  }
+  return handles
+}
+
+/**
+ * Whether one token matches a victim-row handle under any identity normalize.
+ * @param token - one identity-like token or the whole string.
+ * @param handles - victim-row handle values.
+ * @returns true when the token is a handle on that row.
+ */
+function matchesVictimHandle(token: string, handles: Set<string>): boolean {
+  for (const kind of HANDLE_KINDS) {
+    const normalized = normalizeIdentityValue(kind, token)
+    if (normalized !== undefined && handles.has(normalized)) return true
+  }
+  return false
+}
+
+/**
+ * Identity-like tokens: parenthesized groups (full_name or hostname) and the
+ * remaining words (user, IP, MAC, hostname). Unmatched prose becomes tokens
+ * that fail the victim-row handle check.
+ * @param text - trimmed who/where string.
+ * @returns tokens in encounter order.
+ */
+function identityLikeTokens(text: string): string[] {
+  const tokens: string[] = []
+  const mask = [...text]
+  for (const match of text.matchAll(/\(([^)]*)\)/g)) {
+    const inner = (match[1] as string).trim()
+    if (inner !== '') tokens.push(inner)
+    const start = match.index as number
+    mask.fill(' ', start, start + match[0].length)
+  }
+  for (const match of mask.join('').matchAll(/[^\s,;:|/]+/g)) {
+    tokens.push(match[0])
+  }
+  return tokens
 }
