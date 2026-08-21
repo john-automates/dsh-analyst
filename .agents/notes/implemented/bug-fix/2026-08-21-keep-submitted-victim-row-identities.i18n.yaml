@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-keep-submitted-victim-row-identities.md
+2026-08-21-keep-submitted-victim-row-identities.md: 14fc8ac7af2f651f4d818f06f58aa89b77f4e4c2
+2026-08-21-keep-submitted-victim-row-identities.zh.md: 04fd4c7dee64ef8ac3737b4b82bd0ee98844741a

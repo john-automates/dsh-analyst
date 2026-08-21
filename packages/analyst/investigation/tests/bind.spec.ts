@@ -328,13 +328,15 @@ describe('BindRelationship', () => {
       relationship: dcRelationship,
       endpoints: dcEndpoints,
     })).toBeUndefined()
-    expect(c2DomainHuntForBind({
+    const lanC2 = {
       relationship: dcRelationship,
       endpoints: [
-        { addr: LAN, role: 'victim', because: dcBecause },
-        { addr: DISTRACTOR, role: 'c2', because: dcBecause },
+        { addr: LAN, role: 'victim' as const, because: dcBecause },
+        { addr: DISTRACTOR, role: 'c2' as const, because: dcBecause },
       ],
-    })).toBeUndefined()
+    }
+    expect(c2DomainHuntForBind(lanC2)).toBeUndefined()
+    expect(acceptedC2Domain(lanC2, [])).toBeUndefined()
     expect(otherEndHuntForDeniedBind({
       relationship: dcRelationship,
       endpoints: [{ addr: C2, role: 'victim', because: 'the alert named this IP' }],
@@ -1051,5 +1053,125 @@ describe('BindRelationship', () => {
     expect(fromDc.who).toMatchObject({
       ip: LAN, hostname: HOST, user: USER, full_name: FULL_NAME,
     })
+  })
+
+  it('persists a submitted user when the projected victim row has no donated user', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const victimName = identityOf('full_name', FULL_NAME)!
+    const identities = [identityOf('ip', LAN)!, clientMac, dcMac, victimHost, victimName]
+    const frames = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const submitted = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: DISTRACTOR_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    const projected = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    expect(projectVictimSlot(live, identities, frames)).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    const report = requireCaseReport(live, identities, claims, frames, {
+      who: submitted,
+      where: JSON.stringify(submitted),
+    })
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(report.where.mac).not.toBe(DISTRACTOR_MAC)
+    const dcUser = { ...identityOf('user', DISTRACTOR_USER)!, evidence_id: DISTRACTOR }
+    const dcHost = { ...identityOf('hostname', DISTRACTOR_HOST)!, evidence_id: DISTRACTOR }
+    const foreign = requireCaseReport(
+      live,
+      [...identities, dcUser, dcHost],
+      claims,
+      frames,
+      { who: { ...submitted, user: DISTRACTOR_USER, hostname: DISTRACTOR_HOST } },
+    )
+    expect(foreign.who.user).toBeUndefined()
+    expect(foreign.who.hostname).toBe(HOST)
+    expect(foreign.who).toMatchObject({
+      ip: LAN, mac: CLIENT_MAC, hostname: HOST, full_name: FULL_NAME,
+    })
+    const noHost = requireCaseReport(
+      live,
+      [identityOf('ip', LAN)!, clientMac, dcHost, victimName],
+      claims,
+      frames,
+      { who: { entity_id: LAN, ip: LAN, hostname: DISTRACTOR_HOST } },
+    )
+    expect(noHost.who.hostname).toBeUndefined()
+    const omittedUser = {
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    }
+    const omitted = requireCaseReport(live, identities, claims, frames, { who: omittedUser })
+    expect(omitted.who.user).toBeUndefined()
+    expect(omitted.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, {
+      user: USER,
+      hostname: HOST,
+      full_name: FULL_NAME,
+      mac: DISTRACTOR_MAC,
+      ip: '203.0.113.1',
+    })).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: 'kerberos.CNameString' }))
+      .toEqual({ entity_id: LAN, ip: LAN })
+    expect(completeAcceptedSlot(
+      { entity_id: LAN, ip: LAN },
+      { user: USER },
+      { relationship, endpoints: [] },
+    )).toEqual({ entity_id: LAN, ip: LAN, user: USER })
+    const victimUser = identityOf('user', USER)!
+    expect(completeAcceptedSlot(
+      { entity_id: LAN, ip: LAN },
+      { user: USER },
+      live,
+      [identityOf('ip', LAN)!, victimUser],
+      frames,
+    )).toEqual({ entity_id: LAN, ip: LAN, user: USER })
   })
 })

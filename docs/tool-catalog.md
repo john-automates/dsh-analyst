@@ -2374,7 +2374,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. Unmatched free-text who or where is denied."
     },
     "where": {
       "oneOf": [
@@ -2412,7 +2412,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. Unmatched free-text who or where is denied."
     }
   },
   "required": [

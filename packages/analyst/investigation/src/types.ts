@@ -161,7 +161,9 @@ declare module '@deepseek-ai/dsh-session/types' {
     /**
      * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
      * who/where are the projected victim entity row; omitted model keys are
-     * filled from that row after deny/coerce. `c2_domain` is the harvested
+     * filled from that row after deny/coerce. A submitted user, hostname, or
+     * full_name is kept when the row has no donated value and that identity
+     * does not donate to a different entity. `c2_domain` is the harvested
      * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
      */
     'investigation/report': CaseReport
