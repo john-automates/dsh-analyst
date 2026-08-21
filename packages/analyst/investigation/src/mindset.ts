@@ -49,10 +49,6 @@ export const CUE_INVALID_REASON =
 export const CUE_PENDING_REASON =
   'unbound: slot 0a must name a real cue (valid or explicitly open) before bind_relationship.'
 
-/** Deny text when the model tries to overwrite the chassis Mission purpose. */
-export const MISSION_PURPOSE_REASON =
-  'unbound: Mission purpose is a victim-identity + C2 investigation and cannot be overwritten.'
-
 /** Alias of {@link PLAN_C2_HYPOTHESIS_REASON}. */
 export const PLAN_NOT_READY_REASON = PLAN_C2_HYPOTHESIS_REASON
 

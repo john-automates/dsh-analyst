@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-persist-c2-extras-without-close.md
-2026-08-21-persist-c2-extras-without-close.md: 4382f14a9f1a56154e7a3896fff4525121c6eb22
-2026-08-21-persist-c2-extras-without-close.zh.md: 90445e9ad9d5497daf5b0b1cadb95151ad1f1750
+2026-08-21-persist-c2-extras-without-close.md: 0a705afce7817e1abf4acd735a1e5dee9b32b70c
+2026-08-21-persist-c2-extras-without-close.zh.md: a5e141e0cffb966ed47c722a75b868775c662983
