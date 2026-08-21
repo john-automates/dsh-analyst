@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
-  huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
-  isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
+  c2DomainDisplayFilter, c2DomainHunt, huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities,
+  huntsToAutoRun, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
+  shouldAutoRunHunt,
 } from '../src/hunts.ts'
 import { formatLedger } from '../src/ledger.ts'
 import type { Hunt, Identity } from '../src/types.ts'
@@ -246,6 +247,34 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hunt, '')).toBe(true)
     expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
     expect(shouldAutoRunHunt({ kind: 'other-end', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
+  })
+
+  it('issues c2-domain for a bound C2 IP and auto-runs that hunt', () => {
+    const hunt = c2DomainHunt(C2)
+    expect(hunt).toEqual({ kind: 'c2-domain', subjectKind: 'ip', subject: C2 })
+    expect(c2DomainDisplayFilter(C2)).toBe(
+      `(tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name) and ip.addr == ${C2}`,
+    )
+    expect(huntFilterSpec(hunt)).toEqual({
+      display_filter: c2DomainDisplayFilter(C2),
+      fields: [
+        'tls.handshake.extensions_server_name',
+        'dns.qry.name',
+        'dns.resp.name',
+      ],
+    })
+    const notice = huntNotice(hunt)
+    expect(notice).toContain('c2-domain')
+    expect(notice).toContain(`ip.addr == ${C2}`)
+    expect(notice).toContain('tls.handshake.extensions_server_name')
+    expect(notice).toContain('dns.qry.name')
+    expect(notice).toContain('dns.resp.name')
+    expect(notice).not.toContain(LAN_A)
+    expect(shouldAutoRunHunt(hunt, '')).toBe(true)
+    expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
+    expect(shouldAutoRunHunt({ kind: 'c2-domain', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
     expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
     expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
   })

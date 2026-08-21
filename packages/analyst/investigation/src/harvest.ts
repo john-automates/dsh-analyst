@@ -1,7 +1,7 @@
 /**
  * Extract unique labeled identities from tool-result text, including hostnames
- * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries. After a
- * C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
+ * taken from NBNS, BROWSER, SMB, LLMNR, TLS SNI, and DNS tshark summaries.
+ * After a C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
  * that IP. A MAC stamps `evidence_id` from the talking IP that sources that
  * eth.src on the line. A field-only `eth.src` dump with no talking IP stamps
  * an `eth-src` hunt-subject `scopeIp`. User and full_name
@@ -9,11 +9,13 @@
  * end), not from a SAMR/CNameString hunt subject. A field-only SAMR/CName
  * line with no IP resolves that client from evidenceText. Protocol field
  * names and truncated dumps are not identities. A `name-service` hunt
- * subject still stamps `evidence_id` on hostname.
+ * subject still stamps `evidence_id` on hostname. A `c2-domain` hunt
+ * subject stamps the C2 IPv4; single-label LAN / DC / NetBIOS names are
+ * not recorded under that non-LAN scope.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
-import { c2TalkingLanIps, isLanIpv4 } from './hunts.ts'
+import { c2TalkingLanIps, isLanIpv4, isNonLanUnicastIpv4 } from './hunts.ts'
 import type { Identity, IdentityKind } from './types.ts'
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
@@ -29,7 +31,11 @@ const IP_CONVERSATION = /(\d{1,3}(?:\.\d{1,3}){3})\s*(?:→|->)\s*(\d{1,3}(?:\.\
 const SAMR_HEX = /\b((?:[0-9a-fA-F]{2}:){7,}[0-9a-fA-F]{2})\b/g
 const ARP_IS_AT = /(\d{1,3}(?:\.\d{1,3}){3})\s+is at\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
 
-const HOST_LABEL = /(?:^|[\s,;|])(?:hostname|host|nbns\.name|dns\.qry\.name)\s*[:=]\s*(\w[\w.-]{0,253})/gi
+const HOST_LABEL = new RegExp(
+  String.raw`(?:^|[\s,;|])(?:hostname|host|nbns\.name|dns\.qry\.name|dns\.resp\.name|` +
+    String.raw`tls\.handshake\.extensions_server_name)\s*[:=]\s*(\w[\w.-]{0,253})`,
+  'gi',
+)
 const USER_LABEL = new RegExp(
   String.raw`(?:^|[\s,;.|])(?:samr\.samr_UserInfo21\.account_name|username|account_name|` +
     String.raw`kerberos\.CNameString|CNameString|user|cname)\s*[:=]\s*([^\s,;|]*)`,
@@ -125,10 +131,25 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
 }
 
 /**
+ * Whether a harvested hostname is a DNS name that may persist as `c2_domain`.
+ * Single-label NetBIOS / LAN / DC names and dotted IPv4s are not domains.
+ * @param value - normalized hostname.
+ * @returns true when the value contains a dot and is not an IPv4.
+ */
+export function isC2DomainName(value: string): boolean {
+  if (!value.includes('.') || DOTTED_IPV4.test(value)) return false
+  return true
+}
+
+/**
  * Harvest unique labeled identities from tool-result text.
- * Hostname also comes from NBNS, BROWSER, SMB, and LLMNR tshark summaries.
+ * Hostname also comes from NBNS, BROWSER, SMB, LLMNR, TLS SNI
+ * (`tls.handshake.extensions_server_name`), and DNS (`dns.qry.name`,
+ * `dns.resp.name`) tshark summaries.
  * Workgroup and domain tokens distinguished as Domain/Workgroup Announcement,
  * Local Master Announcement, or NBNS `<1b>`–`<1e>` are not recorded as hostname.
+ * When `scopeIp` is a non-LAN C2 IPv4, only a dotted DNS name is recorded as
+ * hostname; LAN / DC / gateway labels stay off.
  * After `c2TalkingLanIps` finds a focus IP, a MAC is recorded only when it is
  * sourced from that IP (`ip.src`, outbound `focus → peer`, or ARP `is at`).
  * A bidirectional dump cannot persist the far-side NIC.
@@ -158,6 +179,14 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
   const add = (kind: IdentityKind, value: string, talkingIp?: string): void => {
     const identity = identityOf(kind, value)
     if (identity === undefined) return
+    if (
+      kind === 'hostname'
+      && scope !== undefined
+      && isNonLanUnicastIpv4(scope)
+      && !isC2DomainName(identity.value)
+    ) {
+      return
+    }
     const key = `${identity.kind}\0${identity.value}`
     if (seen.has(key)) return
     seen.add(key)

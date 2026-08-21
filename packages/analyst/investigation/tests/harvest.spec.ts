@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, ipsEvidencingIdentity,
-  normalizeIdentityValue, regexCapture,
+  isC2DomainName, normalizeIdentityValue, regexCapture,
 } from '../src/harvest.ts'
 
 const BECKA_HEX = '42:00:65:00:63:00:6b:00:61:00:20:00:52:00:6f:00:6c:00:66:00'
@@ -423,5 +423,28 @@ describe('identity harvest', () => {
       identityOf('user', OTHER)!,
       `${arrowEvidence}\nip.src: ${LAN_B}\tkerberos.CNameString: ${OTHER}`,
     )).toEqual([LAN_B])
+  })
+
+  it('harvests TLS SNI and DNS names on a C2 IP and rejects LAN labels there', () => {
+    const C2 = '198.51.100.80'
+    const DOMAIN = 'c2.example.test'
+    expect(isC2DomainName(DOMAIN)).toBe(true)
+    expect(isC2DomainName('lan-host')).toBe(false)
+    expect(isC2DomainName('dc01')).toBe(false)
+    expect(isC2DomainName(C2)).toBe(false)
+    const dump = [
+      `tls.handshake.extensions_server_name: ${DOMAIN}`,
+      'dns.qry.name: c2.example.test',
+      'dns.resp.name: c2.example.test',
+      'hostname: lan-host',
+      'NBNS Registration NB DC01<00>',
+      'BROWSER Domain/Workgroup Announcement WORKGROUP',
+    ].join('\n')
+    expect(harvestIdentities(dump, dump, C2).filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: DOMAIN, label: 'hostname', evidence_id: C2 },
+    ])
+    expect(harvestIdentities('hostname: lan-host', 'hostname: lan-host', '10.0.10.2')).toEqual([
+      { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
+    ])
   })
 })

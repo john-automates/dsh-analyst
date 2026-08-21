@@ -7,7 +7,9 @@ import { ENDPOINT_ROLES } from './bind.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-investigation'
 const IDENTITY_KINDS = new Set(['ip', 'mac', 'hostname', 'user', 'full_name'])
-const HUNT_KINDS = new Set(['kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service', 'other-end'])
+const HUNT_KINDS = new Set([
+  'kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service', 'other-end', 'c2-domain',
+])
 const HUNT_SUBJECTS = new Set(['ip', 'hostname', 'user'])
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const CLAIM_FIELDS = ['what', 'when', 'why', 'how'] as const
@@ -111,6 +113,7 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
   }
   validateSlot(data.who, 'investigation/report who', fail)
   validateSlot(data.where, 'investigation/report where', fail)
+  if (data.c2_domain !== undefined) requireText(data.c2_domain, 'investigation/report c2_domain', fail)
 }
 
 function validateSlot(value: unknown, label: string, fail: InvariantFailure): void {

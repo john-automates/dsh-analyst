@@ -1,7 +1,8 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
  * tool results, auto-issue hunts after new identities, auto-issue `other-end`
- * when bind_relationship assigns a cue as victim, auto-run outstanding
+ * when bind_relationship assigns a cue as victim, auto-issue `c2-domain`
+ * on a successful bind with a non-LAN C2, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
  * deny write/edit of case-root close files, and persist a 5W1H close packet
@@ -26,7 +27,7 @@ import {
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
-  caseReportDenyReason, ENDPOINT_ROLES, foldBind, formatRolesCard,
+  caseReportDenyReason, c2DomainHuntForBind, ENDPOINT_ROLES, foldBind, formatRolesCard,
   otherEndHuntForDeniedBind, resolveBind, victimOf,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
@@ -42,12 +43,13 @@ import type { CaseReport, Hunt, Identity, RelationshipBind } from './types.ts'
 export type * from './types.ts'
 export type { HuntFilterSpec } from './hunts.ts'
 export {
-  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
+  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, isC2DomainName,
+  normalizeIdentityValue,
 } from './harvest.ts'
 export {
-  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
-  huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
-  isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
+  c2DomainDisplayFilter, c2DomainHunt, c2TalkingLanIps, displayFilterFor, evidenceTextForHunts,
+  foldToolResultText, huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun,
+  isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
@@ -58,7 +60,7 @@ export {
   entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
   LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
   projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf,
-  VICTIM_COUNT_REASON,
+  VICTIM_COUNT_REASON, acceptedC2Domain, c2DomainHuntForBind,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
@@ -102,10 +104,11 @@ export interface Config {
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
    * those identity hunts issue only for that C2-talking IP. A cue-as-victim
-   * bind issues `other-end` for that cue. Outstanding issued hunts then run
+   * bind issues `other-end` for that cue. A successful bind with a non-LAN
+   * C2 issues `c2-domain` for that C2 IPv4. Outstanding issued hunts then run
    * through `pcap_filter` with the scoped display_filter and fields; results
    * harvest into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
-   * `other-end`. Defaults to true.
+   * `other-end` and `c2-domain`. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -402,6 +405,11 @@ export class Investigation extends Service {
           throw new Error(resolved.reason)
         }
         this.recordBind(exec.agent.session, resolved.bind)
+        const hunt = c2DomainHuntForBind(resolved.bind)
+        if (hunt !== undefined) {
+          this.recordHunt(exec.agent.session, hunt)
+          if (this.autoHunt) await this.harvestIssueAutoRun(exec, exec.agent.session, '')
+        }
         return {
           ...resolved.bind.relationship,
           endpoints: resolved.bind.endpoints,
@@ -593,7 +601,7 @@ export class Investigation extends Service {
 
   /**
    * Harvest identities from `current`, issue identity hunts, and auto-run
-   * outstanding issued hunts (including `other-end`).
+   * outstanding issued hunts (including `other-end` and `c2-domain`).
    * @param exec - triggering execution (path and cancellation).
    * @param session - session whose ledger is folded.
    * @param current - text of the triggering tool result, or empty on a denied bind.
@@ -625,7 +633,7 @@ export class Investigation extends Service {
       await this.autoRunOutstanding(exec, session, current, (text, hunt) => {
         const before = added.length
         harvestFrom(text, `${evidence()}\n${text}`, scopeIpFromHunt(hunt))
-        issueFrom(added.slice(before))
+        if (hunt.kind !== 'c2-domain') issueFrom(added.slice(before))
       })
     }
     return { added, issued }
@@ -675,13 +683,15 @@ export class Investigation extends Service {
 }
 
 /**
- * Hunt-subject IPv4 for an `eth-src` or `name-service` dump.
+ * Hunt-subject IPv4 for an `eth-src`, `name-service`, or `c2-domain` dump.
  * @param hunt - issued hunt whose dump is being harvested.
  * @returns the IP subject, or undefined when the hunt is not IP-scoped.
  */
 function scopeIpFromHunt(hunt: Hunt): string | undefined {
   if (hunt.subjectKind !== 'ip') return undefined
-  if (hunt.kind === 'eth-src' || hunt.kind === 'name-service') return hunt.subject
+  if (hunt.kind === 'eth-src' || hunt.kind === 'name-service' || hunt.kind === 'c2-domain') {
+    return hunt.subject
+  }
   return undefined
 }
 
@@ -689,6 +699,7 @@ function scopeIpFromHunt(hunt: Hunt): string | undefined {
  * Hunt-subject IPv4 implied by a `pcap_filter` display filter.
  * `eth.src` with `ip.src ==` or `ip.addr ==` scopes a MAC dump; `llmnr` /
  * `nbns` / `browser` with `ip.addr ==` scopes a name-service dump.
+ * TLS SNI or DNS fields with `ip.addr ==` or `ip.dst ==` scope a C2-domain dump.
  * @param args - tool arguments that may include `display_filter`.
  * @returns the scoped IPv4, or undefined when the filter is not those hunts.
  */
@@ -699,6 +710,10 @@ function scopeIpFromPcapFilter(args: unknown): string | undefined {
     ? /ip\.(?:src|addr)\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)
     : null
   if (eth?.[1] !== undefined) return eth[1]
+  const domain = /\b(?:tls\.handshake\.extensions_server_name|dns\.(?:qry|resp)\.name)\b/.test(filter)
+    ? /ip\.(?:addr|dst)\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)
+    : null
+  if (domain?.[1] !== undefined) return domain[1]
   if (!/\b(?:llmnr|nbns|browser)\b/.test(filter)) return undefined
   return /ip\.addr\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)?.[1]
 }

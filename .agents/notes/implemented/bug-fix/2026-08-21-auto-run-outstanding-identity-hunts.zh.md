@@ -14,7 +14,7 @@ Status: implemented
 
 当 `autoHunt` 为 true 时，已下发且尚未执行的身份 hunt——`eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`——会用 `huntFilterSpec` / `huntNotice` 中限定范围的 `display_filter` 和字段跑 `pcap_filter`。插件不等模型调用 `pcap_filter`。每次转储仍按原样收割进身份账本。
 
-已知正在与 C2 通信的 LAN IP 时，只自动运行该主体的 hunt。主体为非 LAN / C2 IP 的 hunt 从不自动运行，但 [`other-end`](2026-08-21-other-end-hunt-on-cue-victim.md) 除外，它猎取与该线索通信的 LAN `ip.src`。主机名和用户 hunt 只在尚未知道 C2 通信 LAN IP 时自动运行。
+已知正在与 C2 通信的 LAN IP 时，只自动运行该主体的 hunt。主体为非 LAN / C2 IP 的 hunt 从不自动运行，但 [`other-end`](2026-08-21-other-end-hunt-on-cue-victim.md) 除外（猎取与该线索通信的 LAN `ip.src`），以及 [`c2-domain`](2026-08-21-c2-domain-hunt-after-live-bind.md) 除外（猎取该 C2 上的 TLS SNI／DNS）。主机名和用户 hunt 只在尚未知道 C2 通信 LAN IP 时自动运行。
 
 捕获路径优先用触发 pcap 工具的 `path`（该参数带捕获后缀时），否则取 `evidence/` 或案件根目录下第一个 `*.pcap` / `*.pcapng` / `*.cap`。没有 `pcap_filter` 或没有捕获文件就跳过执行。失败的 hunt 不会让触发工具失败。同一会话上已尝试过的 hunt 不会重试。
 
@@ -26,7 +26,7 @@ Status: implemented
 
 **只改方法论提示词。** 否决：通知已经点名 `(eth.src)` 和 `ip.src ==` 该 LAN 客户端。
 
-**对每一个已下发主体自动运行 hunt，包括 C2 IP。** 否决：那会持久化对端网卡。非 LAN 身份 hunt 主体不会自动运行。`other-end` 是单独的例外（[other-end](2026-08-21-other-end-hunt-on-cue-victim.md)）。
+**对每一个已下发主体自动运行 hunt，包括 C2 IP。** 否决：那会持久化对端网卡。非 LAN 身份 hunt 主体不会自动运行。`other-end` 和 `c2-domain` 是单独的例外（[other-end](2026-08-21-other-end-hunt-on-cue-victim.md)，[c2-domain](2026-08-21-c2-domain-hunt-after-live-bind.md)）。
 
 **把黄金身份写进提示词或测试。** 否决：测试使用合成的 LAN 客户端和 MAC。案件名称、IP 和 MAC 不是期望答案。
 

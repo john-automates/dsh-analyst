@@ -488,7 +488,7 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 'investigation/bind': RelationshipBind
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:137`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:160`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -501,15 +501,18 @@ Source: [`packages/analyst/investigation/src/types.ts:137`](../packages/analyst/
  * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
  * peer, those identity hunts issue only for that C2-talking IP. Assigning
  * victim to a cue/observation address issues `other-end` for that cue IP
- * (`ip.dst ==` the cue, field `ip.src`). When `autoHunt` is true,
- * outstanding issued hunts execute through `pcap_filter` with the scoped
- * display filter; `other-end` auto-runs even though its subject is the
- * cue. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
+ * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a non-LAN
+ * C2 issues `c2-domain` for that C2 IPv4 (TLS SNI / DNS). A both-LAN
+ * conversation deny does not issue `other-end` or `c2-domain` and does
+ * not invent a C2. When `autoHunt` is true, outstanding issued hunts
+ * execute through `pcap_filter` with the scoped display filter;
+ * `other-end` and `c2-domain` auto-run even though the subject is the
+ * cue or C2. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
  */
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:132`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:155`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -523,7 +526,7 @@ Source: [`packages/analyst/investigation/src/types.ts:132`](../packages/analyst/
 'investigation/identity': Identity
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:120`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:140`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -532,12 +535,14 @@ Source: [`packages/analyst/investigation/src/types.ts:120`](../packages/analyst/
 ```ts persistence-catalog
 /**
  * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
- * who/where are projections of the bound victim entity row.
+ * who/where are the projected victim entity row; omitted model keys are
+ * filled from that row after deny/coerce. `c2_domain` is the harvested
+ * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:142`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:167`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

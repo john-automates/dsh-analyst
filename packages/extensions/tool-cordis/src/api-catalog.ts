@@ -866,9 +866,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'recordIdentity(session: Session, identity: Identity): boolean',
-        description: 'Append one identity when kind+value is new.',
+        description: 'Append one identity when kind+value is new, or when a later harvest supplies `evidence_id` that the first-seen row lacks, or when a later MAC harvest stamps the bound victim or a C2-talking LAN IP over a DC/peer first stamp. Unique-on-kind+value still yields one folded row. A restamp does not count as a new identity for hunt issuance. A later DC/peer stamp does not overwrite a victim or C2-talking stamp.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'identity', description: 'identity to record.' }],
-        returns: 'true when a new event was appended.',
+        returns: 'true when a new kind+value was appended.',
       },
       {
         signature: 'recordHunt(session: Session, hunt: Hunt): boolean',
@@ -2950,7 +2950,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CaseReport',
-    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n}',
+    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n    c2_domain?: string;\n}',
   },
   {
     name: 'ClientResponse',
@@ -3366,7 +3366,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HuntKind',
-    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\' | \'other-end\';',
+    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\' | \'other-end\' | \'c2-domain\';',
   },
   {
     name: 'HuntSubjectKind',
