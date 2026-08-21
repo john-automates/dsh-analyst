@@ -127,6 +127,7 @@ describe('BindRelationship', () => {
     const victimHost: Identity = { ...identityOf('hostname', HOST)!, entity_id: LAN }
     const distractorHost: Identity = { ...identityOf('hostname', DISTRACTOR_HOST)!, entity_id: DISTRACTOR }
     const victimUser: Identity = { ...identityOf('user', USER)!, entity_id: LAN }
+    const victimName: Identity = { ...identityOf('full_name', FULL_NAME)!, entity_id: LAN }
     const distractorUser: Identity = {
       ...identityOf('user', DISTRACTOR_USER)!,
       entity_id: DISTRACTOR,
@@ -140,7 +141,8 @@ describe('BindRelationship', () => {
       ],
     })
     const identities = [
-      victimIp, c2Ip, victimMac, distractorMac, victimHost, distractorHost, victimUser, distractorUser,
+      victimIp, c2Ip, victimMac, distractorMac, victimHost, distractorHost, victimUser, victimName,
+      distractorUser,
     ]
     const conversation = `${LAN} → ${C2} TCP`
     expect(identityDonatesToVictim(victimMac, live, identities, conversation)).toBe(true)
@@ -153,6 +155,7 @@ describe('BindRelationship', () => {
       mac: CLIENT_MAC,
       hostname: HOST,
       user: USER,
+      full_name: FULL_NAME,
     })
     expect(slot?.mac).not.toBe(DISTRACTOR_MAC)
     expect(slot?.hostname).not.toBe(DISTRACTOR_HOST)
@@ -329,7 +332,7 @@ describe('BindRelationship', () => {
       { ...identityOf('user', DISTRACTOR_USER)!, entity_id: DISTRACTOR },
     ]
     const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
-    const projected = { entity_id: LAN, ip: LAN, hostname: HOST, user: USER }
+    const projected = { entity_id: LAN, ip: LAN, hostname: HOST, user: USER, full_name: FULL_NAME }
     expect(caseReportDenyReason({
       who: USER,
       where: LAN,
@@ -350,5 +353,61 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, claims)
     expect(report.who).toEqual(projected)
     expect(report.where).toEqual(projected)
+  })
+
+  it('completes the victim row from unique unaffiliated ledger identities after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: UNBOUND_REASON })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle LAN workstation' },
+      ],
+    })
+    const distractorUser = { ...identityOf('user', DISTRACTOR_USER)!, entity_id: DISTRACTOR }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('mac', CLIENT_MAC)!,
+      identityOf('hostname', HOST)!,
+      identityOf('user', USER)!,
+      identityOf('full_name', FULL_NAME)!,
+      distractorUser,
+    ]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const projected = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    expect(caseReportDenyReason({ who: { entity_id: USER }, where: { entity_id: LAN } }, live, identities))
+      .toBeUndefined()
+    const report = requireCaseReport(live, identities, claims)
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.user).not.toBe(DISTRACTOR_USER)
+    expect(identityDonatesToVictim(distractorUser, live, identities)).toBe(false)
+    const twoUsers = [...identities, identityOf('user', 'other-user')!]
+    const ambiguous = requireCaseReport(live, twoUsers, claims)
+    expect(ambiguous.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(ambiguous.where).toEqual(ambiguous.who)
+    expect(ambiguous.who.user).toBeUndefined()
+    const affiliatedUser = { ...identityOf('user', USER)!, entity_id: LAN }
+    expect(requireCaseReport(live, [identityOf('ip', LAN)!, affiliatedUser, identityOf('user', 'other-user')!], claims).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+    })
   })
 })

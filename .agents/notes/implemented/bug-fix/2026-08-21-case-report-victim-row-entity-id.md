@@ -24,7 +24,7 @@ Scout, leftover-report bans, harvest affiliation, and new evals stay out of this
 
 **Teach the model in the prompt to put the victim address in `who.entity_id`.** Rejected: the first unbound deny already taught the bind; the second deny was the handle check.
 
-**Affiliate harvested users onto the victim in the same change.** Rejected: names still donate only with an explicit victim `entity_id` or a sourced MAC. This knob is the close deny.
+**Affiliate harvested users onto the victim in the same change.** Rejected: that change kept donation on an explicit victim `entity_id` or a sourced MAC. Unique unaffiliated donation is [complete victim-row projection](2026-08-21-complete-victim-row-projection.md).
 
 **Bake gold identities into prompts or tests, invent evals, or touch scout.** Rejected: the fixture is a synthetic LAN IP plus a user on that row.
 

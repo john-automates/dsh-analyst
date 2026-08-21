@@ -20,7 +20,7 @@ Status: implemented
 
 `tools/pre-execute` 在没有恰好一个 victim 的当前绑定时报错拒绝 `case_report`，以及任何设置 `who` 或 `where` 的工具参数。身份槽的 `evidence_id` 指向非 victim，或 `who` / `where` 的 `entity_id` 点名非 victim 端点或另一个 IPv4 时，同样拒绝。用户、主机名、MAC 或全名是受害端行句柄，不是实体 id；持久化结案包使用被绑定的 victim 地址（[受害端行 entity_id](../bug-fix/2026-08-21-case-report-victim-row-entity-id.md)）。拒绝文本是 `unbound: assign victim vs c2 on the cited conversation.` 对调的 victim／c2 会被拒绝。不会对调 token。
 
-`case_report` 的 `who` / `where` 是受害端实体行（IP、MAC、主机名、用户）的投影，不是自由文本填写。IP 以自身作为实体。显式 `entity_id` 优先。唯一的来源 `eth.src` MAC 通过 `c2TalkingLanVictim` 归属到被绑定的 victim；该辅助函数不改写 `who` / `where`。主机名和用户只有在 `entity_id` 是 victim 时才捐出。distractor 留在账本上，不能捐出身份槽。不编造姓名。
+`case_report` 的 `who` / `where` 是受害端实体行（IP、MAC、主机名、用户、全名）的投影，不是自由文本填写。IP 以自身作为实体。显式 `entity_id` 优先。唯一的来源 `eth.src` MAC 通过 `c2TalkingLanVictim` 归属到被绑定的 victim；该辅助函数不改写 `who` / `where`。当前绑定之后，未归属的账本身份在它是该种类中唯一未归属到其他实体的身份时捐出（[补全受害端行投影](../bug-fix/2026-08-21-complete-victim-row-projection.md)）。`entity_id` 已经是 victim 的身份仍捐出。同一种类的两个未归属身份都不捐出。distractor 留在账本上，不能捐出身份槽。不编造姓名。
 
 [去引号](../bug-fix/2026-08-21-pcap-filter-quoted-display-filter.md)、[字符串字段强制转换](../bug-fix/2026-08-20-pcap-filter-string-fields.md)、`eth-src` 使用 `ip.src`、[来源 MAC 收割](../bug-fix/2026-08-21-harvest-eth-src-from-c2-talking-ip.md) 和[自动运行](../bug-fix/2026-08-21-auto-run-outstanding-identity-hunts.md) 仍是辅助手段。BindRelationship 是结案检查。scout、遗留报告禁令和新评测不在本次变更内。
 
@@ -36,7 +36,7 @@ Status: implemented
 
 **把 who/where 里的空闲 LAN IP 改写成焦点 IP。** 否决：那是[双客户端融合](../bug-fix/2026-08-20-scope-identity-hunts-to-c2-talking-client.md)。
 
-**在受害端没有 entity_id 时插入账本上的主机名、用户或全名。** 否决：不编造姓名。
+**编造账本上没有的主机名、用户或全名。** 否决：不编造姓名。当前绑定之后，唯一未归属的账本身份会捐出（[补全受害端行投影](../bug-fix/2026-08-21-complete-victim-row-projection.md)）。
 
 **把 Easy as 123、First to Last 或 Lumma 的黄金 IP、MAC 或姓名写进提示词或测试。** 否决：测试使用合成 LAN 客户端和 TEST-NET 对等体。
 
@@ -48,8 +48,8 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、线索作为 victim 被拒绝、两个／零个 victim 被拒绝、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、线索作为 victim 被拒绝、两个／零个 victim 被拒绝、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、唯一未归属的 mac／hostname／user／full_name 捐出、两个未归属用户都不捐出 user、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄以及未归属的收割行。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
 
 ## 后果
 
-结案必须先调用 `bind_relationship`。对调或未绑定的 `case_report` 以未绑定原因失败。模型在账本卡片上看到 victim 与 c2。自动运行、去引号和字段强制转换仍是辅助手段，不指定角色。主机名、用户和全名仍只来自收割或受害端上的显式 `entity_id`，不来自改写。
+结案必须先调用 `bind_relationship`。对调或未绑定的 `case_report` 以未绑定原因失败。模型在账本卡片上看到 victim 与 c2。自动运行、去引号和字段强制转换仍是辅助手段，不指定角色。主机名、用户和全名来自收割捐出——受害端上的显式 `entity_id`，或唯一未归属的账本身份——不来自改写。

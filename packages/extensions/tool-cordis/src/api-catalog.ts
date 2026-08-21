@@ -2946,7 +2946,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CaseIdentitySlot',
-    declaration: 'export interface CaseIdentitySlot {\n    entity_id: string;\n    ip?: string;\n    mac?: string;\n    hostname?: string;\n    user?: string;\n}',
+    declaration: 'export interface CaseIdentitySlot {\n    entity_id: string;\n    ip?: string;\n    mac?: string;\n    hostname?: string;\n    user?: string;\n    full_name?: string;\n}',
   },
   {
     name: 'CaseReport',

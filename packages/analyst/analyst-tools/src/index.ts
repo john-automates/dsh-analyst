@@ -54,6 +54,7 @@ const CASE_IDENTITY_SLOT_SCHEMA = {
     mac: { type: 'string' as const },
     hostname: { type: 'string' as const },
     user: { type: 'string' as const },
+    full_name: { type: 'string' as const },
   },
 }
 
@@ -68,8 +69,9 @@ function renderIdentitySlot(slot: {
   mac?: string
   hostname?: string
   user?: string
+  full_name?: string
 }): string {
-  const parts = [slot.ip, slot.mac, slot.hostname, slot.user].filter(
+  const parts = [slot.ip, slot.mac, slot.hostname, slot.user, slot.full_name].filter(
     (part): part is string => part !== undefined && part !== '',
   )
   return parts.length === 0 ? slot.entity_id : parts.join(' ')
