@@ -1421,7 +1421,7 @@ describe('BindRelationship', () => {
       live,
       identities,
       evidence,
-    )).toEqual({ entity_id: LAN, ip: LAN, mac: CLIENT_MAC, user: USER })
+    )).toEqual({ entity_id: LAN, ip: LAN, mac: CLIENT_MAC })
     expect(completeAcceptedSlot(
       { entity_id: LAN, ip: LAN },
       { mac: DISTRACTOR_MAC, user: DISTRACTOR_USER },
