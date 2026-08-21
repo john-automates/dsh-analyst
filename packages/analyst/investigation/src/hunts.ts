@@ -78,7 +78,7 @@ const NON_LAN_UNICAST_DST = [
  * Display filter that finds `ip.src ==` the bound victim talking to a
  * non-LAN unicast destination that is not the already-bound C2.
  * @param victim - normalized LAN victim IPv4.
- * @param boundC2 - unique bound non-LAN C2 IPv4, when known.
+ * @param boundC2 - bound non-LAN C2 IPv4, when known.
  * @returns `ip.src` plus non-LAN dest exclusions, and `not ip.dst ==` the C2.
  */
 export function extraWanDisplayFilter(victim: string, boundC2?: string): string {
@@ -253,7 +253,7 @@ export interface HuntFilterSpec {
  * Scoped display_filter and fields for one issued hunt.
  * Matches the filters named in {@link huntNotice}.
  * @param hunt - the hunt to execute or notice.
- * @param boundC2 - unique bound non-LAN C2 IPv4, used to exclude that dest
+ * @param boundC2 - bound non-LAN C2 IPv4, used to exclude that dest
  * from `extra-wan`.
  * extra-wan `ip.dst` dumps unique-collapse in first-seen order before the
  * `pcap_filter` output clip.

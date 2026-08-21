@@ -330,6 +330,60 @@ describe('BindRelationship', () => {
     }), extras)).toEqual([C2])
   })
 
+  it('keeps conversation dest as bound C2 when a second endpoint is also c2', () => {
+    const twoC2 = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: EXTRA_WAN, role: 'c2', because: 'second WAN peer' },
+      ],
+    })
+    expect(boundC2Ipv4(twoC2)).toBe(C2)
+    expect(extraWanHuntForBind(twoC2)).toEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: LAN,
+    })
+    expect(c2DomainHuntForBind(twoC2)).toEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: C2,
+    })
+    expect(acceptedC2Ips(twoC2, [])).toEqual([C2])
+    expect(requireCaseReport(twoC2, [], {
+      what: 'a', when: 'b', why: 'c', how: 'd',
+    }).c2_ips).toEqual([C2])
+    const destNotC2 = bind({
+      relationship: { ...relationship, dst: DISTRACTOR_WAN },
+      endpoints: [
+        { addr: LAN, role: 'victim', because: `${LAN} talking to ${DISTRACTOR_WAN}` },
+        { addr: DISTRACTOR_WAN, role: 'infra', because: 'not the C2 dest' },
+        { addr: C2, role: 'c2', because: 'cue' },
+        { addr: EXTRA_WAN, role: 'c2', because: 'second WAN peer' },
+      ],
+    })
+    expect(boundC2Ipv4(destNotC2)).toBeUndefined()
+    expect(extraWanHuntForBind(destNotC2)).toBeUndefined()
+    expect(c2DomainHuntForBind(destNotC2)).toBeUndefined()
+    expect(acceptedC2Ips(destNotC2, [])).toEqual([])
+    expect(requireCaseReport(destNotC2, [], {
+      what: 'a', when: 'b', why: 'c', how: 'd',
+    }).c2_ips).toBeUndefined()
+    const destInfraUnique = bind({
+      relationship: { ...relationship, dst: DISTRACTOR_WAN },
+      endpoints: [
+        { addr: LAN, role: 'victim', because: `${LAN} talking to ${DISTRACTOR_WAN}` },
+        { addr: DISTRACTOR_WAN, role: 'infra', because: 'not the C2 dest' },
+        { addr: C2, role: 'c2', because: 'cue' },
+      ],
+    })
+    expect(boundC2Ipv4(destInfraUnique)).toBe(C2)
+    expect(extraWanHuntForBind(destInfraUnique)).toEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: LAN,
+    })
+    const noVictim = bind({
+      endpoints: [{ addr: C2, role: 'c2', because: 'cue/observation address' }],
+    })
+    expect(boundC2Ipv4(noVictim)).toBe(C2)
+    expect(extraWanHuntForBind(noVictim)).toBeUndefined()
+  })
+
   it('persists unnamed extra-wan dests that survive CDN/CF omit', () => {
     const CF_DEST = '104.16.1.1'
     const live = bind()

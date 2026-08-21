@@ -1981,7 +1981,7 @@ describe('analyst tools', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
-  it('omits C2 IPs on case_report when the live bind has two C2s', async () => {
+  it('keeps conversation dest on case_report when the live bind has two C2s', async () => {
     const { ctx, owner } = await setup()
     const bound = await ctx.tools.execute({
       signal,
@@ -2015,8 +2015,8 @@ describe('analyst tools', () => {
       agent: owner,
     })
     expect(result.isError).toBe(false)
-    expect(ctx.investigation.report(owner.session)?.c2_ips).toBeUndefined()
-    expect(text(result)).not.toContain('C2 IPs:')
+    expect(ctx.investigation.report(owner.session)?.c2_ips).toEqual(['198.51.100.80'])
+    expect(text(result)).toContain('C2 IPs: 198.51.100.80')
   })
 
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
