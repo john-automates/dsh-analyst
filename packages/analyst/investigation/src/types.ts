@@ -30,8 +30,9 @@ export interface Identity {
    * A `name-service` hunt-subject IPv4 scopes a hostname. A slot whose
    * `evidence_id` points at a non-victim entity cannot donate who/where,
    * except a MAC later sourced from the bound victim IP or restamped from a
-   * victim-IP-scoped `eth.src` dump, or a user or full_name whose
-   * conversation `ip.src` is that victim.
+   * victim-IP-scoped `eth.src` dump — including overwrite of a DC/peer first
+   * stamp — or a user or full_name whose conversation `ip.src` is that
+   * victim.
    */
   evidence_id?: string
 }

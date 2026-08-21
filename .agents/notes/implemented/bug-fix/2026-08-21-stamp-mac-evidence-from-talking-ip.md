@@ -22,7 +22,7 @@ After a live bind, a MAC first seen under a DC or peer hunt still donates to the
 
 **Keep stamping hunt-subject `evidence_id` on MAC and teach donate to ignore it.** Rejected for harvest: the first write is durable. Stamping the talking IP records who sourced the frame. Donate still ignores a wrong first stamp when later frames source the MAC from the victim.
 
-**Restamp `evidence_id` on a later victim-IP dump that already has a talking-IP or other IPv4 stamp.** Rejected here: talking IP still wins on the line, and donate already reads later victim-IP frames. Filling a missing first-harvest `evidence_id` from a field-only victim-IP-scoped dump is [victim-IP-scoped restamp](2026-08-21-restamp-victim-ip-scoped-eth-src.md).
+**Restamp `evidence_id` on a later victim-IP dump that already has a talking-IP or other IPv4 stamp.** Rejected here: talking IP still wins on the line, and donate already reads later victim-IP frames. Filling a missing first-harvest `evidence_id` from a field-only victim-IP-scoped dump is [victim-IP-scoped restamp](2026-08-21-restamp-victim-ip-scoped-eth-src.md). Overwrite of a filled DC/peer stamp is [overwrite DC MAC stamp](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md).
 
 **Donate every MAC that shares any line with the victim IP (`ip.addr`).** Rejected: inbound frames contribute the far-side or DC NIC. Sourced means `ip.src`, outbound `ip → peer`, or ARP `is at`.
 

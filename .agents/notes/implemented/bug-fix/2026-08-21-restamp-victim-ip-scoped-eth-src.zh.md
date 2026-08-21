@@ -16,7 +16,7 @@ Status: implemented
 
 限定在某个 IPv4 的 `eth-src` hunt 或转储（`scopeIp`，`display_filter` 为 `ip.addr`／`ip.src ==` 该 IP）在行上没有通信 IP 时，把收割到的 `eth.src` 的 `evidence_id` 写成该 IP。行上有 `ip.src`、出站 `ip → peer` 或 ARP `is at` 时，通信 IP 仍胜出。当前绑定之后，若该 IP 是 victim，该 MAC 捐给受害端行。
 
-全账本唯一性和第一次收割缺少 `evidence_id`，不能挡住出现在受害端 IP 帧上或限定在受害端 IP 的 `eth.src` 转储里的 MAC。`recordIdentity` 仍按 kind+value 得到一行；后来的事件可以补上缺少的 `evidence_id`。
+全账本唯一性和第一次收割缺少 `evidence_id`，不能挡住出现在受害端 IP 帧上或限定在受害端 IP 的 `eth.src` 转储里的 MAC。`recordIdentity` 仍按 kind+value 得到一行；后来的事件可以补上缺少的 `evidence_id`。覆盖已有的域控／对等体戳记见[覆盖域控 MAC 戳记](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md)。
 
 从未共享那些受害端 IP 帧或受害端范围转储的域控或网关 MAC 保持不在。限定在域控的 `eth-src` hunt 不把那些 MAC 捐给 victim。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 **保持 `recordIdentity` 按 kind+value 唯一且不改戳，改让捐出从证据文本解析 hunt 过滤器。** 否决：自动运行的转储文本只有 `eth.src: MAC`。范围在 hunt／`display_filter` 上，收割已经以 `scopeIp` 收到。把后来的 `evidence_id` 折进第一次见到的行，就是在记录该范围。
 
-**用后来的范围转储覆盖已有的通信 IP 或域控 `evidence_id`。** 否决：行上仍是通信 IP 胜出。域控范围的第一次戳记保留；后来的帧把该 MAC 从来自 victim 的方向送出时，捐出已经忽略它。本次变更只补第一次收割缺少的 `evidence_id`。
+**用后来的范围转储覆盖已有的通信 IP 或域控 `evidence_id`。** 此处否决：行上仍是通信 IP 胜出，且本次变更只补第一次收割缺少的 `evidence_id`。覆盖已有的域控／对等体戳记见[覆盖域控 MAC 戳记](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md)。
 
 **捐出从未出现在受害端 IP 帧上、也不在限定于受害端 IP 的转储里的域控或网关 MAC。** 否决：那些网卡不进入受害端行。
 

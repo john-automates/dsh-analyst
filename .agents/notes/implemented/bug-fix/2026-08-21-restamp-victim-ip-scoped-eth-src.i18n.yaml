@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-restamp-victim-ip-scoped-eth-src.md
-2026-08-21-restamp-victim-ip-scoped-eth-src.md: fa491746f56674c3456e141607bdf84beb94044a
-2026-08-21-restamp-victim-ip-scoped-eth-src.zh.md: 5ff255820ee3ccaeb1ac9d5dd4a2e142aa4f027a
+2026-08-21-restamp-victim-ip-scoped-eth-src.md: 90a8c5f8301c7cbe2b19211e2b71d102f8e10127
+2026-08-21-restamp-victim-ip-scoped-eth-src.zh.md: 273c5e61de8b4b3ee0d1bc6333dd23cb8333b93e

@@ -270,7 +270,8 @@ export function resolveBind(request: BindRequest): BindResolution {
  * victim; a hunt-subject `evidence_id` does not veto that. A MAC whose
  * `evidence_id` is the victim IPv4 — including a field-only `eth.src` dump
  * scoped to that IP — affiliates to that victim even when the first harvest
- * had no `evidence_id`. A user or full_name evidenced on a Kerberos/SAMR
+ * had no `evidence_id` or a DC/peer stamp that a later victim-IP-scoped
+ * dump overwrote. A user or full_name evidenced on a Kerberos/SAMR
  * conversation whose client is the bound victim affiliates to that victim;
  * hunt-subject `evidence_id` does not veto that. A hostname evidenced on an
  * IPv4 (hunt-subject `evidence_id`, or a name-service line scoped to that IP)
@@ -332,7 +333,8 @@ export function entityIdForIdentity(
  * not veto that. A MAC or hostname evidenced on the bound victim IP, or a
  * user or full_name whose conversation client is that victim, donates even
  * when other values of that kind exist on the ledger and even when the first
- * harvest had no `evidence_id`. After a live bind, a unique unaffiliated
+ * harvest had no `evidence_id` or a DC/peer stamp later overwritten by a
+ * victim-IP-scoped dump. After a live bind, a unique unaffiliated
  * identity of a kind donates; two unaffiliated values of that kind donate
  * neither.
  * @param identity - ledger identity.

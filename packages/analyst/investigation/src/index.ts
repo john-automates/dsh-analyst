@@ -27,12 +27,12 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
   caseReportDenyReason, ENDPOINT_ROLES, foldBind, formatRolesCard,
-  otherEndHuntForDeniedBind, resolveBind,
+  otherEndHuntForDeniedBind, resolveBind, victimOf,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
-  evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice, huntsForNewIdentities,
-  huntsToAutoRun, huntKey,
+  c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice,
+  huntsForNewIdentities, huntsToAutoRun, huntKey,
 } from './hunts.ts'
 import { formatLedger } from './ledger.ts'
 import { denyReason, stringArg } from './policy.ts'
@@ -144,14 +144,17 @@ export function resolveCaseDir(caseDir: string): string {
 /**
  * Fold unique identities from a log prefix.
  * First-seen kind+value wins the row. A later event may fill a missing
- * `evidence_id` on that row so a field-only victim-IP `eth.src` dump can
- * restamp an unaffiliated first harvest.
+ * `evidence_id`, or overwrite a MAC DC/peer stamp when the later id is the
+ * bound victim or a C2-talking LAN IP, so a field-only victim-IP `eth.src`
+ * dump can restamp a wrong first harvest. A later DC/peer stamp does not
+ * overwrite a victim or C2-talking stamp.
  * @param events - session log or any prefix of it.
  * @returns identities in first-seen order.
  */
 export function foldIdentities(events: readonly SessionEvent[]): Identity[] {
   const seen = new Map<string, Identity>()
   const out: Identity[] = []
+  const preferred = preferredMacEvidenceIds(events)
   for (const event of events) {
     if (event.type !== 'investigation/identity') continue
     const key = identityKey(event.data)
@@ -162,15 +165,49 @@ export function foldIdentities(events: readonly SessionEvent[]): Identity[] {
       out.push(copy)
       continue
     }
-    if (
-      (existing.evidence_id === undefined || existing.evidence_id === '')
-      && event.data.evidence_id !== undefined
-      && event.data.evidence_id !== ''
-    ) {
-      existing.evidence_id = event.data.evidence_id
-    }
+    const next = restampEvidenceId(existing, event.data, preferred)
+    if (next !== undefined) existing.evidence_id = next
   }
   return out
+}
+
+/**
+ * Later `evidence_id` that should overwrite the first-seen kind+value row.
+ * A missing stamp fills from any later non-empty id. A MAC DC/peer stamp
+ * overwrites only when the later id is the bound victim or a C2-talking
+ * LAN IP. A victim or C2-talking stamp does not yield to a later DC/peer
+ * stamp. Other kinds keep the first non-empty stamp.
+ * @param existing - first-seen folded row.
+ * @param incoming - later identity of the same kind+value.
+ * @param preferred - bound victim and C2-talking LAN IPs on this log.
+ * @returns the incoming id when the folded row must take it.
+ */
+function restampEvidenceId(
+  existing: Identity,
+  incoming: Identity,
+  preferred: ReadonlySet<string>,
+): string | undefined {
+  const next = incoming.evidence_id
+  if (next === undefined || next === '') return undefined
+  const prev = existing.evidence_id
+  if (prev === undefined || prev === '') return next
+  if (existing.kind !== 'mac' || incoming.kind !== 'mac') return undefined
+  if (preferred.has(prev)) return undefined
+  return preferred.has(next) ? next : undefined
+}
+
+/**
+ * IPv4s a later MAC harvest may restamp onto: the bound victim address
+ * and every C2-talking LAN IP in tool-result text.
+ * @param events - session log or any prefix of it.
+ * @returns those IPv4s.
+ */
+function preferredMacEvidenceIds(events: readonly SessionEvent[]): Set<string> {
+  const preferred = new Set(c2TalkingLanIps(foldToolResultText(events)))
+  const bind = foldBind(events)
+  const victim = bind === undefined ? undefined : victimOf(bind)
+  if (victim !== undefined) preferred.add(victim.addr)
+  return preferred
 }
 
 /**
@@ -440,9 +477,12 @@ export class Investigation extends Service {
 
   /**
    * Append one identity when kind+value is new, or when a later harvest
-   * supplies `evidence_id` that the first-seen row lacks.
+   * supplies `evidence_id` that the first-seen row lacks, or when a later
+   * MAC harvest stamps the bound victim or a C2-talking LAN IP over a
+   * DC/peer first stamp.
    * Unique-on-kind+value still yields one folded row. A restamp does not
-   * count as a new identity for hunt issuance.
+   * count as a new identity for hunt issuance. A later DC/peer stamp does
+   * not overwrite a victim or C2-talking stamp.
    * @param session - session to append to.
    * @param identity - identity to record.
    * @returns true when a new kind+value was appended.
@@ -455,11 +495,7 @@ export class Investigation extends Service {
       session.append('investigation/identity', identity)
       return true
     }
-    if (
-      (existing.evidence_id === undefined || existing.evidence_id === '')
-      && identity.evidence_id !== undefined
-      && identity.evidence_id !== ''
-    ) {
+    if (restampEvidenceId(existing, identity, preferredMacEvidenceIds(session.events)) !== undefined) {
       session.append('investigation/identity', identity)
     }
     return false

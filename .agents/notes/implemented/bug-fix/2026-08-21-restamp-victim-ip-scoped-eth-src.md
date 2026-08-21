@@ -16,7 +16,7 @@ After a live bind, restamp `eth.src` from the victim-IP hunt onto the victim row
 
 An `eth-src` hunt or dump scoped to an IPv4 (`scopeIp`, `display_filter` `ip.addr` / `ip.src ==` that IP) stamps harvested `eth.src` `evidence_id` as that IP when the line has no talking IP. Talking IP still wins when the line has `ip.src`, outbound `ip → peer`, or ARP `is at`. After a live bind, if that IP is the victim, the MAC donates to the victim row.
 
-Whole-ledger uniqueness and a missing first-harvest `evidence_id` do not block a MAC that appears on victim-IP frames or in a victim-IP-scoped `eth.src` dump. `recordIdentity` unique-on-kind+value still yields one row; a later event may fill a missing `evidence_id`.
+Whole-ledger uniqueness and a missing first-harvest `evidence_id` do not block a MAC that appears on victim-IP frames or in a victim-IP-scoped `eth.src` dump. `recordIdentity` unique-on-kind+value still yields one row; a later event may fill a missing `evidence_id`. Overwrite of a filled DC/peer stamp is [overwrite DC MAC stamp](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md).
 
 A DC or gateway MAC that never shares those victim-IP frames or victim-scoped dumps stays off. An `eth-src` hunt scoped to the DC does not donate those MACs to the victim.
 
@@ -30,7 +30,7 @@ Accepted who/where are still `completeAcceptedSlot` of that projected row. Donat
 
 **Keep `recordIdentity` unique-on-kind+value with no restamp, and teach donate to parse hunt filters out of evidence text.** Rejected: auto-run dump text is `eth.src: MAC` only. The scope lives on the hunt / `display_filter`, which harvest already receives as `scopeIp`. Folding a later `evidence_id` onto the first-seen row records that scope.
 
-**Overwrite an existing talking-IP or DC `evidence_id` with a later scoped dump.** Rejected: talking IP still wins on the line. A DC-scoped first stamp stays; donate already ignores it when later frames source the MAC from the victim. This change only fills a missing first-harvest `evidence_id`.
+**Overwrite an existing talking-IP or DC `evidence_id` with a later scoped dump.** Rejected here: talking IP still wins on the line, and this change only fills a missing first-harvest `evidence_id`. Overwrite of a filled DC/peer stamp is [overwrite DC MAC stamp](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md).
 
 **Donate a DC or gateway MAC that never appears on victim-IP frames or in a victim-IP-scoped dump.** Rejected: those NICs stay off the victim row.
 

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -158,6 +158,67 @@ describe('investigation service', () => {
       data: { ...emptyStamp.data, evidence_id: '10.0.10.3' },
     }])).toEqual([
       { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    const dcStamp = {
+      type: 'investigation/identity' as const,
+      seq: 1,
+      time: 0,
+      data: { kind: 'mac' as const, value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3' },
+    }
+    const bindEvent = {
+      type: 'investigation/bind' as const,
+      seq: 3,
+      time: 0,
+      data: relationshipBind,
+    }
+    expect(foldIdentities([dcStamp, filledStamp, bindEvent])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    expect(foldIdentities([filledStamp, dcStamp, bindEvent])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    const hostDc = {
+      type: 'investigation/identity' as const,
+      seq: 1,
+      time: 0,
+      data: { kind: 'hostname' as const, value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.3' },
+    }
+    const hostVictim = {
+      type: 'investigation/identity' as const,
+      seq: 2,
+      time: 0,
+      data: { kind: 'hostname' as const, value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
+    }
+    expect(foldIdentities([hostDc, hostVictim, bindEvent])).toEqual([
+      { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.3' },
+    ])
+    const talking = {
+      type: 'tool/result' as const,
+      seq: 0,
+      time: 0,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          content: [{
+            type: 'tool-result' as const,
+            toolCallId: 'conv-1',
+            content: [{ type: 'text' as const, text: '10.0.10.2 → 198.51.100.80 TCP' }],
+          }],
+        },
+      },
+    } as SessionEvent
+    expect(foldIdentities([dcStamp, filledStamp, talking])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    const noVictimBind = {
+      type: 'investigation/bind' as const,
+      seq: 3,
+      time: 0,
+      data: { relationship: relationshipBind.relationship, endpoints: [] },
+    }
+    expect(foldIdentities([dcStamp, filledStamp, noVictimBind])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3' },
     ])
   })
 
@@ -637,6 +698,80 @@ describe('investigation service', () => {
       { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
       { kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3' },
     ])
+    expect(ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3',
+    })).toBe(false)
+    expect(ctx.investigation.identities(owner.session).find(item => item.value === '02:00:00:00:00:0a'))
+      .toEqual({ kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' })
+  })
+
+  it('overwrites a DC-stamped MAC from a later victim-IP-scoped eth.src dump', async () => {
+    const { ctx, caseDir, owner } = await setup({ autoHunt: false })
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('ip.src == 10.0.10.2') || filter.includes('ip.addr == 10.0.10.2')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a' })
+        }
+        if (filter.includes('ip.src == 10.0.10.3') || filter.includes('ip.addr == 10.0.10.3')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a' })
+        }
+        return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0c' })
+      },
+    }))
+    const victimDump = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-victim-overwrite'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.src == 10.0.10.2',
+        fields: ['eth.src'],
+      },
+      agent: owner,
+    })
+    expect(victimDump.isError).toBe(false)
+    expect(ctx.investigation.identities(owner.session).find(item => item.value === '02:00:00:00:00:0a'))
+      .toEqual({ kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' })
+    const dcDump = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-dc-no-overwrite'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.addr == 10.0.10.3',
+        fields: ['eth.src'],
+      },
+      agent: owner,
+    })
+    expect(dcDump.isError).toBe(false)
+    expect(ctx.investigation.identities(owner.session).find(item => item.value === '02:00:00:00:00:0a'))
+      .toEqual({ kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' })
     expect(ctx.investigation.recordIdentity(owner.session, {
       kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3',
     })).toBe(false)
