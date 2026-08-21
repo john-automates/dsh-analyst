@@ -458,7 +458,13 @@ describe('BindRelationship', () => {
     expect(report.where).toEqual(projected)
     expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
     expect(report.who.hostname).not.toBe(DISTRACTOR_HOST)
-    const ledger = formatLedger(identities, [], undefined, live, scopedDump)
+    const ledger = formatLedger(
+      identities,
+      [{ kind: 'eth-src', subjectKind: 'ip', subject: LAN }],
+      undefined,
+      live,
+      scopedDump,
+    )
     expect(ledger).toContain(`[victim] MAC ${CLIENT_MAC}`)
     expect(ledger).toContain(`[victim] hostname ${HOST}`)
     expect(ledger).toContain(`[distractor] MAC ${DISTRACTOR_MAC}`)
@@ -485,5 +491,12 @@ describe('BindRelationship', () => {
     expect(roleForIdentity(idleLine, live, [identityOf('ip', LAN)!, victimMac, idleLine], bothLines)).toBe('distractor')
     const conversationOnly = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: 'conv-1' }
     expect(identityDonatesToVictim(conversationOnly, live, [identityOf('ip', LAN)!, conversationOnly, identityOf('mac', DISTRACTOR_MAC)!])).toBe(false)
+    const scopedHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const extraHost = identityOf('hostname', 'other-host')!
+    expect(requireCaseReport(live, [identityOf('ip', LAN)!, scopedHost, extraHost], claims).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+    })
   })
 })

@@ -419,7 +419,7 @@ describe('investigation service', () => {
         if (filter.includes('kerberos.CNameString')) {
           return Promise.reject(new Error('tshark missing'))
         }
-        return Promise.resolve({ other: true } as unknown as { text: string })
+        return Promise.resolve('samr dump' as unknown as { text: string })
       },
     }))
     const result = await ctx.tools.execute({

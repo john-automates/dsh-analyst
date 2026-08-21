@@ -242,5 +242,11 @@ describe('identity harvest', () => {
     expect(ipsEvidencingIdentity(mac, `${LAN_A} → 198.51.100.80  ${MAC_A}`)).toEqual([LAN_A])
     expect(ipsEvidencingIdentity(mac, `ARP ${LAN_A} is at ${MAC_A}`)).toEqual([LAN_A])
     expect(ipsEvidencingIdentity(mac, `eth.src: ${MAC_A}\tip.src: 0.0.0.0`)).toEqual([])
+    expect(ipsEvidencingIdentity(host, `hostname: ${HOST_A}`)).toEqual([])
+    expect(ipsEvidencingIdentity(
+      host,
+      `hostname: ${HOST_A}\tip.addr: ${LAN_A}\nhostname: ${HOST_A}\tip.src: ${LAN_A}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(host, `NBNS Registration NB otherhost<00>\tip.src: ${LAN_A}`)).toEqual([])
   })
 })
