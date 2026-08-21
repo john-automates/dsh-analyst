@@ -1277,6 +1277,199 @@ describe('analyst tools', () => {
     await omitted.ctx.fiber.dispose()
   })
 
+  it('folds sibling identity keys into omitted case_report who/where after a live bind', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'lan-user', label: 'user' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'lan-host$', label: 'user' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'idle-user', label: 'user' })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const siblings = {
+      ip: '203.0.113.1',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-sibling-slots'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-sibling-slots'),
+      name: 'case_report',
+      arguments: { ...claims, ...siblings },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+    })
+    expect(ctx.investigation.report(owner.session)?.who.ip).not.toBe('203.0.113.1')
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    expect(text(result)).not.toContain('lan-host$')
+    expect(text(result)).not.toContain('idle-user')
+    const machine = await setup()
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'user', value: 'lan-host$', label: 'user',
+    })
+    const machineBind = await machine.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-sibling-machine-sam'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: machine.owner,
+    })
+    expect(machineBind.isError).toBe(false)
+    const machineReport = await machine.ctx.tools.execute({
+      signal,
+      callId: CallId('report-sibling-machine-sam'),
+      name: 'case_report',
+      arguments: { ...claims, ...siblings, user: 'lan-host$' },
+      agent: machine.owner,
+    })
+    expect(machineReport.isError).toBe(false)
+    expect(machine.ctx.investigation.report(machine.owner.session)?.who).toEqual({
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      full_name: 'Lan User',
+    })
+    expect(machine.ctx.investigation.report(machine.owner.session)?.who.user).toBeUndefined()
+    await machine.ctx.fiber.dispose()
+    const objectClose = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-sibling-object-close'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2', user: 'lan-user' },
+        where: { entity_id: '10.0.10.2' },
+      },
+      agent: owner,
+    })
+    expect(objectClose.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.who.user).toBe('lan-user')
+    const handle = await setup()
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    handle.ctx.investigation.recordIdentity(handle.owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user',
+    })
+    const handleBind = await handle.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-sibling-handle-close'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: handle.owner,
+    })
+    expect(handleBind.isError).toBe(false)
+    const handleClose = await handle.ctx.tools.execute({
+      signal,
+      callId: CallId('report-sibling-handle-close'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: 'lan-user (Lan User)',
+        where: '10.0.10.2 (lan-host)',
+      },
+      agent: handle.owner,
+    })
+    expect(handleClose.isError).toBe(false)
+    expect(handle.ctx.investigation.report(handle.owner.session)?.who).toEqual(projected)
+    await handle.ctx.fiber.dispose()
+  })
+
   it('persists a submitted victim MAC when case_report who/where donate that MAC to the DC', async () => {
     const { ctx, owner } = await setup()
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })

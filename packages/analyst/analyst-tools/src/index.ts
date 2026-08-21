@@ -80,8 +80,11 @@ const CASE_REPORT_SLOT_DESCRIPTION = [
   'A victim-row handle string is the same handle after a live bind.',
   'A JSON object string with entity_id is the same handle.',
   'Omitted keys are filled from the projected victim row after a live bind.',
+  'Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot.',
   'Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty.',
   'A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity.',
+  'A submitted human user is kept without a conversation-client stamp.',
+  'A machine SAM ending in $ is not persisted as user.',
   'A submitted mac is kept unless that MAC only appears on DC/gateway frames.',
   'Unmatched free-text who or where is denied.',
 ].join(' ')
@@ -384,9 +387,15 @@ export function apply(ctx: Context, config: Config): void {
       const evidenceText = foldToolResultText(session.events)
       const denied = caseReportDenyReason(args, bind, identities, evidenceText)
       if (denied !== undefined) throw new Error(denied)
+      const record = args as Record<string, unknown>
       const report = requireCaseReport(bind, identities, claims, evidenceText, {
         who: args.who,
         where: args.where,
+        ip: record.ip,
+        mac: record.mac,
+        hostname: record.hostname,
+        user: record.user,
+        full_name: record.full_name,
       })
       ctx.investigation.recordReport(session, report)
       return Promise.resolve(report)

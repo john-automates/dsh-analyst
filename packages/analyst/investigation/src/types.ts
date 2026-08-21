@@ -161,12 +161,16 @@ declare module '@deepseek-ai/dsh-session/types' {
     /**
      * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
      * who/where are the projected victim entity row; omitted model keys are
-     * filled from that row after deny/coerce. Omitted mac persists the
-     * unique ledger MAC that is not DC/gateway-only when a sticky DC donate
-     * or uniqueness left the row empty. Omitted user still persists from
-     * victim-IP evidence. A submitted user, hostname, or full_name is kept
-     * when the row has no donated value and that identity does not donate to
-     * a different entity. A submitted mac is kept unless talking-IP frames
+     * filled from that row after deny/coerce. Omitted who/where also fold
+     * sibling top-level identity keys (ip, mac, hostname, user, full_name)
+     * from the same case_report arguments into that submitted slot. Omitted
+     * mac persists the unique ledger MAC that is not DC/gateway-only when a
+     * sticky DC donate or uniqueness left the row empty. Omitted user still
+     * persists from victim-IP evidence. A submitted user, hostname, or
+     * full_name is kept when the row has no donated value and that identity
+     * does not donate to a different entity. A submitted human user is kept
+     * without a conversation-client stamp. A machine SAM ending in `$` is
+     * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_domain` is the harvested
      * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
      */

@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-把 who/where 投影或重映射到被绑定受害端实体时，若模型提供了 user、hostname 或 `full_name`，且投影行没有已捐出的值，则保留该提交值。在已接受的 who/where 上持久化该 user。不编造模型从未提交的 user。
+把 who/where 投影或重映射到被绑定受害端实体时，若模型提供了 user、hostname 或 `full_name`，且投影行没有已捐出的值，则保留该提交值。同一 `case_report` 调用上折入的同级 user 也算提交（[折入同级身份键](2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.md)）。在已接受的 who/where 上持久化该 user。不编造模型从未提交的 user。以 `$` 结尾的机器 SAM 不作为 user 持久化。
 
 该行未捐出的模型提供 IP 保持不在。提交的 mac 保留见[除非仅出现在域控／网关帧上，否则保留提交的受害端 MAC](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md)。捐给其他（非 victim）实体的提交 user、hostname 或 `full_name` 不持久化。行上已有的已捐出 ip／mac／hostname／`full_name` 保留。
 

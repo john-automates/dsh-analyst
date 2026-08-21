@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-keep-submitted-victim-row-identities.md
-2026-08-21-keep-submitted-victim-row-identities.md: 32696271f8d63e32f69750f467b7a2940e276897
-2026-08-21-keep-submitted-victim-row-identities.zh.md: d69df4b2018a7a2328b9ea410da043d97d298ade
+2026-08-21-keep-submitted-victim-row-identities.md: 53461ea3ff3dbeff92bea8f29feddfb4668eb45b
+2026-08-21-keep-submitted-victim-row-identities.zh.md: e9ef8e2bde40760564fd132d3aee65b1a906f20b

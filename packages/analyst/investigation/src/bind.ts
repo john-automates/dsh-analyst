@@ -164,6 +164,16 @@ export interface SubmittedIdentitySlots {
   who?: unknown
   /** Raw where argument, or omitted. */
   where?: unknown
+  /** Sibling top-level victim IPv4 on the same case_report call. */
+  ip?: unknown
+  /** Sibling top-level victim MAC on the same case_report call. */
+  mac?: unknown
+  /** Sibling top-level victim hostname on the same case_report call. */
+  hostname?: unknown
+  /** Sibling top-level victim user on the same case_report call. */
+  user?: unknown
+  /** Sibling top-level victim full name on the same case_report call. */
+  full_name?: unknown
 }
 
 /** Cited conversation as submitted to bind_relationship. */
@@ -461,7 +471,9 @@ export function projectVictimSlot(
     identityDonatesToVictim(identity, bind, identities, evidenceText)
   ))
   const first = (kind: Identity['kind']): string | undefined => (
-    donated.find(identity => identity.kind === kind)?.value
+    donated.find(identity => (
+      identity.kind === kind && (kind !== 'user' || !isMachineSam(identity.value))
+    ))?.value
   )
   const ip = first('ip') ?? (isIpv4(victim.addr) ? victim.addr : undefined)
   if (ip !== undefined) slot.ip = ip
@@ -487,13 +499,15 @@ export function projectVictimSlot(
  * omitted conversation-client user. A user that donates to a non-victim
  * and is not evidenced on the victim stays off. A submitted user,
  * hostname, or full_name is kept when the row has no donated value and
- * that identity does not donate to a different entity. A submitted mac is
- * kept unless talking-IP frames source that MAC only from a non-victim
- * (never as eth.src from the bound victim IP; never the NIC of that
- * victim). A submitted string that is not a six-octet MAC stays off.
- * A sticky DC `evidence_id` or donate does not override that submitted
- * MAC. A model-offered IP does not replace the bound victim ip.
- * Slots the row and frames do not evidence are not invented.
+ * that identity does not donate to a different entity. A submitted
+ * human user is kept without a conversation-client stamp. A machine SAM
+ * ending in `$` is not persisted as user. A submitted mac is kept unless
+ * talking-IP frames source that MAC only from a non-victim (never as
+ * eth.src from the bound victim IP; never the NIC of that victim). A
+ * submitted string that is not a six-octet MAC stays off. A sticky DC
+ * `evidence_id` or donate does not override that submitted MAC. A
+ * model-offered IP does not replace the bound victim ip. Slots the row
+ * and frames do not evidence are not invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
  * @param bind - live bind used to reject a value that donates elsewhere.
@@ -502,7 +516,7 @@ export function projectVictimSlot(
  * @returns the accepted slot: entity_id, ip, donated or unique non-DC-only
  * omitted mac, evidenced omitted user, donated hostname/full_name, kept
  * submitted mac unless talking-IP proves DC/gateway-only, and kept
- * submitted user/hostname/full_name.
+ * submitted user/hostname/full_name. A machine SAM is not a submitted user.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
@@ -524,6 +538,7 @@ export function completeAcceptedSlot(
       if (key === 'ip') continue
       const normalized = normalizeIdentityValue(key, offered)
       if (normalized === undefined) continue
+      if (key === 'user' && isMachineSam(normalized)) continue
       if (key === 'mac') {
         if (!MAC_HANDLE.test(normalized)) continue
         if (
@@ -566,14 +581,18 @@ export function completeAcceptedSlot(
  * left the row empty. Omitted user still persists from victim-IP evidence.
  * A submitted user, hostname, or full_name is kept when the row has no
  * donated value and that identity does not donate to a different entity.
- * A submitted mac is kept unless talking-IP frames source that MAC only
- * from a non-victim. A harvested C2 DNS/SNI name persists as `c2_domain`
- * and does not fill who/where hostname.
+ * After a live bind, omitted who/where fold sibling top-level identity
+ * keys (ip, mac, hostname, user, full_name) from the same case_report
+ * arguments into that submitted slot. A submitted human user is kept
+ * without a conversation-client stamp. A machine SAM ending in `$` is
+ * not persisted as user. A submitted mac is kept unless talking-IP
+ * frames source that MAC only from a non-victim. A harvested C2 DNS/SNI
+ * name persists as `c2_domain` and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
- * @param submitted - raw who/where after deny/coerce, or omitted.
+ * @param submitted - raw who/where after deny/coerce, plus sibling slot keys, or omitted.
  * @returns the report, or undefined when the bind has no unique victim.
  */
 export function projectCaseReport(
@@ -585,11 +604,13 @@ export function projectCaseReport(
 ): CaseReport | undefined {
   const slot = projectVictimSlot(bind, identities, evidenceText)
   if (slot === undefined) return undefined
+  const who = foldOmittedSlotFromSiblings(submitted.who, submitted)
+  const where = foldOmittedSlotFromSiblings(submitted.where, submitted)
   const report: CaseReport = {
-    who: completeAcceptedSlot(slot, submitted.who, bind, identities, evidenceText),
+    who: completeAcceptedSlot(slot, who, bind, identities, evidenceText),
     what: claims.what,
     when: claims.when,
-    where: completeAcceptedSlot(slot, submitted.where, bind, identities, evidenceText),
+    where: completeAcceptedSlot(slot, where, bind, identities, evidenceText),
     why: claims.why,
     how: claims.how,
   }
@@ -604,7 +625,7 @@ export function projectCaseReport(
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
- * @param submitted - raw who/where after deny/coerce, or omitted.
+ * @param submitted - raw who/where after deny/coerce, plus sibling slot keys, or omitted.
  * @returns the projected report.
  */
 export function requireCaseReport(
@@ -1000,11 +1021,12 @@ function omittedMacEvidencedOnVictim(
  * A Kerberos/SAMR conversation whose client is that IP, or a
  * conversation-client `evidence_id` of that IP, qualifies. Uniqueness does
  * not block. A sticky DC `entity_id` does not skip that user. A user that
- * only donates to a non-victim is not returned.
+ * only donates to a non-victim is not returned. A machine SAM ending in
+ * `$` is not returned.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
- * @returns the first evidenced user, or undefined when none exists.
+ * @returns the first evidenced human user, or undefined when none exists.
  */
 function omittedUserEvidencedOnVictim(
   bind: RelationshipBind,
@@ -1015,6 +1037,7 @@ function omittedUserEvidencedOnVictim(
   if (victim === undefined) return undefined
   for (const identity of identities) {
     if (identity.kind !== 'user') continue
+    if (isMachineSam(identity.value)) continue
     if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return identity.value
     if (ipv4EvidenceId(identity.evidence_id) === victim.addr) return identity.value
   }
@@ -1080,6 +1103,38 @@ function offeredDonatesToNonVictim(
   if (identity === undefined) return false
   const entityId = entityIdForIdentity(identity, bind, identities, evidenceText)
   return entityId !== undefined && entityId !== victim.addr
+}
+
+/**
+ * Whether a SAM account name is a machine account.
+ * @param value - normalized or raw user value.
+ * @returns true when the value ends in `$`.
+ */
+function isMachineSam(value: string): boolean {
+  return value.endsWith('$')
+}
+
+/**
+ * Fold sibling top-level identity keys into an omitted who/where slot.
+ * A present who/where object or handle string is unchanged.
+ * @param submitted - raw who or where argument, or omitted.
+ * @param siblings - same-call top-level SLOT_KEYS.
+ * @returns the submitted slot, or a record of sibling keys when omitted.
+ */
+function foldOmittedSlotFromSiblings(
+  submitted: unknown,
+  siblings: SubmittedIdentitySlots,
+): unknown {
+  if (submitted !== undefined && submitted !== null) return submitted
+  const folded: Record<string, unknown> = {}
+  let any = false
+  for (const key of SLOT_KEYS) {
+    const value = siblings[key]
+    if (typeof value !== 'string' || value.trim() === '') continue
+    folded[key] = value
+    any = true
+  }
+  return any ? folded : submitted
 }
 
 /**
