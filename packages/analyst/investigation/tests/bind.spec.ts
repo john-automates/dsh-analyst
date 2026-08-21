@@ -22,6 +22,7 @@ const DISTRACTOR_HOST = 'idle-host'
 const USER = 'lan-user'
 const FULL_NAME = 'Lan User'
 const DISTRACTOR_USER = 'idle-user'
+const MACHINE_SAM = 'lan-host$'
 
 const relationship: Relationship = {
   src: LAN,
@@ -1689,5 +1690,98 @@ describe('BindRelationship', () => {
       identities,
       evidence,
     )).toEqual({ entity_id: LAN, ip: LAN })
+  })
+
+  it('folds sibling identity keys into omitted who/where after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const identities = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN },
+      { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+      identityOf('full_name', FULL_NAME)!,
+      identityOf('user', USER)!,
+      identityOf('user', MACHINE_SAM)!,
+      identityOf('user', DISTRACTOR_USER)!,
+    ]
+    const frames = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const siblings = {
+      ip: '203.0.113.1',
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    const projected = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    expect(requireCaseReport(live, identities, claims, frames).who.user).toBeUndefined()
+    const report = requireCaseReport(live, identities, claims, frames, siblings)
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.who.ip).not.toBe('203.0.113.1')
+    expect(report.who.user).toBe(USER)
+    expect(report.who.user).not.toBe(MACHINE_SAM)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    const machine = requireCaseReport(live, identities, claims, frames, {
+      ...siblings,
+      user: MACHINE_SAM,
+    })
+    expect(machine.who.user).toBeUndefined()
+    expect(machine.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(machine.where).toEqual(machine.who)
+    const objectClose = requireCaseReport(live, identities, claims, frames, {
+      who: { entity_id: LAN, user: USER },
+      where: { entity_id: LAN },
+      user: MACHINE_SAM,
+    })
+    expect(objectClose.who.user).toBe(USER)
+    expect(objectClose.where.user).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: `${USER} (${FULL_NAME})`,
+      where: `${LAN} (${HOST})`,
+    }, live, identities, frames)).toBeUndefined()
+    const handleClose = requireCaseReport(live, identities, claims, frames, {
+      who: `${USER} (${FULL_NAME})`,
+      where: `${LAN} (${HOST})`,
+    })
+    expect(handleClose.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(handleClose.where).toEqual(handleClose.who)
+    expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: MACHINE_SAM }))
+      .toEqual({ entity_id: LAN, ip: LAN })
+    expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: USER }))
+      .toEqual({ entity_id: LAN, ip: LAN, user: USER })
   })
 })

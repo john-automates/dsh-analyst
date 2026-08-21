@@ -12,7 +12,7 @@ Live fake-software r1 (`mta-2025-01-22`) bound the cited conversation correctly 
 
 ## Decision
 
-When projecting or remapping who/where onto the bound victim entity, keep a submitted user, hostname, or `full_name` if the model offered that key and the projected row has no donated value. Persist that user on accepted who/where. Do not invent a user the model never submitted.
+When projecting or remapping who/where onto the bound victim entity, keep a submitted user, hostname, or `full_name` if the model offered that key and the projected row has no donated value. A sibling-folded user on the same `case_report` call counts as submitted ([fold sibling identity keys](2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.md)). Persist that user on accepted who/where. Do not invent a user the model never submitted. A machine SAM ending in `$` is not persisted as user.
 
 A model-offered IP the row did not donate stays off. Submitted mac keep is [keep submitted victim MAC unless DC-only](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md). A submitted user, hostname, or `full_name` that donates to a different (non-victim) entity is not persisted. Donated ip/mac/hostname/`full_name` already on the row stay.
 
