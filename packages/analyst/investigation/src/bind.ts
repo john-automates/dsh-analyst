@@ -401,6 +401,184 @@ export function victimOf(bind: RelationshipBind): BoundEndpoint | undefined {
 }
 
 /**
+ * Fold every live bind from a log prefix in append order.
+ * {@link foldBind} is still last-wins. Complete-deny leftover
+ * workstations need every victim and infra endpoint that was bound.
+ * @param events - session log or any prefix of it.
+ * @returns recorded binds, or empty when none exist.
+ */
+export function foldBinds(
+  events: readonly { type: string; data: unknown }[],
+): RelationshipBind[] {
+  const out: RelationshipBind[] = []
+  for (const event of events) {
+    if (event.type === 'investigation/bind') out.push(event.data as RelationshipBind)
+  }
+  return out
+}
+
+/**
+ * A harvested LAN IPv4 that already has workstation identity and is
+ * not a bound victim or bind-role infra / DC / gateway / file-server.
+ */
+export interface HarvestedLanWorkstation {
+  /** LAN IPv4 on the ledger. */
+  ip: string
+  /** Non-AD-SRV hostname evidenced on that IP, when one exists. */
+  hostname?: string
+  /** Human user or full_name evidenced on that IP, when one exists. */
+  user?: string
+}
+
+/**
+ * Harvested LAN workstations that remain unbound after at least one
+ * live bind. A leftover is a non-infra LAN IPv4 that already has
+ * workstation identity (a non-AD-SRV hostname, a human user / full_name,
+ * and/or a MAC that is not sourced only from known infra) and is not a
+ * bound victim. Bind role `infra` and an AD SRV / DC locator hostname
+ * on that IP are infra. Does not invent a bind or a who/where row.
+ * @param binds - every recorded bind, not only the last-wins live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for affiliation.
+ * @returns leftovers in first-seen LAN IP order, or empty when none
+ * exist or no live bind has been recorded.
+ */
+export function unboundHarvestedLanWorkstations(
+  binds: readonly RelationshipBind[],
+  identities: readonly Identity[],
+  evidenceText = '',
+): HarvestedLanWorkstation[] {
+  if (binds.length === 0) return []
+  const victims = new Set<string>()
+  const infra = new Set<string>()
+  for (const bind of binds) {
+    for (const endpoint of bind.endpoints) {
+      if (endpoint.role === 'victim') victims.add(endpoint.addr)
+      if (endpoint.role === 'infra') infra.add(endpoint.addr)
+    }
+  }
+  for (const identity of identities) {
+    if (identity.kind !== 'hostname' || !isAdSrvLocatorName(identity.value)) continue
+    for (const ip of ipsAffiliatedWithIdentity(identity, evidenceText)) infra.add(ip)
+  }
+  const leftovers: HarvestedLanWorkstation[] = []
+  const seen = new Set<string>()
+  for (const identity of identities) {
+    if (identity.kind !== 'ip' || !isLanIpv4(identity.value)) continue
+    const ip = identity.value
+    if (seen.has(ip) || victims.has(ip) || infra.has(ip)) continue
+    const leftover = workstationIdentityOn(ip, identities, evidenceText, infra)
+    if (leftover === undefined) continue
+    seen.add(ip)
+    leftovers.push(leftover)
+  }
+  return leftovers
+}
+
+/**
+ * Workstation identity evidenced on one LAN IPv4.
+ * AD SRV locators and machine SAMs are not workstation identity.
+ * A MAC sourced only from known infra is not workstation identity.
+ * @param ip - candidate LAN IPv4.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @param infra - IPv4s already known as bind-role infra or AD SRV hosts.
+ * @returns the leftover row, or undefined when that IP has no
+ * workstation identity.
+ */
+function workstationIdentityOn(
+  ip: string,
+  identities: readonly Identity[],
+  evidenceText: string,
+  infra: ReadonlySet<string>,
+): HarvestedLanWorkstation | undefined {
+  let hostname: string | undefined
+  let user: string | undefined
+  let hasWorkstationMac = false
+  for (const identity of identities) {
+    if (!identityAffiliatedWithIp(identity, ip, evidenceText)) continue
+    if (identity.kind === 'hostname' && !isAdSrvLocatorName(identity.value)) {
+      hostname ??= identity.value
+      continue
+    }
+    if (identity.kind === 'user' && !isMachineSam(identity.value)) {
+      user ??= identity.value
+      continue
+    }
+    if (identity.kind === 'full_name') {
+      user ??= identity.value
+      continue
+    }
+    if (identity.kind === 'mac' && !macSourcedOnlyFromInfra(identity, evidenceText, infra)) {
+      hasWorkstationMac = true
+    }
+  }
+  if (hostname === undefined && user === undefined && !hasWorkstationMac) return undefined
+  const leftover: HarvestedLanWorkstation = { ip }
+  if (hostname !== undefined) leftover.hostname = hostname
+  if (user !== undefined) leftover.user = user
+  return leftover
+}
+
+/**
+ * IPv4s a ledger identity is already affiliated with.
+ * Hunt-subject / conversation-client `evidence_id`, `entity_id`, and
+ * talking-IP / name-service / account lines all count.
+ * @param identity - ledger identity.
+ * @param evidenceText - tool-result text.
+ * @returns those IPv4s, unique, first-seen order.
+ */
+function ipsAffiliatedWithIdentity(identity: Identity, evidenceText: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const add = (ip: string | undefined): void => {
+    if (ip === undefined || seen.has(ip)) return
+    seen.add(ip)
+    out.push(ip)
+  }
+  add(ipv4EvidenceId(identity.evidence_id))
+  add(ipv4EvidenceId(identity.entity_id))
+  for (const ip of ipsEvidencingIdentity(identity, evidenceText)) add(ip)
+  return out
+}
+
+/**
+ * Whether a ledger identity is already affiliated with one IPv4.
+ * @param identity - ledger identity.
+ * @param ip - candidate IPv4.
+ * @param evidenceText - tool-result text.
+ * @returns true when that identity is stamped or evidenced on `ip`.
+ */
+function identityAffiliatedWithIp(
+  identity: Identity,
+  ip: string,
+  evidenceText: string,
+): boolean {
+  if (identity.kind === 'ip') return identity.value === ip
+  return ipsAffiliatedWithIdentity(identity, evidenceText).includes(ip)
+}
+
+/**
+ * Whether talking-IP frames or a stamp source this MAC only from known
+ * infra. Absence of talking-IP evidence is not infra-only unless the
+ * stamp IPv4 is already known infra.
+ * @param identity - ledger MAC.
+ * @param evidenceText - tool-result text.
+ * @param infra - IPv4s already known as bind-role infra or AD SRV hosts.
+ * @returns true when this MAC is not workstation identity.
+ */
+function macSourcedOnlyFromInfra(
+  identity: Identity,
+  evidenceText: string,
+  infra: ReadonlySet<string>,
+): boolean {
+  const talking = ipsEvidencingIdentity(identity, evidenceText)
+  if (talking.length > 0) return talking.every(ip => infra.has(ip))
+  const stamp = ipv4EvidenceId(identity.evidence_id) ?? ipv4EvidenceId(identity.entity_id)
+  return stamp !== undefined && infra.has(stamp)
+}
+
+/**
  * Coerce Hermes-stringified bind_relationship arguments before resolveBind.
  * A JSON array string of endpoint objects becomes that array. A numeric
  * string dport that is an integer becomes that integer. A string that is

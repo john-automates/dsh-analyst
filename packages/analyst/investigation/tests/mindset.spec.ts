@@ -7,8 +7,9 @@ import {
   isBelieveBecauseClaim, killedHypothesisIds, namedLiveCue, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras,
-  thesisForHuntDump, completeDenyReason, COMPLETE_CUE_PENDING_REASON,
-  COMPLETE_PLAN_NOT_READY_REASON,
+  thesisForHuntDump, completeDenyReason, completeUnboundWorkstationReason,
+  COMPLETE_CUE_PENDING_REASON, COMPLETE_PLAN_NOT_READY_REASON,
+  COMPLETE_UNBOUND_WORKSTATION_PREFIX,
 } from '../src/mindset.ts'
 import type {
   CaseReport, Hunt, Identity, InvestigationAction, InvestigationMission, InvestigationPlanEntry,
@@ -16,6 +17,10 @@ import type {
 } from '../src/types.ts'
 
 const LAN = '10.0.10.2'
+const LAN2 = '10.0.10.8'
+const DC = '10.0.10.3'
+const HOST2 = 'lan-host-b'
+const AD_SRV = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
 const C2 = '198.51.100.80'
 const EXTRA = '203.0.113.50'
 const PAYLOAD = 'payload.example.test'
@@ -215,6 +220,47 @@ describe('analyst mindset chassis', () => {
       .toBe(COMPLETE_PLAN_NOT_READY_REASON)
     expect(completeDenyReason(mission({ cueValidation: 'open' }), readyPlan)).toBeUndefined()
     expect(completeDenyReason(mission(), readyPlan)).toBeUndefined()
+    const leftoverIds: Identity[] = [
+      { kind: 'ip', value: LAN, label: 'IP' },
+      { kind: 'ip', value: LAN2, label: 'IP' },
+      { kind: 'hostname', value: HOST2, label: 'hostname', evidence_id: LAN2 },
+      { kind: 'ip', value: DC, label: 'IP' },
+      { kind: 'hostname', value: AD_SRV, label: 'hostname', evidence_id: DC },
+    ]
+    const leftoverLedger = { binds: [bind()], identities: leftoverIds }
+    const leftoverReason = completeUnboundWorkstationReason([{ ip: LAN2, hostname: HOST2 }])
+    expect(leftoverReason).toContain(COMPLETE_UNBOUND_WORKSTATION_PREFIX)
+    expect(leftoverReason).toContain(`${LAN2} (${HOST2})`)
+    expect(leftoverReason).toContain('unbound')
+    expect(completeDenyReason(mission(), readyPlan, leftoverLedger)).toBe(leftoverReason)
+    expect(completeUnboundWorkstationReason([
+      { ip: LAN2, hostname: HOST2 },
+      { ip: '10.0.10.9', hostname: 'lan-host-c' },
+    ])).toContain('workstations')
+    expect(completeDenyReason(chassisMission(), readyPlan, leftoverLedger))
+      .toBe(COMPLETE_CUE_PENDING_REASON)
+    expect(completeDenyReason(mission(), { inventory: [], gaps: [], hypotheses: [] }, leftoverLedger))
+      .toBe(COMPLETE_PLAN_NOT_READY_REASON)
+    expect(completeDenyReason(mission(), readyPlan, {
+      binds: [bind(), bind({
+        relationship: {
+          src: LAN2, dst: C2, dport: 443, t: '2026-08-21T00:01:00Z', evidence_id: 'conv-2',
+        },
+        endpoints: [
+          { addr: LAN2, role: 'victim', because: `${LAN2} talking to ${C2}` },
+          { addr: C2, role: 'c2', because: 'cue' },
+        ],
+      })],
+      identities: leftoverIds,
+    })).toBeUndefined()
+    expect(completeDenyReason(mission(), readyPlan, {
+      binds: [bind()],
+      identities: [
+        { kind: 'ip', value: LAN, label: 'IP' },
+        { kind: 'ip', value: DC, label: 'IP' },
+        { kind: 'hostname', value: AD_SRV, label: 'hostname', evidence_id: DC },
+      ],
+    })).toBeUndefined()
     expect(c2HypothesisId({ inventory: [], gaps: [], hypotheses: [] })).toBeUndefined()
     expect(c2HypothesisId(readyPlan)).toBe('h-c2')
     expect(requireC2HypothesisId(readyPlan)).toBe('h-c2')

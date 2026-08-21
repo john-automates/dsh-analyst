@@ -12,7 +12,7 @@ Headless 可以把仅有文本的模型停止（`finish` kind=`stop`）当成 `t
 
 `dsh-investigation` 监听 `agent/turn-stopping`。当 Mission 仍为 cue-pending（`cueValidation` 待定／open 且未点名线索）或 `planReady` 为 false 时，它 `steer()` 一条插件通知，点名 cue-pending 和／或 Plan 未就绪。循环再执行一步。不会追加 `turn/end` `completed`。Headless 不会因那次仅有文本的停止以 0 退出。
 
-已点名现场线索已持久化且 `planReady` 为 true 之后，监听器不做 steering（中途引导）。complete 再次被允许。绑定、结案、身份遗留和 extra-wan 去重仍由各自检查负责。
+已点名现场线索已持久化且 `planReady` 为 true 之后，此监听器不再因 cue-pending 或 Plan 未就绪做 steering（中途引导）。在那些理由上 complete 被允许。当前绑定之后，[仍未绑定的已收割 LAN 工作站](2026-08-21-refuse-complete-while-unbound-workstation.md) 是另一条 complete 拒绝。绑定、结案、身份遗留持久化，以及 extra-wan 去重仍由各自检查负责。
 
 `planReady` 仍要求已点名现场线索、C2 假设、CDN／DC／更新替代，以及作证清单。此检查不编造线索或 Plan。hunt、绑定和附加项持久化不变。
 
@@ -36,4 +36,4 @@ Headless 可以把仅有文本的模型停止（`finish` kind=`stop`）当成 `t
 
 ## 后果
 
-`pcap_info` 之后的仅有文本停止，在 Mission 仍为 cue-pending 或 Plan 未就绪时，不能把 headless 调查关闭为已完成。模型会看到原因。已点名现场线索且 Plan 就绪之后，complete 被允许；之后的绑定或结案失败不变。
+`pcap_info` 之后的仅有文本停止，在 Mission 仍为 cue-pending 或 Plan 未就绪时，不能把 headless 调查关闭为已完成。模型会看到原因。已点名现场线索且 Plan 就绪之后，此检查允许 complete；之后的绑定或结案失败不变。当前绑定之后仍未绑定的已收割 LAN 工作站由另一条检查负责。

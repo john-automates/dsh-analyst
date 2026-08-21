@@ -17,7 +17,8 @@
  * The plugin stamps Mission at session start to scope the case. Auto-hunts
  * run only when Plan is ready. Bind still needs a named C2 hypothesis.
  * A text-only stop is not a completed investigation while Mission is still
- * cue-pending or Plan is not ready.
+ * cue-pending, Plan is not ready, or a live bind left a harvested LAN
+ * workstation unbound.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -39,9 +40,9 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
   boundVictimSlot, caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind,
-  ENDPOINT_ROLES, extraWanHuntForBind, foldBind, foldPublishedVictimRows, formatRolesCard,
-  mergePublishedVictimRows, otherEndHuntForDeniedBind, publishedVictimRows, resolveBind,
-  victimOf, boundC2Ipv4, withPublishedVictimRows,
+  ENDPOINT_ROLES, extraWanHuntForBind, foldBind, foldBinds, foldPublishedVictimRows,
+  formatRolesCard, mergePublishedVictimRows, otherEndHuntForDeniedBind, publishedVictimRows,
+  resolveBind, victimOf, boundC2Ipv4, withPublishedVictimRows,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
@@ -86,6 +87,7 @@ export {
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
   COMPLETE_CUE_PENDING_REASON, COMPLETE_PLAN_NOT_READY_REASON,
+  COMPLETE_UNBOUND_WORKSTATION_PREFIX, completeUnboundWorkstationReason,
   projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
   thesisForHuntDump,
 } from './mindset.ts'
@@ -99,13 +101,14 @@ export {
   projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
   UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON, acceptedC2Domain, acceptedC2Ips, boundC2Ipv4,
   boundVictimSlot, c2DomainHuntForBind, c2DomainHuntsForBind, extraWanHuntForBind,
-  foldPublishedVictimRows, mergePublishedVictimRows, publishedVictimRows, victimRowKey,
-  withPublishedVictimRows,
+  foldBinds, foldPublishedVictimRows, mergePublishedVictimRows, publishedVictimRows,
+  unboundHarvestedLanWorkstations, victimRowKey, withPublishedVictimRows,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
-  CoercedBindRequest, SubmittedIdentitySlots,
+  CoercedBindRequest, HarvestedLanWorkstation, SubmittedIdentitySlots,
 } from './bind.ts'
+export type { CompleteDenyLedger } from './mindset.ts'
 export {
   CLOSE_FILE_REASON, denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
@@ -325,7 +328,8 @@ function withNotice(decision: PostToolDecision, notice: UserMessage): PostToolDe
 /**
  * `ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence
  * policy, BindRelationship, methodology prompt, 5W1H report persistence, and
- * a text-only turn/end complete denial while cue-pending or Plan is not ready.
+ * a text-only turn/end complete denial while cue-pending, Plan is not ready,
+ * or a live bind left a harvested LAN workstation unbound.
  */
 export class Investigation extends Service {
   static inject = ['tools', 'systemPrompt']
@@ -356,9 +360,15 @@ export class Investigation extends Service {
     }, { global: true })
 
     ctx.on('agent/turn-stopping', ({ agent }) => {
+      const events = agent.session.events
       const reason = completeDenyReason(
-        foldMission(agent.session.events),
-        foldPlan(agent.session.events),
+        foldMission(events),
+        foldPlan(events),
+        {
+          binds: foldBinds(events),
+          identities: foldIdentities(events),
+          evidenceText: foldToolResultText(events),
+        },
       )
       if (reason === undefined) return
       agent.steer(createUserMessage({

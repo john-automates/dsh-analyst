@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-refuse-complete-while-unbound-workstation.md
+2026-08-21-refuse-complete-while-unbound-workstation.md: ce581308d1b1780d69e7035de926aeb8b9dd0179
+2026-08-21-refuse-complete-while-unbound-workstation.zh.md: 91211a3f63d6574d07b4a381e0dfffc2479dd7b0
