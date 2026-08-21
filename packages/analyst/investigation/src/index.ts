@@ -165,16 +165,14 @@ export function foldIdentities(events: readonly SessionEvent[]): Identity[] {
       out.push(copy)
       continue
     }
-    if (shouldRestampEvidenceId(existing, event.data, preferred)) {
-      existing.evidence_id = event.data.evidence_id
-    }
+    const next = restampEvidenceId(existing, event.data, preferred)
+    if (next !== undefined) existing.evidence_id = next
   }
   return out
 }
 
 /**
- * Whether a later identity event should overwrite `evidence_id` on the
- * first-seen kind+value row.
+ * Later `evidence_id` that should overwrite the first-seen kind+value row.
  * A missing stamp fills from any later non-empty id. A MAC DC/peer stamp
  * overwrites only when the later id is the bound victim or a C2-talking
  * LAN IP. A victim or C2-talking stamp does not yield to a later DC/peer
@@ -182,20 +180,20 @@ export function foldIdentities(events: readonly SessionEvent[]): Identity[] {
  * @param existing - first-seen folded row.
  * @param incoming - later identity of the same kind+value.
  * @param preferred - bound victim and C2-talking LAN IPs on this log.
- * @returns true when the folded row must take `incoming.evidence_id`.
+ * @returns the incoming id when the folded row must take it.
  */
-function shouldRestampEvidenceId(
+function restampEvidenceId(
   existing: Identity,
   incoming: Identity,
   preferred: ReadonlySet<string>,
-): boolean {
+): string | undefined {
   const next = incoming.evidence_id
-  if (next === undefined || next === '') return false
+  if (next === undefined || next === '') return undefined
   const prev = existing.evidence_id
-  if (prev === undefined || prev === '') return true
-  if (existing.kind !== 'mac' || incoming.kind !== 'mac') return false
-  if (preferred.has(prev)) return false
-  return preferred.has(next)
+  if (prev === undefined || prev === '') return next
+  if (existing.kind !== 'mac' || incoming.kind !== 'mac') return undefined
+  if (preferred.has(prev)) return undefined
+  return preferred.has(next) ? next : undefined
 }
 
 /**
@@ -497,7 +495,7 @@ export class Investigation extends Service {
       session.append('investigation/identity', identity)
       return true
     }
-    if (shouldRestampEvidenceId(existing, identity, preferredMacEvidenceIds(session.events))) {
+    if (restampEvidenceId(existing, identity, preferredMacEvidenceIds(session.events)) !== undefined) {
       session.append('investigation/identity', identity)
     }
     return false
