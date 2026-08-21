@@ -1249,6 +1249,162 @@ describe('analyst tools', () => {
     await omitted.ctx.fiber.dispose()
   })
 
+  it('persists omitted mac and user onto case_report after a live bind when the row did not donate them', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user',
+      value: 'lan-user',
+      label: 'user',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user',
+      value: 'idle-user',
+      label: 'user',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    const evidence = [
+      'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2',
+      'eth.src: 02:00:00:00:00:0b\tip.src: 10.0.10.3',
+      '10.0.10.2 → 10.0.10.3  kerberos.CNameString: lan-user',
+      'ip.src: 10.0.10.3\tkerberos.CNameString: idle-user',
+    ].join('\n')
+    owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-omitted-mac-user'),
+        content: [{ type: 'text', text: evidence }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-omitted-mac-user'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-omitted-mac-user'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2' },
+        where: { entity_id: '10.0.10.2' },
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    expect(text(result)).not.toContain('idle-user')
+    const submitted = await setup()
+    submitted.ctx.investigation.recordIdentity(submitted.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    submitted.ctx.investigation.recordIdentity(submitted.owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    submitted.owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-keep-submitted-mac'),
+        content: [{ type: 'text', text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    const submittedBind = await submitted.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-keep-submitted-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: submitted.owner,
+    })
+    expect(submittedBind.isError).toBe(false)
+    const submittedReport = await submitted.ctx.tools.execute({
+      signal,
+      callId: CallId('report-keep-submitted-mac'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2', mac: '02:00:00:00:00:0a' },
+      },
+      agent: submitted.owner,
+    })
+    expect(submittedReport.isError).toBe(false)
+    expect(submitted.ctx.investigation.report(submitted.owner.session)?.who.mac).toBe('02:00:00:00:00:0a')
+    await submitted.ctx.fiber.dispose()
+  })
+
   it('persists a harvested C2 domain onto case_report after a live bind', async () => {
     const binDir = await mkdtemp(join(tmpdir(), 'dsh-c2-domain-'))
     const tsharkBin = await script(binDir, 'tshark', 'echo "c2.example.test"')

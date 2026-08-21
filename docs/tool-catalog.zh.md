@@ -2378,7 +2378,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     },
     "where": {
       "oneOf": [
@@ -2416,7 +2416,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     }
   },
   "required": [

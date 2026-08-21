@@ -22,7 +22,7 @@ A model-offered IP does not replace the bound victim ip. Submitted user/hostname
 
 The hole is the empty-`projected[key]` branch in `completeAcceptedSlot` — the `ip`/`mac` continue. IP stay remains: do not copy a model-offered non-victim IP over the bound victim ip.
 
-[Persist omitted victim-row keys](2026-08-21-persist-projected-victim-slot.md) still fills omitted keys from the row. [Overwrite of a DC/peer first stamp](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md) still owns restamp. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, idle or DC LAN row, and synthetic `CLIENT_MAC` vs DC/gateway `DISTRACTOR_MAC`.
+[Persist omitted victim-row keys](2026-08-21-persist-projected-victim-slot.md) still fills omitted keys from the row. [Complete omitted victim-row mac and user](2026-08-21-complete-omitted-victim-mac-user.md) still persists omitted mac from victim-IP evidence when a sticky DC donate left the row empty. [Overwrite of a DC/peer first stamp](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md) still owns restamp. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, idle or DC LAN row, and synthetic `CLIENT_MAC` vs DC/gateway `DISTRACTOR_MAC`.
 
 ## Alternatives considered
 
@@ -32,7 +32,7 @@ The hole is the empty-`projected[key]` branch in `completeAcceptedSlot` — the 
 
 **Treat a sticky DC `evidence_id` as DC-only even when victim-IP frames source that MAC.** Rejected: DC-scoped stay-off is frame scope, not first hunt subject or first donate.
 
-**Invent a MAC when the model omits the key and the row did not donate.** Rejected: slots the model never submitted are not invented.
+**Invent a MAC when the model omits the key and the row and frames do not evidence one.** Rejected: slots are not invented. Omitted persist from victim-IP evidence is [complete omitted victim-row mac and user](2026-08-21-complete-omitted-victim-mac-user.md).
 
 **Copy a model-offered non-victim IP over the bound victim ip.** Rejected: IP stay keeps the bound victim address.
 
@@ -46,4 +46,4 @@ The hole is the empty-`projected[key]` branch in `completeAcceptedSlot` — the 
 
 ## Consequences
 
-A live bind plus a submitted victim MAC writes that mac even when a sticky DC donate left the projected row empty. A DC/gateway-only MAC still stays off. An omitted mac is still not invented. Bound victim ip stays. Submitted user/hostname/`full_name` and donated slots stay.
+A live bind plus a submitted victim MAC writes that mac even when a sticky DC donate left the projected row empty. A DC/gateway-only MAC still stays off. An omitted mac is still not invented when no victim-IP evidence exists. Bound victim ip stays. Submitted user/hostname/`full_name` and donated slots stay.
