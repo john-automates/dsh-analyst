@@ -12,7 +12,7 @@ Live lumma-r7 (`ac6f879`) Bind #1 denied correctly: victim was the cue/observati
 
 ## Decision
 
-A cue/observation address cannot be victim. `role === 'victim' && isCueObservationAddr(addr)` always returns `UNBOUND_REASON`. Cue/observation addresses still default to `c2`. Tokens are not swapped. Exactly one victim. An inverted `case_report` is refused. Victim-row handle-string coerce remains for a live non-inverted bind.
+A cue/observation address cannot be victim. `role === 'victim' && isCueObservationAddr(addr)` always returns `UNBOUND_REASON`. `isCueObservationAddr` is a unicast non-LAN IPv4; a hostname is not a cue. Cue/observation addresses still default to `c2`. Tokens are not swapped. Exactly one victim. An inverted `case_report` is refused. Victim-row handle-string coerce remains for a live non-inverted bind.
 
 [BindRelationship](../feature/2026-08-21-bind-relationship.md) still owns bind-before-close. Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client and a TEST-NET peer.
 

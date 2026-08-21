@@ -45,6 +45,7 @@ describe('BindRelationship', () => {
   it('defaults a cue/external IP to c2 and requires exactly one victim', () => {
     expect(isCueObservationAddr(C2)).toBe(true)
     expect(isCueObservationAddr(LAN)).toBe(false)
+    expect(isCueObservationAddr(HOST)).toBe(false)
     expect(defaultRoleForAddr(C2)).toBe('c2')
     expect(defaultRoleForAddr(LAN)).toBe('unknown')
     const completed = resolveBind({

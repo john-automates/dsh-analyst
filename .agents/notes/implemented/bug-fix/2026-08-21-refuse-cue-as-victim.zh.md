@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-线索或观测地址不能作为 victim。只要 `role === 'victim' && isCueObservationAddr(addr)`，就返回 `UNBOUND_REASON`。线索或观测地址仍默认 `c2`。不会对调 token。恰好一个 victim。对调的 `case_report` 会被拒绝。受害端行句柄字符串强制转换仍适用于未对调的当前绑定。
+线索或观测地址不能作为 victim。只要 `role === 'victim' && isCueObservationAddr(addr)`，就返回 `UNBOUND_REASON`。`isCueObservationAddr` 是非 LAN 单播 IPv4；主机名不是线索。线索或观测地址仍默认 `c2`。不会对调 token。恰好一个 victim。对调的 `case_report` 会被拒绝。受害端行句柄字符串强制转换仍适用于未对调的当前绑定。
 
 [BindRelationship](../feature/2026-08-21-bind-relationship.md) 仍拥有结案前绑定。scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端和 TEST-NET 对等体。
 

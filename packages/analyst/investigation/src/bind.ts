@@ -76,7 +76,7 @@ export function normalizeEndpointAddr(addr: string): string | undefined {
  * @returns true for a unicast non-LAN IPv4.
  */
 export function isCueObservationAddr(addr: string): boolean {
-  return isNonLanUnicastIpv4(addr)
+  return isIpv4(addr) && isNonLanUnicastIpv4(addr)
 }
 
 /**
