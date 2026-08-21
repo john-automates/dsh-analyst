@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
-  c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, formatLedger, huntKey, huntNotice,
-  huntsForNewIdentities, isLanIpv4, isNonLanUnicastIpv4,
+  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText, formatLedger,
+  huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
+  isNonLanUnicastIpv4, shouldAutoRunHunt,
 } from '../src/hunts.ts'
 import type { Hunt, Identity } from '../src/types.ts'
 
@@ -178,11 +179,53 @@ describe('auto-issued hunts', () => {
     expect(huntNotice(samr)).toContain('Becka Rolf')
     expect(huntNotice(samr)).not.toContain('ip.addr ==')
     expect(() => huntNotice({ ...mac, kind: 'unknown' as Hunt['kind'] })).toThrow('huntNotice')
+    expect(() => huntFilterSpec({ ...mac, kind: 'unknown' as Hunt['kind'] })).toThrow('huntFilterSpec')
+    expect(displayFilterFor('eth.src', mac)).toBe('(eth.src) and ip.src == 10.0.0.5')
+    expect(displayFilterFor('kerberos.CNameString', kerberos)).toBe('kerberos.CNameString')
+    expect(huntFilterSpec(mac)).toEqual({
+      display_filter: '(eth.src) and ip.src == 10.0.0.5',
+      fields: ['eth.src'],
+    })
+    expect(huntFilterSpec(names)).toEqual({
+      display_filter: '(llmnr or nbns or browser) and ip.addr == 10.0.0.5',
+      fields: [],
+    })
+    expect(huntFilterSpec(kerberos)).toEqual({
+      display_filter: 'kerberos.CNameString',
+      fields: ['kerberos.CNameString'],
+    })
+    expect(huntFilterSpec(samr)).toEqual({
+      display_filter: 'samr.samr_UserInfo21.account_name or samr.samr_UserInfo21.full_name',
+      fields: ['samr.samr_UserInfo21.account_name', 'samr.samr_UserInfo21.full_name'],
+    })
     expect(formatLedger([], [], undefined)).toBe('')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Identities:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('Hunts:')
     expect(formatLedger([ip], [kerberos], { who: 'x' })).toContain('case_report')
     expect(formatLedger([], [kerberos], undefined)).toContain('Hunts:')
     expect(formatLedger([], [], { who: 'x' })).toContain('case_report')
+  })
+
+  it('auto-runs LAN-subject hunts and skips a non-LAN C2 IP', () => {
+    const lanMac: Hunt = { kind: 'eth-src', subjectKind: 'ip', subject: LAN_A }
+    const idleMac: Hunt = { kind: 'eth-src', subjectKind: 'ip', subject: LAN_B }
+    const c2Mac: Hunt = { kind: 'eth-src', subjectKind: 'ip', subject: C2 }
+    const loopback: Hunt = { kind: 'eth-src', subjectKind: 'ip', subject: '127.0.0.1' }
+    const hostHunt: Hunt = { kind: 'kerberos-cname', subjectKind: 'hostname', subject: 'workstation1' }
+    const userHunt: Hunt = { kind: 'samr-userinfo', subjectKind: 'user', subject: 'brolf' }
+    expect(shouldAutoRunHunt(lanMac, '')).toBe(true)
+    expect(shouldAutoRunHunt(c2Mac, '')).toBe(false)
+    expect(shouldAutoRunHunt(loopback, '')).toBe(false)
+    expect(shouldAutoRunHunt(hostHunt, '')).toBe(true)
+    expect(shouldAutoRunHunt(userHunt, '')).toBe(true)
+    expect(shouldAutoRunHunt(lanMac, twoClientFixture)).toBe(true)
+    expect(shouldAutoRunHunt(idleMac, twoClientFixture)).toBe(false)
+    expect(shouldAutoRunHunt(c2Mac, twoClientFixture)).toBe(false)
+    expect(shouldAutoRunHunt(hostHunt, twoClientFixture)).toBe(false)
+    expect(shouldAutoRunHunt(userHunt, twoClientFixture)).toBe(false)
+    const issued = [c2Mac, idleMac, lanMac, hostHunt]
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([lanMac])
+    expect(huntsToAutoRun(issued, '', new Set())).toEqual([idleMac, lanMac, hostHunt])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]))).toEqual([])
   })
 })

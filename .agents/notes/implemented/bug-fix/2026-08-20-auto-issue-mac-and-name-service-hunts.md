@@ -16,13 +16,13 @@ A new IP also issues `eth-src` and `name-service` for that subject, then the exi
 
 `huntNotice` names valid tshark 4.4.16 fields: `eth.src` for the MAC hunt (with `ip.src ==` the C2-talking IP when known; [sourced MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)), and `llmnr`, `nbns`, and `browser` for the name-service hunt that produces DESKTOP-* / NBNS Registration / BROWSER Host Announcement lines. After a LAN IP talks to a non-LAN peer, those identity hunts issue only for that C2-talking IP ([two-client fusion](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)). The [analyst investigation preset](../feature/2026-08-20-analyst-investigation-preset.md) still owns harvest, SAMR, and the other hunt knobs.
 
-Scout, family harvest, auto-run hunts, and new evals stay out of this change.
+Scout, family harvest, and new evals stay out of this change. Execution of issued hunts is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 ## Alternatives considered
 
 **Change only the methodology prompt.** Rejected: r6 already followed Kerberos then SAMR after the IP. The missing hunts were never issued, so the model had no MAC or name-service notice.
 
-**Auto-run the pcap_filter hunts.** Rejected: this knob is issuance and notice text. Execution stays with the model.
+**Auto-run the pcap_filter hunts.** Rejected for this issuance knob: execution is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 **Add an SMB hunt kind.** Rejected: SMB is not already a `HuntKind`. Hostname harvest already reads SMB summaries when those lines appear.
 

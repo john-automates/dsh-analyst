@@ -16,13 +16,13 @@ Status: implemented
 
 `huntNotice` 点名有效的 tshark 4.4.16 字段：MAC hunt 用 `eth.src`（已知 C2 通信 IP 时带 `ip.src ==` 该 IP；[来源 MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)）；名称服务 hunt 用 `llmnr`、`nbns` 和 `browser`，以产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行。当一个 LAN IP 与非 LAN 对等体通信后，这些身份 hunt 只对该 C2 通信 IP 下发（[双客户端融合](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)）。[调查分析预设](../feature/2026-08-20-analyst-investigation-preset.md) 仍拥有收割、SAMR 和其他 hunt 旋钮。
 
-scout、家族收割、自动运行 hunt 以及新评测不在本次变更内。
+scout、家族收割以及新评测不在本次变更内。已下发 hunt 的执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 ## 备选方案
 
 **只改方法论提示词。** 否决：r6 在 IP 之后已经按 Kerberos 再 SAMR 做了。缺失的 hunt 从未下发，因此模型没有 MAC 或名称服务通知。
 
-**自动运行 pcap_filter hunt。** 否决：本旋钮是下发与通知文本。执行仍由模型完成。
+**自动运行 pcap_filter hunt。** 对本下发旋钮否决：执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 **新增 SMB hunt 种类。** 否决：SMB 本来就不是 `HuntKind`。那些行出现时，主机名收割已经会读 SMB 摘要。
 

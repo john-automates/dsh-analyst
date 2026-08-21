@@ -1,36 +1,43 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
- * tool results, auto-issue hunts after new identities, deny writes to evidence
- * and work outside the case directory, and persist a 5W1H close packet.
+ * tool results, auto-issue hunts after new identities, auto-run outstanding
+ * issued hunts through `pcap_filter`, deny writes to evidence and work
+ * outside the case directory, and persist a 5W1H close packet.
  *
  * State is folded from the session log. There is no live mirror.
  *
  * @module @deepseek-ai/dsh-investigation
  */
 
-import { isAbsolute, resolve } from 'node:path'
+import { readdir } from 'node:fs/promises'
+import { extname, isAbsolute, join, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
-import type { PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import type {
+  PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult, ToolRunContext,
+} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
-  evidenceTextForHunts, formatLedger, huntNotice, huntsForNewIdentities, huntKey,
+  evidenceTextForHunts, formatLedger, huntFilterSpec, huntNotice, huntsForNewIdentities,
+  huntsToAutoRun, huntKey,
 } from './hunts.ts'
-import { denyReason } from './policy.ts'
+import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
 import type { CaseReport, Hunt, Identity } from './types.ts'
 
 export type * from './types.ts'
+export type { HuntFilterSpec } from './hunts.ts'
 export {
   decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
 } from './harvest.ts'
 export {
-  c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, formatLedger, huntKey, huntNotice,
-  huntsForNewIdentities, isLanIpv4, isNonLanUnicastIpv4,
+  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText, formatLedger,
+  huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
+  isNonLanUnicastIpv4, shouldAutoRunHunt,
 } from './hunts.ts'
 export {
   denyCommand, denyReason, stringArg, tokenizeCommand,
@@ -66,7 +73,10 @@ export interface Config {
    * When true, a new IP issues eth.src, name-service, Kerberos CNameString, and
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
-   * those identity hunts issue only for that C2-talking IP. Defaults to true.
+   * those identity hunts issue only for that C2-talking IP. Outstanding issued
+   * hunts then run through `pcap_filter` with the scoped display_filter and
+   * fields; results harvest into the ledger. Non-LAN / C2 IP subjects do not
+   * auto-run. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -179,8 +189,10 @@ export class Investigation extends Service {
   readonly caseDir: string
   /** Whether evidence and capture files are read-only. */
   readonly evidenceReadOnly: boolean
-  /** Whether new IP/hostname/user identities auto-issue hunts. */
+  /** Whether new IP/hostname/user identities auto-issue and auto-run hunts. */
   readonly autoHunt: boolean
+  /** Hunt keys already auto-run (or attempted) on one session. */
+  private readonly executedHuntKeys = new WeakMap<Session, Set<string>>()
 
   /**
    * @param ctx - Cordis context carrying tools and systemPrompt.
@@ -200,7 +212,7 @@ export class Investigation extends Service {
     })
 
     ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
-      const notices = this.observe(exec, result)
+      const notices = await this.observe(exec, result)
       const downstream = await next()
       if (notices === undefined) return downstream
       return withNotice(downstream, notices)
@@ -324,34 +336,45 @@ export class Investigation extends Service {
     return isInsideCase(this.caseDir, target)
   }
 
-  /** Harvest identities and issue hunts from one successful tool result. */
-  private observe(exec: ToolExecution, result: ToolExecutionResult): UserMessage | undefined {
+  /** Harvest identities, issue hunts, and auto-run outstanding issued hunts. */
+  private async observe(exec: ToolExecution, result: ToolExecutionResult): Promise<UserMessage | undefined> {
     if (result.isError || exec.agent === undefined) return undefined
     const session = exec.agent.session
     const current = resultText(result)
     const added: Identity[] = []
-    for (const identity of harvestIdentities(current, evidenceTextForHunts(session.events, current))) {
-      if (this.recordIdentity(session, identity)) added.push(identity)
-    }
-    if (added.length === 0) return undefined
-    const lines = added.map(identity => `New identity: ${identity.label} ${identity.value}.`)
-    if (this.autoHunt) {
-      for (const hunt of huntsForNewIdentities(
-        added,
-        foldHunts(session.events),
-        evidenceTextForHunts(session.events, current),
-      )) {
-        this.recordHunt(session, hunt)
-        lines.push(huntNotice(hunt))
+    const issued: Hunt[] = []
+    const evidence = (): string => evidenceTextForHunts(session.events, current)
+    const harvestFrom = (text: string, evidenceText: string): void => {
+      for (const identity of harvestIdentities(text, evidenceText)) {
+        if (this.recordIdentity(session, identity)) added.push(identity)
       }
     }
-    const text = lines.join('\n')
+    const issueFrom = (batch: readonly Identity[]): void => {
+      if (!this.autoHunt) return
+      for (const hunt of huntsForNewIdentities(batch, foldHunts(session.events), evidence())) {
+        if (this.recordHunt(session, hunt)) issued.push(hunt)
+      }
+    }
+    harvestFrom(current, evidence())
+    issueFrom(added)
+    if (this.autoHunt) {
+      await this.autoRunOutstanding(exec, session, current, (text) => {
+        const before = added.length
+        harvestFrom(text, `${evidence()}\n${text}`)
+        issueFrom(added.slice(before))
+      })
+    }
+    if (added.length === 0) return undefined
+    const lines = [
+      ...added.map(identity => `New identity: ${identity.label} ${identity.value}.`),
+      ...issued.map(huntNotice),
+    ]
     const first = added[0]
     const headline = first !== undefined && added.length === 1
       ? `New identity: ${first.label} ${first.value}`
       : `New identities: ${added.map(identity => identity.label).join(', ')}`
     return createUserMessage({
-      content: [{ type: 'text', text }],
+      content: [{ type: 'text', text: lines.join('\n') }],
       source: {
         kind: 'plugin',
         plugin: 'investigation',
@@ -360,6 +383,136 @@ export class Investigation extends Service {
       },
     })
   }
+
+  /**
+   * Execute outstanding eligible hunts through `pcap_filter` and harvest each dump.
+   * @param exec - the triggering tool execution (path and cancellation).
+   * @param session - session whose issued hunts are folded.
+   * @param current - text of the triggering tool result.
+   * @param onText - harvest and issue from one successful hunt dump.
+   */
+  private async autoRunOutstanding(
+    exec: ToolExecution,
+    session: Session,
+    current: string,
+    onText: (text: string) => void,
+  ): Promise<void> {
+    const tool = this.ctx.tools.get('pcap_filter', exec.agent)
+    if (tool === undefined) return
+    const path = await capturePathForAutoRun(this.caseDir, exec)
+    if (path === undefined) return
+    const executed = executedSet(this.executedHuntKeys, session)
+    const runContext = autoRunContext(exec)
+    for (;;) {
+      const hunt = huntsToAutoRun(
+        foldHunts(session.events),
+        evidenceTextForHunts(session.events, current),
+        executed,
+      )[0]
+      if (hunt === undefined) break
+      executed.add(huntKey(hunt))
+      const spec = huntFilterSpec(hunt)
+      const args: Record<string, unknown> = { path, display_filter: spec.display_filter }
+      if (spec.fields.length > 0) args.fields = [...spec.fields]
+      let value: unknown
+      try {
+        value = await tool.execute(args, runContext)
+      } catch {
+        // pcap_filter / tshark failed; the triggering result must still succeed.
+        continue
+      }
+      const text = huntResultText(value)
+      if (text !== '') onText(text)
+    }
+  }
+}
+
+/** Capture suffixes auto-run will open. `.log` is evidence but not a pcap. */
+const CAPTURE_EXTENSIONS = new Set(['.pcap', '.pcapng', '.cap'])
+
+/**
+ * Session-local set of hunt keys already auto-run or attempted.
+ * @param store - per-session executed keys.
+ * @param session - session whose hunts are being executed.
+ * @returns the mutable set for this session.
+ */
+function executedSet(store: WeakMap<Session, Set<string>>, session: Session): Set<string> {
+  const existing = store.get(session)
+  if (existing !== undefined) return existing
+  const created = new Set<string>()
+  store.set(session, created)
+  return created
+}
+
+/**
+ * Run-context for a plugin-owned `pcap_filter` body. Auto-run is not a model call.
+ * @param exec - the triggering execution (signal, agent, token).
+ * @returns a context that does not defer notices or conclude the turn.
+ */
+function autoRunContext(exec: ToolExecution): ToolRunContext {
+  return {
+    ...exec,
+    deferContext() {
+      // Plugin harvest records identities; this body has no deferred context.
+    },
+    concludeTurn() {
+      // Auto-run must not end the triggering turn.
+    },
+  }
+}
+
+/**
+ * Read rendered text from a `pcap_filter` return value.
+ * @param value - canonical tool value.
+ * @returns dump text, or empty when the value has none.
+ */
+function huntResultText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && value !== null && 'text' in value) {
+    const text = Reflect.get(value, 'text')
+    if (typeof text === 'string') return text
+  }
+  return ''
+}
+
+/**
+ * Capture path for auto-run: the triggering pcap tool's `path`, else the first
+ * `*.pcap` / `*.pcapng` / `*.cap` under `evidence/` or the case root.
+ * @param caseDir - absolute case directory.
+ * @param exec - triggering execution that may name a capture.
+ * @returns a case-relative or absolute capture path, or undefined when none exists.
+ */
+async function capturePathForAutoRun(caseDir: string, exec: ToolExecution): Promise<string | undefined> {
+  const fromExec = stringArg(exec.arguments, ['path'])
+  if (fromExec !== undefined && CAPTURE_EXTENSIONS.has(extname(fromExec).toLowerCase())) {
+    return fromExec
+  }
+  const evidence = await firstCaptureIn(join(caseDir, 'evidence'), 'evidence')
+  if (evidence !== undefined) return evidence
+  return firstCaptureIn(caseDir, '')
+}
+
+/**
+ * First capture filename in a directory, sorted.
+ * @param abs - absolute directory to list.
+ * @param relDir - case-relative prefix, or empty for the case root.
+ * @returns a case-relative path, or undefined when the directory is missing or empty of captures.
+ */
+async function firstCaptureIn(abs: string, relDir: string): Promise<string | undefined> {
+  let entries
+  try {
+    entries = await readdir(abs, { withFileTypes: true })
+  } catch {
+    // Missing evidence/ or unreadable directory: try the next location.
+    return undefined
+  }
+  const names = entries
+    .filter(entry => entry.isFile() && CAPTURE_EXTENSIONS.has(extname(entry.name).toLowerCase()))
+    .map(entry => entry.name)
+    .sort()
+  const first = names[0]
+  if (first === undefined) return undefined
+  return relDir === '' ? first : `${relDir}/${first}`
 }
 
 export default Investigation
