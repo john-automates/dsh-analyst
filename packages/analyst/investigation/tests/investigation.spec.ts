@@ -1843,9 +1843,6 @@ describe('investigation service', () => {
         if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(EXTRA)) {
           return Promise.resolve({ text: `tls.handshake.extensions_server_name: ${PAYLOAD}` })
         }
-        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes('198.51.100.80')) {
-          return Promise.resolve({ text: `tls.handshake.extensions_server_name: ${PAYLOAD}` })
-        }
         return Promise.resolve({ text: '' })
       },
     }))
