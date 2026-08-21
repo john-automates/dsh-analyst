@@ -57,7 +57,7 @@ const readyPlan = {
   ],
 }
 
-const bind = (): RelationshipBind => ({
+const bind = (over: Partial<RelationshipBind> = {}): RelationshipBind => ({
   relationship: {
     src: LAN, dst: C2, dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
   },
@@ -65,6 +65,7 @@ const bind = (): RelationshipBind => ({
     { addr: LAN, role: 'victim', because: `${LAN} talking to ${C2}` },
     { addr: C2, role: 'c2', because: 'cue' },
   ],
+  ...over,
 })
 
 const report = (over: Partial<CaseReport> = {}): CaseReport => ({
