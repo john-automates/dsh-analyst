@@ -599,9 +599,10 @@ export function projectVictimSlot(
  * `evidence_id` is not the ownership test and does not hide a NIC that is
  * not proven DC-only. Several equally unproven MACs persist none. When the
  * row did not donate `user`, an omitted user still persists from victim-IP
- * evidence (conversation-client stamp). Uniqueness does not block an
- * omitted conversation-client user. A user that donates to a non-victim
- * and is not evidenced on the victim stays off. A submitted user,
+ * evidence (conversation-client stamp), or from the unique harvested human
+ * user when machine SAMs are the only other users. Uniqueness does not
+ * block an omitted conversation-client user. A user that donates to a
+ * non-victim and is not evidenced on the victim stays off. A submitted user,
  * hostname, or full_name is kept when the row has no donated value and
  * that identity does not donate to a different entity. A submitted
  * human user is kept without a conversation-client stamp. A machine SAM
@@ -618,9 +619,10 @@ export function projectVictimSlot(
  * @param identities - folded ledger identities for that donate check.
  * @param evidenceText - tool-result text for victim-IP scope and conversation-client donate.
  * @returns the accepted slot: entity_id, ip, donated or unique non-DC-only
- * omitted mac, evidenced omitted user, donated hostname/full_name, kept
- * submitted mac unless talking-IP proves DC/gateway-only, and kept
- * submitted user/hostname/full_name. A machine SAM is not a submitted user.
+ * omitted mac, evidenced omitted user or unique harvested human user,
+ * donated hostname/full_name, kept submitted mac unless talking-IP
+ * proves DC/gateway-only, and kept submitted user/hostname/full_name.
+ * A machine SAM is not a submitted or harvested user.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
@@ -682,8 +684,9 @@ export function completeAcceptedSlot(
  * Model-supplied who/where go through deny/coerce first; omitted keys are
  * filled from that projected row. Omitted mac persists the unique ledger
  * MAC that is not DC/gateway-only when a sticky DC donate or uniqueness
- * left the row empty. Omitted user still persists from victim-IP evidence.
- * A submitted user, hostname, or full_name is kept when the row has no
+ * left the row empty. Omitted user still persists from victim-IP evidence,
+ * or the unique harvested human user when machine SAMs blocked uniqueness
+ * donate. A submitted user, hostname, or full_name is kept when the row has no
  * donated value and that identity does not donate to a different entity.
  * After a live bind, omitted who/where fold sibling top-level identity
  * keys (ip, mac, hostname, user, full_name) from the same case_report
@@ -1210,16 +1213,19 @@ function omittedMacEvidencedOnVictim(
 }
 
 /**
- * First ledger user evidenced on the bound victim.
+ * First ledger user evidenced on the bound victim, or the unique harvested
+ * human user when machine SAMs are the only other users.
  * A Kerberos/SAMR conversation whose client is that IP, or a
  * conversation-client `evidence_id` of that IP, qualifies. Uniqueness does
- * not block. A sticky DC `entity_id` does not skip that user. A user that
- * only donates to a non-victim is not returned. A machine SAM ending in
- * `$` is not returned.
+ * not block a conversation-client user. A sticky DC `entity_id` does not
+ * skip that user. A user that only donates to a non-victim is not
+ * returned. A machine SAM ending in `$` is not a harvested user and does
+ * not count against the unique-human fallback.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
- * @returns the first evidenced human user, or undefined when none exists.
+ * @returns the first evidenced human user, the unique harvested human
+ * user, or undefined when none exists.
  */
 function omittedUserEvidencedOnVictim(
   bind: RelationshipBind,
@@ -1228,13 +1234,16 @@ function omittedUserEvidencedOnVictim(
 ): string | undefined {
   const victim = victimOf(bind)
   if (victim === undefined) return undefined
+  const humans: string[] = []
   for (const identity of identities) {
     if (identity.kind !== 'user') continue
     if (isMachineSam(identity.value)) continue
     if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return identity.value
     if (ipv4EvidenceId(identity.evidence_id) === victim.addr) return identity.value
+    if (offeredDonatesToNonVictim('user', identity.value, bind, identities, evidenceText)) continue
+    humans.push(identity.value)
   }
-  return undefined
+  return new Set(humans).size === 1 ? humans[0] : undefined
 }
 
 /**

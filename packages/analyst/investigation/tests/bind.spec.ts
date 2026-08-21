@@ -2342,6 +2342,75 @@ describe('BindRelationship', () => {
     )).toEqual({ entity_id: LAN, ip: LAN })
   })
 
+  it('persists omitted who.user from the harvested victim-row human when where already has it', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const victimName = identityOf('full_name', FULL_NAME)!
+    const harvestedUser = identityOf('user', USER)!
+    const identities = [
+      identityOf('ip', LAN)!, clientMac, dcMac, victimHost, victimName, harvestedUser,
+      identityOf('user', MACHINE_SAM)!,
+    ]
+    const frames = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(projectVictimSlot(live, identities, frames)).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    })
+    expect(identityDonatesToVictim(harvestedUser, live, identities, frames)).toBe(false)
+    const omittedWho = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      full_name: FULL_NAME,
+    }
+    const whereWithUser = { ...omittedWho, user: USER }
+    const projected = { ...whereWithUser }
+    const report = requireCaseReport(live, identities, claims, frames, {
+      who: omittedWho,
+      where: whereWithUser,
+    })
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.user).toBe(USER)
+    expect(report.where.user).toBe(USER)
+    expect(report.who.user).not.toBe(MACHINE_SAM)
+    expect(report.where.user).not.toBe(MACHINE_SAM)
+    expect(completeAcceptedSlot(omittedWho, omittedWho, live, identities, frames)).toEqual(projected)
+    const machineWho = requireCaseReport(live, identities, claims, frames, {
+      who: { ...omittedWho, user: MACHINE_SAM },
+      where: whereWithUser,
+    })
+    expect(machineWho.who.user).toBeUndefined()
+    expect(machineWho.where.user).toBe(USER)
+    const twoHumans = [...identities, identityOf('user', DISTRACTOR_USER)!]
+    const ambiguous = requireCaseReport(live, twoHumans, claims, frames, {
+      who: omittedWho,
+      where: whereWithUser,
+    })
+    expect(ambiguous.who.user).toBeUndefined()
+    expect(ambiguous.where.user).toBe(USER)
+  })
+
   it('folds sibling identity keys into omitted who/where after a live bind', () => {
     expect(resolveBind({
       relationship,

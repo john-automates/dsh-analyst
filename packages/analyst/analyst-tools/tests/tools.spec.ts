@@ -1564,6 +1564,131 @@ describe('analyst tools', () => {
     await handle.ctx.fiber.dispose()
   })
 
+  it('persists omitted case_report who.user from the harvested victim-row human when where already has it', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'lan-user', label: 'user' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'user', value: 'lan-host$', label: 'user' })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const omittedWho = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      full_name: 'Lan User',
+    }
+    const whereWithUser = { ...omittedWho, user: 'lan-user' }
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-omitted-who-user'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-omitted-who-user'),
+      name: 'case_report',
+      arguments: { ...claims, who: omittedWho, where: whereWithUser },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = { ...whereWithUser }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+      c2_ips: ['198.51.100.80'],
+    })
+    expect(ctx.investigation.report(owner.session)?.who.user).toBe('lan-user')
+    expect(ctx.investigation.report(owner.session)?.where.user).toBe('lan-user')
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('lan-host$')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    const machine = await setup()
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user',
+    })
+    machine.ctx.investigation.recordIdentity(machine.owner.session, {
+      kind: 'user', value: 'lan-host$', label: 'user',
+    })
+    const machineBind = await machine.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-omitted-who-machine-sam'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: machine.owner,
+    })
+    expect(machineBind.isError).toBe(false)
+    const machineReport = await machine.ctx.tools.execute({
+      signal,
+      callId: CallId('report-omitted-who-machine-sam'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { ...omittedWho, user: 'lan-host$' },
+        where: whereWithUser,
+      },
+      agent: machine.owner,
+    })
+    expect(machineReport.isError).toBe(false)
+    expect(machine.ctx.investigation.report(machine.owner.session)?.who.user).toBeUndefined()
+    expect(machine.ctx.investigation.report(machine.owner.session)?.where.user).toBe('lan-user')
+    await machine.ctx.fiber.dispose()
+  })
+
   it('persists a submitted victim MAC when case_report who/where donate that MAC to the DC', async () => {
     const { ctx, owner } = await setup()
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.md
-2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.md: 2cd09bb96591501c538d4a57c556b65b1d8b8246
-2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.zh.md: 9908a095aace22e75fe95f81f6de357488640c01
+2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.md: d8560824d0d3641fec52a10c8fc6503ffe672fdf
+2026-08-21-fold-sibling-identity-keys-into-omitted-who-where.zh.md: 769b082da6d29cf602819a2f1ad460beb876df33

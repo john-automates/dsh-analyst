@@ -16,7 +16,7 @@ Status: implemented
 
 当前绑定之后，即使模型只提交 `entity_id`，也把省略的 `mac` 和 `user` 持久化到已接受的 who/where。
 
-先捐给域控的 MAC，只要它是唯一不是仅域控／网关的账本 MAC，仍填入省略的 mac 槽。[仅域控 MAC 须为排他的非 victim 通信 IP](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md) 拥有该测试。粘滞的域控 `entity_id` 或 `evidence_id` 不得隐藏未被证明为仅域控的网卡。若干同样未被证明的 MAC 都不持久化。证据落在被绑定 victim 上的 user（会话客户端戳记，或客户端为该 IP 的 Kerberos／SAMR 会话）即使唯一性会阻止捐出，也填入省略的 user。不编造 user。不持久化捐给非 victim、且证据不在 victim 上的 user。
+先捐给域控的 MAC，只要它是唯一不是仅域控／网关的账本 MAC，仍填入省略的 mac 槽。[仅域控 MAC 须为排他的非 victim 通信 IP](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md) 拥有该测试。粘滞的域控 `entity_id` 或 `evidence_id` 不得隐藏未被证明为仅域控的网卡。若干同样未被证明的 MAC 都不持久化。证据落在被绑定 victim 上的 user（会话客户端戳记，或客户端为该 IP 的 Kerberos／SAMR 会话）即使唯一性会阻止捐出，也填入省略的 user。机器 SAM 挡住唯一性捐出时，唯一已收割的人类 user 也填入省略的 who/where（[在省略的 who 上持久化已收割的人类 user](2026-08-21-persist-harvested-human-on-omitted-who.md)）。不编造 user。不持久化捐给非 victim、且证据不在 victim 上的 user。
 
 不丢掉 ip／hostname／`full_name`。若干账本 MAC 同样未被证明时不编造 MAC。仅域控／网关 MAC 保持不在。
 
