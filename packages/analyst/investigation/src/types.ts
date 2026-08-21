@@ -133,7 +133,7 @@ export interface InvestigationAction {
 export interface CaseReportExtras {
   /**
    * Bound C2 IPv4 plus victim-stamped extra-wan dests, omitting
-   * CDN/update names and published Cloudflare anycast dests. Unnamed
+   * CDN/update names and published Cloudflare or Fastly anycast dests. Unnamed
    * extra-wan dests that survive those omits persist. Omitted when
    * none remain.
    */
@@ -237,7 +237,7 @@ export interface CaseReport {
   how: string
   /**
    * Bound C2 IPv4 plus victim-stamped extra-wan dests, omitting an IP
-   * in a published Cloudflare anycast prefix or whose evidenced
+   * in a published Cloudflare or Fastly anycast prefix or whose evidenced
    * hostname is a well-known CDN or update name. Unnamed extra-wan
    * dests that survive those omits persist. Omitted when none remain.
    * Not a who/where slot and not a second bind.
@@ -300,7 +300,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
      * plus victim-stamped extra-wan dests, omitting an IP in a published
-     * Cloudflare anycast prefix or whose evidenced hostname is a
+     * Cloudflare or Fastly anycast prefix or whose evidenced hostname is a
      * well-known CDN or update name, when any remain. Unnamed extra-wan
      * dests that survive those omits persist. `c2_domain` is the harvested
      * TLS SNI or DNS name evidenced on an attested dest that is not

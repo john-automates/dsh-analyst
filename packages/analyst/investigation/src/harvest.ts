@@ -134,8 +134,9 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
 /**
  * Whether a harvested hostname is a DNS name that may persist as `c2_domain`.
  * Single-label NetBIOS / LAN / DC names and dotted IPv4s are not domains.
- * Well-known CDN / update names still pass; {@link isCdnOrUpdateName} and
- * {@link isCloudflareIpv4} are the additional persist and bind checks.
+ * Well-known CDN / update names still pass; {@link isCdnOrUpdateName},
+ * {@link isCloudflareIpv4}, and {@link isFastlyIpv4} are the additional
+ * persist and bind checks.
  * @param value - normalized hostname.
  * @returns true when the value contains a dot and is not an IPv4.
  */
@@ -147,8 +148,8 @@ export function isC2DomainName(value: string): boolean {
 /**
  * Registrable suffixes of well-known public CDN and software-update
  * domains. Subdomains match. IPv4 ranges are not this list; published
- * Cloudflare prefixes use {@link isCloudflareIpv4}. Live-case gold
- * hostnames are not listed.
+ * Cloudflare prefixes use {@link isCloudflareIpv4} and published Fastly
+ * prefixes use {@link isFastlyIpv4}. Live-case gold hostnames are not listed.
  */
 const CDN_OR_UPDATE_SUFFIXES = [
   'microsoft.com',
@@ -184,7 +185,8 @@ const CONVERSATION_HOST_LABEL = new RegExp(
  * (`update.microsoft.com`, `windows.msn.com`, `www.bing.com`,
  * `login.microsoftonline.com`, `sfx.ms`, `a1.akamai.net`,
  * `img-s-msn-com.akamaized.net`). IPv4 ranges are not this test;
- * published Cloudflare prefixes use {@link isCloudflareIpv4}.
+ * published Cloudflare prefixes use {@link isCloudflareIpv4} and
+ * published Fastly prefixes use {@link isFastlyIpv4}.
  * Live-case gold names are not listed.
  * `evilcloudflare.com` is false.
  * @param value - raw or normalized hostname.
@@ -224,12 +226,53 @@ const CLOUDFLARE_IPV4_CIDRS = [
   '198.41.128.0/17',
 ] as const
 
-const CLOUDFLARE_IPV4_RANGES = CLOUDFLARE_IPV4_CIDRS.map((cidr) => {
-  const slash = cidr.indexOf('/')
-  const prefix = Number(cidr.slice(slash + 1))
-  const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
-  return { network: ipv4ToInt(cidr.slice(0, slash)) & mask, mask }
-})
+/**
+ * Published Fastly IPv4 anycast prefixes
+ * (https://api.fastly.com/public-ip-list). A dest in these ranges is
+ * CDN even when the evidenced hostname is a customer domain, not
+ * `fastly.net`. Generic VPS / hosting ranges are not this list.
+ * Live-case gold IPs are not listed.
+ */
+const FASTLY_IPV4_CIDRS = [
+  '23.235.32.0/20',
+  '43.249.72.0/22',
+  '103.244.50.0/24',
+  '103.245.222.0/23',
+  '103.245.224.0/24',
+  '104.156.80.0/20',
+  '140.248.64.0/18',
+  '140.248.128.0/17',
+  '146.75.0.0/17',
+  '151.101.0.0/16',
+  '157.52.64.0/18',
+  '167.82.0.0/17',
+  '167.82.128.0/20',
+  '167.82.160.0/20',
+  '167.82.224.0/20',
+  '172.111.64.0/18',
+  '185.31.16.0/22',
+  '199.27.72.0/21',
+  '199.232.0.0/16',
+] as const
+
+type Ipv4Range = { network: number; mask: number }
+
+/**
+ * Compiled IPv4 CIDR ranges.
+ * @param cidrs - dotted prefixes with mask length.
+ * @returns network and mask pairs.
+ */
+function ipv4CidrsToRanges(cidrs: readonly string[]): Ipv4Range[] {
+  return cidrs.map((cidr) => {
+    const slash = cidr.indexOf('/')
+    const prefix = Number(cidr.slice(slash + 1))
+    const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
+    return { network: ipv4ToInt(cidr.slice(0, slash)) & mask, mask }
+  })
+}
+
+const CLOUDFLARE_IPV4_RANGES = ipv4CidrsToRanges(CLOUDFLARE_IPV4_CIDRS)
+const FASTLY_IPV4_RANGES = ipv4CidrsToRanges(FASTLY_IPV4_CIDRS)
 
 /**
  * Unsigned 32-bit value of a dotted IPv4.
@@ -243,6 +286,22 @@ function ipv4ToInt(ip: string): number {
 }
 
 /**
+ * Whether a value is a dotted IPv4 in one of the compiled ranges.
+ * @param value - raw or normalized IPv4.
+ * @param ranges - compiled network and mask pairs.
+ * @returns true when the address is in a range.
+ */
+function ipv4InRanges(value: string, ranges: readonly Ipv4Range[]): boolean {
+  const ip = normalizeIdentityValue('ip', value)
+  if (ip === undefined || !DOTTED_IPV4.test(ip)) return false
+  const n = ipv4ToInt(ip)
+  for (const range of ranges) {
+    if ((n & range.mask) === range.network) return true
+  }
+  return false
+}
+
+/**
  * Whether an IPv4 is in a published Cloudflare anycast prefix,
  * including `104.16.0.0/13`. Customer hostnames on those dests are
  * still CDN. Generic VPS / hosting dests are false. Live-case gold
@@ -251,13 +310,19 @@ function ipv4ToInt(ip: string): number {
  * @returns true when the address is in a published Cloudflare prefix.
  */
 export function isCloudflareIpv4(value: string): boolean {
-  const ip = normalizeIdentityValue('ip', value)
-  if (ip === undefined || !DOTTED_IPV4.test(ip)) return false
-  const n = ipv4ToInt(ip)
-  for (const range of CLOUDFLARE_IPV4_RANGES) {
-    if ((n & range.mask) === range.network) return true
-  }
-  return false
+  return ipv4InRanges(value, CLOUDFLARE_IPV4_RANGES)
+}
+
+/**
+ * Whether an IPv4 is in a published Fastly anycast prefix, including
+ * `151.101.0.0/16` and `199.232.0.0/16`. Customer hostnames on those
+ * dests are still CDN. Generic VPS / hosting dests are false.
+ * Live-case gold IPs are not listed.
+ * @param value - raw or normalized IPv4.
+ * @returns true when the address is in a published Fastly prefix.
+ */
+export function isFastlyIpv4(value: string): boolean {
+  return ipv4InRanges(value, FASTLY_IPV4_RANGES)
 }
 
 /**

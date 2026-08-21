@@ -1,0 +1,43 @@
+# Agent Note: Omit Fastly IPv4 dests from accepted C2 persist
+
+Status: implemented
+
+English | [中文](2026-08-21-omit-fastly-ipv4-c2-dests.zh.md)
+
+## Problem
+
+After [hostname-suffix CDN/update omit](2026-08-21-refuse-cdn-update-c2.md) and [Cloudflare IPv4 omit](2026-08-21-omit-cloudflare-ipv4-c2-dests.md), a leftover extra dest in a published Fastly IPv4 prefix can still persist. The conversation often has no `fastly.net` hostname — the dest is Fastly anycast serving a customer domain, or hostname evidence is missing at bind time — so `isCdnOrUpdateName` is false. `acceptedC2Ips` keeps the dest. `acceptedC2Domain` first-wins that customer name and skips a later dotted name evidenced on a remaining non-CDN dest. Who/where stay victim-only; the C2 extras are wrong.
+
+Adding another one-off hostname suffix does not fix a Fastly dest with no SNI. A single Fastly IPv4 one-off does not fix the next leftover in the same published prefix.
+
+## Decision
+
+`isFastlyIpv4` matches the published Fastly IPv4 anycast prefixes ([Fastly public IP list](https://api.fastly.com/public-ip-list)), including `151.101.0.0/16` and `199.232.0.0/16`. A dest in those ranges is CDN even when the evidenced hostname is a customer domain or missing. Generic VPS / hosting ranges are not this check. Live-case gold IPs are not listed. `isCdnOrUpdateName` stays suffix-only; `fastly.net` stays on the hostname list. `isCloudflareIpv4` stays the Cloudflare prefix matcher.
+
+`acceptedC2Ips` omits a published Fastly dest — bound C2 included — the same way it omits a dest whose evidenced hostname is CDN/update or whose IPv4 is Cloudflare. Persist is the attested extra-wan set, including unnamed dests that survive those omits ([persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)). `acceptedC2Domain` / `projectCaseReport` persist the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested dest. A hostname evidenced only on a dropped Fastly dest does not win. Who/where stay the victim row.
+
+`resolveBind` treats a unique non-LAN C2 in a published Fastly prefix as unbound, with the same deny text as a CDN/update hostname. A replacement C2 is not invented. extra-wan and c2-domain are not issued.
+
+[Refuse CDN/update C2](2026-08-21-refuse-cdn-update-c2.md) still owns the hostname-suffix list. [Omit Cloudflare IPv4 C2 dests](2026-08-21-omit-cloudflare-ipv4-c2-dests.md) still owns Cloudflare prefixes. Scout, leftover-report bans, identity leftover, authenticatoor.org selection, Mission/Plan gates, persist-unnamed width, and 45.125 clipping stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, Fastly-range fixtures `151.101.1.1` / `199.232.0.1` with `cdn-customer.example.test`, extra WAN `203.0.113.50` with `payload.example.test`, and LAN DC.
+
+## Alternatives considered
+
+**Add another one-off hostname suffix for the customer domain or `fastly.net`.** Rejected: bind-time leftover often has no Fastly hostname; the dest is still Fastly anycast.
+
+**Bake a single Fastly IPv4 into harness code or tests.** Rejected: the next leftover in the same published prefix would miss. Tests use documented range members `151.101.1.1` and `199.232.0.1`, not live-case gold IPs.
+
+**Treat every VPS / generic-hosting dest as CDN.** Rejected: a non-Fastly extra WAN dest must still persist its dotted name.
+
+**Key every CDN omit off IPv4 ranges.** Rejected for Microsoft, Akamai, and software-update dests: those anycast ranges move and the hostname suffix is the evidence. Published Fastly prefixes are the same exception as Cloudflare: a customer hostname on those dests is not `fastly.net`.
+
+**Retune Cloudflare prefixes, akamaized.net, persist-unnamed, dest-wins-when-second-c2, unique-collapse, refuse-complete, identity leftover, or authenticatoor.org selection.** Rejected: those knobs already hit or are separate leftovers.
+
+**Teach only the methodology prompt.** Rejected: leftover extras would still persist the Fastly dest.
+
+## Testing
+
+`packages/analyst/investigation/tests/harvest.spec.ts` pins `isFastlyIpv4` on `151.101.1.1` / `151.101.0.0` / `151.101.255.255` / `23.235.32.0` / `23.235.47.255` / `199.232.0.1` and keeps TEST-NET, `203.0.113.50`, `151.100.255.255`, `199.231.255.255`, Cloudflare fixture `104.16.1.1`, and `cdn-customer.example.test` off. `isCloudflareIpv4('151.101.1.1')` stays false. `isCdnOrUpdateName('a.fastly.net')` stays true and `isCdnOrUpdateName('cdn-customer.example.test')` stays false. `bind.spec.ts` denies `10.0.10.2` ↔ `151.101.1.1` with or without `cdn-customer.example.test` evidenced on that dest, denies `10.0.10.2` ↔ `199.232.0.1` with no hostname, drops those dests from `acceptedC2Ips`, and persists later `payload.example.test` from remaining C2 `198.51.100.80` or extra WAN `203.0.113.50`. Who/where hostname stays `lan-host`. Existing microsoft / msn / bing / sfx / akamai / akamaized / Cloudflare omit stays.
+
+## Consequences
+
+A dest in a published Fastly IPv4 prefix drops from `c2_ips` even when its hostname is a customer domain or missing. A hostname evidenced only on that dest does not win `c2_domain`. A later (or earlier) dotted name evidenced on a remaining non-CDN dest persists. Bound C2 with no CDN name and no Cloudflare or Fastly IP stays. Who/where stay the victim row.

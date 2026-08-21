@@ -794,6 +794,86 @@ describe('BindRelationship', () => {
     ])).toBe(PAYLOAD)
   })
 
+  it('omits Fastly-range dests and prefers a later non-CDN dotted name', () => {
+    const FASTLY_DEST = '151.101.1.1'
+    const FASTLY_CUSTOMER = 'cdn-customer.example.test'
+    const live = bind()
+    const fastlyHost = { ...identityOf('hostname', FASTLY_CUSTOMER)!, evidence_id: FASTLY_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const payloadOnExtra = { ...identityOf('hostname', PAYLOAD)!, evidence_id: EXTRA_WAN }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', FASTLY_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', UNNAMED_WAN)!, evidence_id: LAN },
+      victimHost,
+      fastlyHost,
+      payloadOnC2,
+      payloadOnExtra,
+    ]
+    expect(resolveBind({
+      relationship: { ...relationship, dst: FASTLY_DEST, evidence_id: 'conv-fastly' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${FASTLY_DEST}` }],
+    })).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: { ...relationship, dst: FASTLY_DEST, evidence_id: 'conv-fastly' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${FASTLY_DEST}` }],
+    }, [fastlyHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: { ...relationship, dst: '199.232.0.1', evidence_id: 'conv-fastly-232' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to 199.232.0.1` }],
+    })).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(acceptedC2Ips(live, [
+      { ...identityOf('ip', '199.232.0.1')!, evidence_id: LAN },
+    ])).toEqual([C2])
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(C2)
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
+    expect(acceptedC2Ips(live, identities)).not.toContain(FASTLY_DEST)
+    expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === FASTLY_DEST))
+      .toBe(false)
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, identities)).not.toBe(FASTLY_CUSTOMER)
+    expect(acceptedC2Domain(live, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      fastlyHost,
+      payloadOnExtra,
+      victimHost,
+    ])).toBe(PAYLOAD)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(report.c2_ips).toContain(UNNAMED_WAN)
+    expect(report.c2_ips).not.toContain(FASTLY_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(FASTLY_CUSTOMER)
+    expect(report.where.hostname).not.toBe(FASTLY_CUSTOMER)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+    const boundFastly = bind({
+      relationship: { ...relationship, dst: FASTLY_DEST, evidence_id: 'conv-fastly' },
+      endpoints: [
+        { addr: LAN, role: 'victim', because: `${LAN} talking to ${FASTLY_DEST}` },
+        { addr: FASTLY_DEST, role: 'c2', because: 'cue/observation address' },
+      ],
+    })
+    expect(acceptedC2Ips(boundFastly, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      fastlyHost,
+      payloadOnExtra,
+    ])).toEqual([EXTRA_WAN])
+    expect(acceptedC2Domain(boundFastly, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      fastlyHost,
+      payloadOnExtra,
+    ])).toBe(PAYLOAD)
+  })
+
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
     const live = bind()
     expect(caseReportDenyReason({ what: 'x' }, undefined)).toBe(UNBOUND_REASON)
