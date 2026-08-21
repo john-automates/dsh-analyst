@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   decodeUtf16LeHex, harvestIdentities, hostnamesEvidencedOnIp, identityKey, identityOf,
-  IDENTITY_LABELS, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName, normalizeIdentityValue,
+  IDENTITY_LABELS, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName, isCloudflareIpv4,
+  normalizeIdentityValue,
   regexCapture,
 } from '../src/harvest.ts'
 
@@ -474,9 +475,22 @@ describe('identity harvest', () => {
     expect(isCdnOrUpdateName('evilmicrosoftonline.com')).toBe(false)
     expect(isCdnOrUpdateName('microsoftonline.com.evil.test')).toBe(false)
     expect(isCdnOrUpdateName('sfx.ms.evil.test')).toBe(false)
+    expect(isCdnOrUpdateName('evilcloudflare.com')).toBe(false)
+    expect(isCdnOrUpdateName('cdn-customer.example.test')).toBe(false)
     expect(isCdnOrUpdateName('lan-host')).toBe(false)
     expect(isCdnOrUpdateName(C2)).toBe(false)
     expect(isCdnOrUpdateName('')).toBe(false)
+    const CF_DEST = '104.16.1.1'
+    expect(isCloudflareIpv4(CF_DEST)).toBe(true)
+    expect(isCloudflareIpv4('104.16.0.0')).toBe(true)
+    expect(isCloudflareIpv4('104.23.255.255')).toBe(true)
+    expect(isCloudflareIpv4('172.64.0.1')).toBe(true)
+    expect(isCloudflareIpv4('104.15.255.255')).toBe(false)
+    expect(isCloudflareIpv4(C2)).toBe(false)
+    expect(isCloudflareIpv4('203.0.113.50')).toBe(false)
+    expect(isCloudflareIpv4('10.0.10.2')).toBe(false)
+    expect(isCloudflareIpv4('cdn-customer.example.test')).toBe(false)
+    expect(isCloudflareIpv4('')).toBe(false)
     const cdnDest = '203.0.113.80'
     const harvested = { ...identityOf('hostname', 'update.microsoft.com')!, evidence_id: cdnDest }
     expect(hostnamesEvidencedOnIp(cdnDest, [harvested])).toEqual(['update.microsoft.com'])

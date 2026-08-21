@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-omit-cloudflare-ipv4-c2-dests.md
+2026-08-21-omit-cloudflare-ipv4-c2-dests.md: 57002d0aa4dca87fa260b63a3f11e5bfff5c255d
+2026-08-21-omit-cloudflare-ipv4-c2-dests.zh.md: 69798cde37529d2d7dc1da28fbfead576e5d1513
