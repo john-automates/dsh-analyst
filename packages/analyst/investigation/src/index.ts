@@ -47,7 +47,7 @@ import { formatLedger } from './ledger.ts'
 import {
   actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
   foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt, killedHypothesisIds,
-  planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
+  namedLiveCue, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
   sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
@@ -74,7 +74,7 @@ export { formatLedger } from './ledger.ts'
 export {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_CLOSED_MEANS,
   CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
-  isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason,
+  isBelieveBecauseClaim, killedHypothesisIds, namedLiveCue, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
   projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
@@ -109,7 +109,7 @@ export const METHODOLOGY_SECTION = [
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
   'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Mission scopes the case. Auto-hunts run after Plan is ready, including a named cue that is valid or explicitly open. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
-  'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative.',
+  'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
   'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
@@ -557,13 +557,16 @@ export class Investigation extends Service {
         'Each hypothesis is I believe X because Y plus a disconfirm test.',
         'Candidate labels are victim, c2, dc, cdn, update, distractor.',
         'Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan.',
+        'After a named live cue, omitted inventory defaults to the case capture when one exists.',
+        'Empty inventory is not a finished Plan.',
         'Answers generate more questions. This call appends; it does not replace.',
       ].join(' '),
       parameters: {
         inventory: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Sources that can attest.',
+          description:
+            'Sources that can attest. After a named live cue, omitted or empty inventory defaults to the case capture when one exists.',
         },
         gaps: {
           type: 'array',
@@ -609,11 +612,16 @@ export class Investigation extends Service {
           text: `Plan appended: ${value.hypotheses} hypotheses, ${value.inventory} inventory, ${value.gaps} gaps.`,
         }],
       },
-      execute: (args, exec) => {
+      execute: async (args, exec) => {
         if (exec.agent === undefined) throw new Error('investigation_plan requires an owning agent session')
         const entry: InvestigationPlanEntry = {}
-        const inventory = (args.inventory ?? []).map(item => item.trim()).filter(item => item !== '')
+        let inventory = (args.inventory ?? []).map(item => item.trim()).filter(item => item !== '')
         const gaps = (args.gaps ?? []).map(item => item.trim()).filter(item => item !== '')
+        if (inventory.length === 0 && namedLiveCue(foldMission(exec.agent.session.events))) {
+          // After a live cue, omitted inventory attests the case capture when one exists.
+          const capture = await caseCapturePath(this.caseDir)
+          if (capture !== undefined) inventory = [capture]
+        }
         if (inventory.length > 0) entry.inventory = inventory
         if (gaps.length > 0) entry.gaps = gaps
         if (args.hypotheses !== undefined && args.hypotheses.length > 0) {
@@ -1143,6 +1151,16 @@ async function capturePathForAutoRun(caseDir: string, exec: ToolExecution): Prom
   if (fromExec !== undefined && CAPTURE_EXTENSIONS.has(extname(fromExec).toLowerCase())) {
     return fromExec
   }
+  return caseCapturePath(caseDir)
+}
+
+/**
+ * Case capture for attest inventory and auto-run: first `*.pcap` /
+ * `*.pcapng` / `*.cap` under `evidence/`, else the case root.
+ * @param caseDir - absolute case directory.
+ * @returns a case-relative capture path, or undefined when none exists.
+ */
+async function caseCapturePath(caseDir: string): Promise<string | undefined> {
   const evidence = await firstCaptureIn(join(caseDir, 'evidence'), 'evidence')
   if (evidence !== undefined) return evidence
   return firstCaptureIn(caseDir, '')

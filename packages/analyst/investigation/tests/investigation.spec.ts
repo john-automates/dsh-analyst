@@ -14,7 +14,7 @@ import Investigation, {
   CLOSE_FILE_REASON, Config, foldActions, foldExtras,
   foldHunts, foldIdentities, foldMission, foldPlan, foldReport, METHODOLOGY_SECTION,
   CUE_PENDING_REASON, PLAN_ALTERNATIVE_REASON,
-  PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, requireCaseReport, resolveCaseDir,
+  PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, planReady, requireCaseReport, resolveCaseDir,
   setsWhoWhere,
 } from '../src/index.ts'
 import { stampReadyMindset } from './mindset-fixture.ts'
@@ -455,6 +455,10 @@ describe('investigation service', () => {
       'The chassis stamps Mission as a victim-identity + C2 investigation.',
     )
     expect(METHODOLOGY_SECTION).toContain('Auto-hunts run after Plan is ready')
+    expect(METHODOLOGY_SECTION).toContain(
+      'After a named live cue, omitted inventory defaults to the case capture when one exists.',
+    )
+    expect(METHODOLOGY_SECTION).toContain('Empty inventory is not a finished Plan.')
     expect(METHODOLOGY_SECTION).toContain(
       'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
     )
@@ -2564,6 +2568,131 @@ describe('investigation service', () => {
     expect(noInventory.isError).toBe(true)
     expect(noInventory.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
       PLAN_INVENTORY_REASON,
+    )
+  })
+
+  it('defaults omitted Plan inventory to the case capture after a named live cue', async () => {
+    const bindArgs = {
+      src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+    }
+    const hypotheses = [{
+      id: 'h-c2',
+      claim: 'I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue',
+      disconfirm: 'SNI is a CDN or update name',
+      label: 'c2',
+    }, {
+      id: 'h-cdn',
+      claim: 'I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there',
+      disconfirm: 'a non-CDN dotted name is evidenced on that IP',
+      label: 'cdn',
+    }]
+    const missionArgs = {
+      purpose: CHASSIS_MISSION_PURPOSE,
+      cue_addr: '198.51.100.80',
+      cue_evidence_id: 'conv-1',
+      cue_validation: 'valid',
+    }
+
+    const { ctx, caseDir, owner } = await setup({}, { mindset: false })
+    await writeFile(join(caseDir, 'capture.pcap'), 'pcap')
+    const cue = await ctx.tools.execute({
+      signal, callId: CallId('mission-live-cue'), name: 'investigation_mission',
+      arguments: missionArgs, agent: owner,
+    })
+    expect(cue.isError).toBe(false)
+    const omitted = await ctx.tools.execute({
+      signal, callId: CallId('plan-omit-inventory'), name: 'investigation_plan',
+      arguments: { hypotheses }, agent: owner,
+    })
+    expect(omitted.isError).toBe(false)
+    expect(foldPlan(owner.session.events).inventory).toEqual(['capture.pcap'])
+    expect(planReady(foldMission(owner.session.events), foldPlan(owner.session.events))).toBe(true)
+    const bound = await ctx.tools.execute({
+      signal, callId: CallId('bind-defaulted-inventory'), name: 'bind_relationship',
+      arguments: bindArgs, agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(bound.content.map(block => 'text' in block ? block.text : '').join(''))
+      .not.toContain(PLAN_INVENTORY_REASON)
+
+    const { ctx: ctxEmpty, owner: ownerEmpty } = await setup({}, { mindset: false })
+    const emptyCue = await ctxEmpty.tools.execute({
+      signal, callId: CallId('mission-empty-inventory'), name: 'investigation_mission',
+      arguments: { ...missionArgs, cue_validation: 'open' }, agent: ownerEmpty,
+    })
+    expect(emptyCue.isError).toBe(false)
+    const emptyInv = await ctxEmpty.tools.execute({
+      signal, callId: CallId('plan-empty-inventory'), name: 'investigation_plan',
+      arguments: { inventory: [], hypotheses }, agent: ownerEmpty,
+    })
+    expect(emptyInv.isError).toBe(false)
+    expect(foldPlan(ownerEmpty.session.events).inventory).toEqual([])
+    expect(planReady(foldMission(ownerEmpty.session.events), foldPlan(ownerEmpty.session.events)))
+      .toBe(false)
+    const noCapture = await ctxEmpty.tools.execute({
+      signal, callId: CallId('bind-empty-inventory'), name: 'bind_relationship',
+      arguments: bindArgs, agent: ownerEmpty,
+    })
+    expect(noCapture.isError).toBe(true)
+    expect(noCapture.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      PLAN_INVENTORY_REASON,
+    )
+
+    const { ctx: ctxKeep, caseDir: keepDir, owner: ownerKeep } = await setup({}, { mindset: false })
+    await writeFile(join(keepDir, 'capture.pcap'), 'pcap')
+    const keepCue = await ctxKeep.tools.execute({
+      signal, callId: CallId('mission-keep-inventory'), name: 'investigation_mission',
+      arguments: missionArgs, agent: ownerKeep,
+    })
+    expect(keepCue.isError).toBe(false)
+    const kept = await ctxKeep.tools.execute({
+      signal, callId: CallId('plan-keep-inventory'), name: 'investigation_plan',
+      arguments: { inventory: ['notes/a.md'], hypotheses }, agent: ownerKeep,
+    })
+    expect(kept.isError).toBe(false)
+    expect(foldPlan(ownerKeep.session.events).inventory).toEqual(['notes/a.md'])
+
+    const { ctx: ctxC2, caseDir: c2Dir, owner: ownerC2 } = await setup({}, { mindset: false })
+    await writeFile(join(c2Dir, 'capture.pcap'), 'pcap')
+    await ctxC2.tools.execute({
+      signal, callId: CallId('mission-c2-gate'), name: 'investigation_mission',
+      arguments: missionArgs, agent: ownerC2,
+    })
+    const noC2 = await ctxC2.tools.execute({
+      signal, callId: CallId('plan-no-c2'), name: 'investigation_plan',
+      arguments: { hypotheses: [hypotheses[1]!] }, agent: ownerC2,
+    })
+    expect(noC2.isError).toBe(false)
+    expect(foldPlan(ownerC2.session.events).inventory).toEqual(['capture.pcap'])
+    const denyC2 = await ctxC2.tools.execute({
+      signal, callId: CallId('bind-no-c2'), name: 'bind_relationship',
+      arguments: bindArgs, agent: ownerC2,
+    })
+    expect(denyC2.isError).toBe(true)
+    expect(denyC2.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      PLAN_C2_HYPOTHESIS_REASON,
+    )
+
+    const { ctx: ctxAlt, caseDir: altDir, owner: ownerAlt } = await setup({}, { mindset: false })
+    await writeFile(join(altDir, 'capture.pcap'), 'pcap')
+    await ctxAlt.tools.execute({
+      signal, callId: CallId('mission-alt-gate'), name: 'investigation_mission',
+      arguments: missionArgs, agent: ownerAlt,
+    })
+    const noAlt = await ctxAlt.tools.execute({
+      signal, callId: CallId('plan-no-alt'), name: 'investigation_plan',
+      arguments: { hypotheses: [hypotheses[0]!] }, agent: ownerAlt,
+    })
+    expect(noAlt.isError).toBe(false)
+    expect(foldPlan(ownerAlt.session.events).inventory).toEqual(['capture.pcap'])
+    const denyAlt = await ctxAlt.tools.execute({
+      signal, callId: CallId('bind-no-alt-after-inventory'), name: 'bind_relationship',
+      arguments: bindArgs, agent: ownerAlt,
+    })
+    expect(denyAlt.isError).toBe(true)
+    expect(denyAlt.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      PLAN_ALTERNATIVE_REASON,
     )
   })
 

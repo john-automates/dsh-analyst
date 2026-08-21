@@ -3,7 +3,8 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_MISSION_PURPOSE,
   CUE_INVALID_REASON, CUE_PENDING_REASON, foldActions, foldExtras, foldMission, foldPlan,
-  hypothesisIdForHunt, isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason,
+  hypothesisIdForHunt, isBelieveBecauseClaim, killedHypothesisIds, namedLiveCue,
+  planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras,
   thesisForHuntDump,
@@ -181,6 +182,11 @@ describe('analyst mindset chassis', () => {
       ...readyPlan,
       hypotheses: [{ ...readyPlan.hypotheses[0]!, label: 'victim' }, readyPlan.hypotheses[1]!],
     })).toBe(PLAN_C2_HYPOTHESIS_REASON)
+    expect(namedLiveCue(undefined)).toBe(false)
+    expect(namedLiveCue(chassisMission())).toBe(false)
+    expect(namedLiveCue(mission({ cueValidation: 'invalid' }))).toBe(false)
+    expect(namedLiveCue(mission({ cueValidation: 'open' }))).toBe(true)
+    expect(namedLiveCue(mission())).toBe(true)
     expect(planReady(mission({ cueValidation: 'open' }), readyPlan)).toBe(true)
     expect(planReady(mission(), readyPlan)).toBe(true)
     expect(planReadyDenyReason(undefined, { inventory: [], gaps: [], hypotheses: [] }))
