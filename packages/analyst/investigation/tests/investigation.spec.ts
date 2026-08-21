@@ -16,6 +16,7 @@ import Investigation, {
   CUE_PENDING_REASON, PLAN_ALTERNATIVE_REASON, defaultOpenAlternative,
   PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, planReady, requireCaseReport, resolveCaseDir,
   setsWhoWhere, COMPLETE_CUE_PENDING_REASON, COMPLETE_PLAN_NOT_READY_REASON,
+  COMPLETE_UNBOUND_WORKSTATION_PREFIX, completeUnboundWorkstationReason,
 } from '../src/index.ts'
 import { stampReadyMindset } from './mindset-fixture.ts'
 
@@ -2891,6 +2892,82 @@ describe('investigation service', () => {
     expect(planReady(foldMission(owner.session.events), foldPlan(owner.session.events))).toBe(true)
     await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
     expect(steered).toEqual([])
+  })
+
+  it('refuses turn/end complete after a live bind while a harvested LAN workstation is unbound', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.8', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host-b', label: 'hostname', evidence_id: '10.0.10.8',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.3', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname',
+      value: '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan',
+      label: 'hostname',
+      evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })
+    const steered = attachSteer(owner)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
+    const reason = completeUnboundWorkstationReason([
+      { ip: '10.0.10.8', hostname: 'lan-host-b' },
+    ])
+    expect(reason).toContain(COMPLETE_UNBOUND_WORKSTATION_PREFIX)
+    expect(steered).toHaveLength(1)
+    expect(steered[0]?.content).toEqual([{ type: 'text', text: reason }])
+    expect(foldReport(owner.session.events)).toBeUndefined()
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.8', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:01:00Z',
+        evidence_id: 'conv-2',
+      },
+      endpoints: [
+        { addr: '10.0.10.8', role: 'victim', because: '10.0.10.8 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })
+    const afterBind = attachSteer(owner)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 2, signal })
+    expect(afterBind).toEqual([])
+    expect(foldReport(owner.session.events)).toBeUndefined()
+  })
+
+  it('allows turn/end complete after one bind when only DC/infra leftover remains', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.3', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname',
+      value: '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan',
+      label: 'hostname',
+      evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+        { addr: '10.0.10.3', role: 'infra', because: 'dc' },
+      ],
+    })
+    const steered = attachSteer(owner)
+    await ctx.serial('agent/turn-stopping', { agent: owner, turn: 1, signal })
+    expect(steered).toEqual([])
+    expect(foldReport(owner.session.events)).toBeUndefined()
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

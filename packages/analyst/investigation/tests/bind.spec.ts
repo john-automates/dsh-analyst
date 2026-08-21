@@ -3,10 +3,11 @@ import {
   acceptedC2Domain, acceptedC2Ips, BOTH_LAN_CONVERSATION_REASON, boundC2Ipv4,
   caseReportDenyReason, CDN_C2_REASON, c2DomainHuntForBind, c2DomainHuntsForBind,
   completeAcceptedSlot, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON,
-  extraWanHuntForBind, foldBind, foldPublishedVictimRows, formatRolesCard,
+  extraWanHuntForBind, foldBind, foldBinds, foldPublishedVictimRows, formatRolesCard,
   identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON, mergePublishedVictimRows,
   normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
-  publishedVictimRows, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
+  publishedVictimRows, requireCaseReport, resolveBind, roleForIdentity,
+  unboundHarvestedLanWorkstations, UNBOUND_REASON,
   VICTIM_COUNT_REASON, boundVictimSlot, victimRowKey, withPublishedVictimRows,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
@@ -899,6 +900,11 @@ describe('BindRelationship', () => {
       { type: 'investigation/bind', data: bind() },
       { type: 'investigation/bind', data: bind({ relationship: { ...relationship, evidence_id: 'conv-2' } }) },
     ])?.relationship.evidence_id).toBe('conv-2')
+    expect(foldBinds([])).toEqual([])
+    expect(foldBinds([
+      { type: 'investigation/bind', data: bind() },
+      { type: 'investigation/bind', data: bind({ relationship: { ...relationship, evidence_id: 'conv-2' } }) },
+    ]).map(item => item.relationship.evidence_id)).toEqual(['conv-1', 'conv-2'])
     expect(formatRolesCard(bind())).toContain('victim 10.0.10.2')
     expect(formatRolesCard(bind())).toContain('c2 198.51.100.80')
     expect(formatLedger([], [], undefined)).toBe('')
@@ -2790,5 +2796,73 @@ describe('BindRelationship', () => {
     expect(withPublishedVictimRows(first, []).victims).toBeUndefined()
     expect(foldPublishedVictimRows([])).toEqual([])
     expect(publishedVictimRows(first)).toEqual([first.who])
+  })
+
+  it('names unbound harvested LAN workstations and does not publish them as victims', () => {
+    const leftoverIds = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+      identityOf('ip', LAN2)!,
+      { ...identityOf('hostname', HOST2)!, evidence_id: LAN2 },
+      { ...identityOf('mac', CLIENT_MAC2)!, evidence_id: LAN2 },
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
+      { ...identityOf('hostname', AD_SRV)!, evidence_id: DISTRACTOR },
+    ]
+    const leftoverFrames = [
+      `eth.src: ${CLIENT_MAC2}\tip.src: ${LAN2}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    expect(unboundHarvestedLanWorkstations([], leftoverIds, leftoverFrames)).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], leftoverIds, leftoverFrames)).toEqual([
+      { ip: LAN2, hostname: HOST2 },
+    ])
+    const secondBind = bind({
+      relationship: {
+        src: LAN2, dst: C2B, dport: 443, t: '2026-08-21T00:01:00Z', evidence_id: 'conv-2',
+      },
+      endpoints: [
+        { addr: LAN2, role: 'victim', because: `${LAN2} talking to ${C2B}` },
+        { addr: C2B, role: 'c2', because: 'cue/observation address' },
+      ],
+    })
+    expect(unboundHarvestedLanWorkstations([bind(), secondBind], leftoverIds, leftoverFrames))
+      .toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
+      { ...identityOf('hostname', AD_SRV)!, evidence_id: DISTRACTOR },
+    ], leftoverFrames)).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: GATEWAY, role: 'infra', because: 'gateway' },
+        { addr: INFRA, role: 'infra', because: 'file-server' },
+      ],
+    })], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', GATEWAY)!,
+      identityOf('ip', INFRA)!,
+      { ...identityOf('hostname', 'filesrv')!, evidence_id: INFRA },
+    ])).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', LAN2)!,
+      { ...identityOf('user', USER2)!, evidence_id: LAN2 },
+    ])).toEqual([{ ip: LAN2, user: USER2 }])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', LAN2)!,
+      { ...identityOf('mac', CLIENT_MAC2)!, evidence_id: LAN2 },
+    ], `eth.src: ${CLIENT_MAC2}\tip.src: ${LAN2}`)).toEqual([{ ip: LAN2 }])
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const published = requireCaseReport(bind(), leftoverIds, claims)
+    expect(published.who.entity_id).toBe(LAN)
+    expect(published.who.hostname).toBe(HOST)
+    expect(published.who.ip).not.toBe(LAN2)
+    expect(published.who.hostname).not.toBe(HOST2)
+    expect(published.victims).toBeUndefined()
   })
 })

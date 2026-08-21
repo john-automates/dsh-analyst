@@ -12,7 +12,7 @@ Headless can treat a text-only model stop (`finish` kind=`stop`) as `turn/end` r
 
 `dsh-investigation` listens on `agent/turn-stopping`. When Mission is still cue-pending (`cueValidation` pending / open without a named cue) or `planReady` is false, it `steer()`s a plugin notice that names cue-pending and/or Plan not ready. The loop runs another step. `turn/end` `completed` is not appended. Headless does not exit 0 from that text-only stop.
 
-After a named live cue is persisted and `planReady` is true, the listener does not steer. Complete is allowed again. Bind, report, identity leftover, and extra-wan unique-collapse stay on their own checks.
+After a named live cue is persisted and `planReady` is true, this listener does not steer for cue-pending or Plan-not-ready. Complete is allowed on those grounds. After a live bind, [an unbound harvested LAN workstation](2026-08-21-refuse-complete-while-unbound-workstation.md) is a separate complete denial. Bind, report, identity leftover persist, and extra-wan unique-collapse stay on their own checks.
 
 `planReady` still requires a named live cue, a C2 hypothesis, a CDN/DC/update alternative, and attest inventory. This check does not invent a cue or Plan. Hunt, bind, and extras persist are unchanged.
 
@@ -36,4 +36,4 @@ After a named live cue is persisted and `planReady` is true, the listener does n
 
 ## Consequences
 
-A text-only stop after `pcap_info` cannot close a headless investigation as completed while Mission is cue-pending or Plan is not ready. The model sees why. After a named live cue and ready Plan, complete is allowed; later bind or report failure is unchanged.
+A text-only stop after `pcap_info` cannot close a headless investigation as completed while Mission is cue-pending or Plan is not ready. The model sees why. After a named live cue and ready Plan, this check allows complete; later bind or report failure is unchanged. An unbound harvested LAN workstation after a live bind is a separate check.

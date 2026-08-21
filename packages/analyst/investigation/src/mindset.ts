@@ -4,13 +4,17 @@
  * Thesis-revise is a scenario object, not a fourth IR phase.
  * The plugin stamps Mission at session start to scope the case.
  * Auto-hunts run only when Plan is ready. Bind needs a named C2 hypothesis.
- * A text-only stop is not complete while Mission is cue-pending or Plan is not ready.
+ * A text-only stop is not complete while Mission is cue-pending, Plan is
+ * not ready, or a live bind left a harvested LAN workstation unbound.
  *
  * @module @deepseek-ai/dsh-investigation/mindset
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { acceptedC2Domain, acceptedC2Ips } from './bind.ts'
+import {
+  acceptedC2Domain, acceptedC2Ips, unboundHarvestedLanWorkstations,
+  type HarvestedLanWorkstation,
+} from './bind.ts'
 import type {
   CaseReport, CaseReportExtras, Hunt, HuntKind, Identity, InvestigationAction,
   InvestigationHypothesis, InvestigationMission, InvestigationPlan,
@@ -57,6 +61,9 @@ export const COMPLETE_CUE_PENDING_REASON =
 /** Deny text when a text-only stop would close while Plan is not ready. */
 export const COMPLETE_PLAN_NOT_READY_REASON =
   'incomplete: Plan is not ready; persist a ready Plan before treating the investigation as complete.'
+
+/** Prefix of the text-only stop denial that names an unbound harvested LAN workstation. */
+export const COMPLETE_UNBOUND_WORKSTATION_PREFIX = 'incomplete: harvested LAN workstation'
 
 /** Alias of {@link PLAN_C2_HYPOTHESIS_REASON}. */
 export const PLAN_NOT_READY_REASON = PLAN_C2_HYPOTHESIS_REASON
@@ -277,20 +284,62 @@ export function planReadyDenyReason(
 }
 
 /**
+ * Ledger fold a text-only stop consults after Mission / Plan are ready.
+ * Omitted fields skip the leftover-workstation check.
+ */
+export interface CompleteDenyLedger {
+  /** Every recorded bind. Empty or omitted means no live bind yet. */
+  binds?: readonly RelationshipBind[]
+  /** Folded ledger identities. */
+  identities?: readonly Identity[]
+  /** Tool-result text for identity affiliation. */
+  evidenceText?: string
+}
+
+/**
  * Deny reason when a text-only stop may not close the investigation as complete.
- * Names cue-pending and/or Plan not ready. Hunt and bind denies stay on
- * {@link planReadyDenyReason}. Does not invent a cue or Plan.
+ * Names cue-pending and/or Plan not ready first. After a live bind, names an
+ * unbound harvested LAN workstation when one remains. Hunt and bind denies
+ * stay on {@link planReadyDenyReason}. Does not invent a cue, Plan, bind,
+ * or who/where row.
  * @param mission - last Mission, or undefined.
  * @param plan - folded Plan.
+ * @param ledger - recorded binds and identities, when a live bind may exist.
  * @returns a complete-deny reason, or undefined when complete may proceed.
  */
 export function completeDenyReason(
   mission: InvestigationMission | undefined,
   plan: InvestigationPlan,
+  ledger: CompleteDenyLedger = {},
 ): string | undefined {
-  if (planReady(mission, plan)) return undefined
-  if (cueSlotDenyReason(mission) === CUE_PENDING_REASON) return COMPLETE_CUE_PENDING_REASON
-  return COMPLETE_PLAN_NOT_READY_REASON
+  if (!planReady(mission, plan)) {
+    if (cueSlotDenyReason(mission) === CUE_PENDING_REASON) return COMPLETE_CUE_PENDING_REASON
+    return COMPLETE_PLAN_NOT_READY_REASON
+  }
+  const leftovers = unboundHarvestedLanWorkstations(
+    ledger.binds ?? [],
+    ledger.identities ?? [],
+    ledger.evidenceText ?? '',
+  )
+  if (leftovers.length === 0) return undefined
+  return completeUnboundWorkstationReason(leftovers)
+}
+
+/**
+ * Deny text that names leftover harvested LAN workstations.
+ * @param leftovers - unbound harvested workstations in first-seen order.
+ * @returns a complete-deny reason naming those leftovers.
+ */
+export function completeUnboundWorkstationReason(
+  leftovers: readonly HarvestedLanWorkstation[],
+): string {
+  const named = leftovers.map(item => (
+    item.hostname !== undefined ? `${item.ip} (${item.hostname})` : item.ip
+  ))
+  if (named.length === 1) {
+    return `${COMPLETE_UNBOUND_WORKSTATION_PREFIX} ${named[0]} remains unbound; bind_relationship that leftover before treating the investigation as complete.`
+  }
+  return `${COMPLETE_UNBOUND_WORKSTATION_PREFIX}s ${named.join(', ')} remain unbound; bind_relationship those leftovers before treating the investigation as complete.`
 }
 
 /**
