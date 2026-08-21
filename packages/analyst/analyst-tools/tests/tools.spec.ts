@@ -695,15 +695,48 @@ describe('analyst tools', () => {
     })
     expect(withC2.isError).toBe(true)
     expect(text(withC2)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
     const withDcMac = await ctx.tools.execute({
       signal,
       callId: CallId('report-labeled-dc-mac'),
       name: 'case_report',
-      arguments: { ...claims, who: `${labeledWho} / 02:00:00:00:00:0b` },
+      arguments: {
+        ...claims,
+        who: `${labeledWho} / 02:00:00:00:00:0b`,
+        where: `${sentenceWhere} / 02:00:00:00:00:0b`,
+      },
       agent: owner,
     })
-    expect(withDcMac.isError).toBe(true)
-    expect(text(withDcMac)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    expect(withDcMac.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.who).toEqual(projected)
+    expect(ctx.investigation.report(owner.session)?.where).toEqual(projected)
+    expect(ctx.investigation.report(owner.session)?.who.mac).not.toBe('02:00:00:00:00:0b')
+    expect(text(withDcMac)).not.toContain('02:00:00:00:00:0b')
+    const onlyDcMac = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-dc-mac-only'),
+      name: 'case_report',
+      arguments: { ...claims, who: '02:00:00:00:00:0b' },
+      agent: owner,
+    })
+    expect(onlyDcMac.isError).toBe(true)
+    expect(text(onlyDcMac)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const leftover = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-leftover'),
+      name: 'case_report',
+      arguments: { ...claims, who: `${labeledWho} leftover` },
+      agent: owner,
+    })
+    expect(leftover.isError).toBe(true)
+    expect(text(leftover)).toContain('unbound: assign victim vs c2 on the cited conversation.')
     const prose = await ctx.tools.execute({
       signal,
       callId: CallId('report-labeled-prose'),
@@ -721,14 +754,6 @@ describe('analyst tools', () => {
       agent: owner,
     })
     expect(result.isError).toBe(false)
-    const projected = {
-      entity_id: '10.0.10.2',
-      ip: '10.0.10.2',
-      mac: '02:00:00:00:00:0a',
-      hostname: 'lan-host',
-      user: 'lan-user',
-      full_name: 'Lan User',
-    }
     expect(ctx.investigation.report(owner.session)).toEqual({
       who: projected,
       what: 'beacon to 198.51.100.80',

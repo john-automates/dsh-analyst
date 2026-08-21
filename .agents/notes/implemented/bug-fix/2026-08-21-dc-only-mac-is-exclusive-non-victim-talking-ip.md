@@ -20,7 +20,7 @@ Fill omitted mac the same way: persist the unique ledger MAC that is not DC/gate
 
 A submitted or omitted DC/gateway NIC that only talks from the DC/idle host stays off. Do not drop ip, hostname, user, or `full_name`. Do not replace bound victim ip with a model-offered ip. Harvest stamps, bind accept/deny, and C2-domain persist stay.
 
-`offeredMacEvidencedOnVictim` / `omittedMacEvidencedOnVictim` use talking-IP exclusivity. `evidencedOnVictimIp` still owns donate and victim-IP-scoped dump affiliation.
+`offeredMacEvidencedOnVictim` / `omittedMacEvidencedOnVictim` use talking-IP exclusivity. `evidencedOnVictimIp` still owns donate and victim-IP-scoped dump affiliation. [Handle-string coerce](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md) uses the same DC/gateway-only test for a leftover MAC in labeled or sentence who/where.
 
 [Keep submitted victim MAC unless DC-only](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md) still keeps a submitted mac unless DC-only; this note owns the DC-only test. [Complete omitted victim-row mac and user](2026-08-21-complete-omitted-victim-mac-user.md) still fills omitted mac; uniqueness among unproven MACs stays the stray guard. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, idle or DC LAN row, and synthetic `CLIENT_MAC` vs DC/gateway `DISTRACTOR_MAC`.
 

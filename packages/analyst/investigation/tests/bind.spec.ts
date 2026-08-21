@@ -644,21 +644,29 @@ describe('BindRelationship', () => {
     expect(caseReportDenyReason({ who: `${labeledWho} / ${C2}` }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: `${labeledWho} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
-      .toBe(UNBOUND_REASON)
+      .toBeUndefined()
     expect(caseReportDenyReason({ where: `${sentenceWhere} talking to ${C2}` }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ where: `${sentenceWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
-      .toBe(UNBOUND_REASON)
+      .toBeUndefined()
     expect(caseReportDenyReason({ where: `${quotedWhere} talking to ${C2}` }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ where: `${quotedWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBeUndefined()
+    expect(caseReportDenyReason({ who: `${labeledWho} / ${DISTRACTOR_USER}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${sentenceWhere} / ${DISTRACTOR}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: `${labeledWho} leftover` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: DISTRACTOR_MAC }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: 'the workstation on the LAN' }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: ' () ' }, live, identities, evidence)).toBe(UNBOUND_REASON)
     const report = requireCaseReport(live, identities, claims, evidence, {
-      who: labeledWho,
-      where: quotedWhere,
+      who: `${labeledWho} / ${DISTRACTOR_MAC}`,
+      where: `${sentenceWhere} / ${DISTRACTOR_MAC}`,
     })
     expect(report.who).toEqual({
       entity_id: LAN,

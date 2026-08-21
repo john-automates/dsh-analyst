@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-case-report-labeled-victim-handle-strings.md
-2026-08-21-case-report-labeled-victim-handle-strings.md: 5e92d4b3cd747530113a8363eeb41194b2d9335f
-2026-08-21-case-report-labeled-victim-handle-strings.zh.md: eecb6257a5bfbccdd2b3a9a437bdab1d68142783
+2026-08-21-case-report-labeled-victim-handle-strings.md: 4fce011c8abb2aea0fe6bc219e0f7c936122b383
+2026-08-21-case-report-labeled-victim-handle-strings.zh.md: 7ab3a1bbec18e6481e3d5b94de3748edd9eb35b6

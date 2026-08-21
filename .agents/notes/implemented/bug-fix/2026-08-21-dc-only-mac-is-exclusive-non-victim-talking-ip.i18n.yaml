@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md
-2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md: 435875aa3af003f89feaa2b121b35b277056229b
-2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.zh.md: e4edad1b288a81c116a6a16a5df2c8623fd02214
+2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md: 3e52dc9748b3bfc1b970324ba90918a28a286110
+2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.zh.md: 8d194e7730f229dd48b127d77c3c0fac126bd260
