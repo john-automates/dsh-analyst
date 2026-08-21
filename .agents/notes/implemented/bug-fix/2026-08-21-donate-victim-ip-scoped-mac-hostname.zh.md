@@ -16,7 +16,7 @@ Status: implemented
 
 当前绑定之后，捐出证据落在被绑定 victim IP 上的 MAC 和主机名。
 
-持久化为 `evidence_id` 的 hunt 主体，或限定在该 IP 的工具结果行（`eth.src` 且 `ip.src ==` victim，`name-service` 且 `ip.addr ==` victim），把该 mac／hostname 归属到 victim。从 `eth-src` 或 `name-service` 转储记录 MAC 或主机名时，收割把 hunt 主体 IPv4 写入 `evidence_id`。全账本唯一性不会挡住受害端 IP 范围内的身份。持久化的 who/where 携带该 mac 和 hostname。
+持久化为 `evidence_id` 的 hunt 主体，或限定在该 IP 的工具结果行（`eth.src` 且 `ip.src ==` victim，`name-service` 且 `ip.addr ==` victim），把该 mac／hostname 归属到 victim。从 `name-service` 转储记录主机名时，收割把 hunt 主体写入 `evidence_id`。MAC 戳的是该行上的通信 IP，不是 hunt 主体；后来的帧把该 MAC 从来自 victim 的方向送出时，hunt 主体 `evidence_id` 不能否决捐出（[通信 IP 戳 MAC](2026-08-21-stamp-mac-evidence-from-talking-ip.md)）。全账本唯一性不会挡住受害端 IP 范围内的身份。持久化的 who/where 携带该 mac 和 hostname。
 
 证据落在另一 IP 上、或带有另一 `entity_id` 的 distractor 不进入。不会编造槽位。唯一未归属的用户和全名仍捐出。线索作为 victim 仍被拒绝，并仍下发 [other-end](2026-08-21-other-end-hunt-on-cue-victim.md)。[BindRelationship](../feature/2026-08-21-bind-relationship.md) 仍拥有结案前绑定。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体和空闲 LAN 行。
 

@@ -545,7 +545,7 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(ctx.investigation.identities(owner.session)).toEqual(expect.arrayContaining([
-      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
       { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
       { kind: 'mac', value: '02:00:00:00:00:0c', label: 'MAC' },
       { kind: 'hostname', value: 'other-host', label: 'hostname' },

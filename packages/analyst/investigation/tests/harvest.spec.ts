@@ -209,7 +209,7 @@ describe('identity harvest', () => {
     expect(emptyFieldDump.filter(item => item.kind === 'mac')).toEqual([])
   })
 
-  it('stamps hunt-subject evidence_id on mac and hostname and reads victim-IP-scoped lines', () => {
+  it('stamps MAC evidence_id from the talking IP, not the hunt-subject scopeIp', () => {
     const LAN_A = '10.0.10.2'
     const LAN_B = '10.0.10.3'
     const MAC_A = '02:00:00:00:00:0a'
@@ -226,6 +226,23 @@ describe('identity harvest', () => {
       { kind: 'hostname', value: HOST_A, label: 'hostname', evidence_id: LAN_A },
     ])
     expect(stamped.find(item => item.kind === 'ip')?.evidence_id).toBeUndefined()
+    const dcHunt = harvestIdentities(
+      `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,
+      `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,
+      LAN_B,
+    )
+    expect(dcHunt.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
+    ])
+    expect(dcHunt.filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: HOST_A, label: 'hostname', evidence_id: LAN_B },
+    ])
+    expect(harvestIdentities(`${LAN_A} → 198.51.100.80  ${MAC_A}`, `${LAN_A} → 198.51.100.80  ${MAC_A}`, LAN_B)
+      .find(item => item.kind === 'mac')).toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A })
+    expect(harvestIdentities(`ARP ${LAN_A} is at ${MAC_A}`, `ARP ${LAN_A} is at ${MAC_A}`, LAN_B)
+      .find(item => item.kind === 'mac')).toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A })
+    expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, LAN_B).find(item => item.kind === 'mac'))
+      .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC' })
     expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, '  ').find(item => item.kind === 'mac'))
       .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC' })
     const mac = identityOf('mac', MAC_A)!

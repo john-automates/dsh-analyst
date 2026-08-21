@@ -2,8 +2,9 @@
  * Extract unique labeled identities from tool-result text, including hostnames
  * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries. After a
  * C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
- * that IP. An `eth-src` / `name-service` hunt subject stamps `evidence_id` on
- * harvested MAC and hostname.
+ * that IP. A MAC stamps `evidence_id` from the talking IP that sources that
+ * eth.src on the line, not from an `eth-src` hunt subject. A `name-service`
+ * hunt subject still stamps `evidence_id` on hostname.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
@@ -105,8 +106,10 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
  * After `c2TalkingLanIps` finds a focus IP, a MAC is recorded only when it is
  * sourced from that IP (`ip.src`, outbound `focus → peer`, or ARP `is at`).
  * A bidirectional dump cannot persist the far-side NIC.
- * When `scopeIp` is an IPv4 (an `eth-src` / `name-service` hunt subject),
- * harvested MAC and hostname records carry that IP as `evidence_id`.
+ * A harvested MAC carries the talking IPv4 that sources that eth.src on the
+ * line as `evidence_id`. When `scopeIp` is an IPv4 hunt subject and that
+ * talking IP differs, the talking IP wins. A `name-service` hunt-subject
+ * `scopeIp` still stamps harvested hostname records.
  * @param text - rendered tool output being harvested.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @param scopeIp - hunt-subject IPv4 that scoped this dump, when known.
@@ -116,13 +119,18 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
   const seen = new Set<string>()
   const out: Identity[] = []
   const scope = scopeIp === undefined ? undefined : normalizeIdentityValue('ip', scopeIp)
-  const add = (kind: IdentityKind, value: string): void => {
+  const add = (kind: IdentityKind, value: string, talkingIp?: string): void => {
     const identity = identityOf(kind, value)
     if (identity === undefined) return
     const key = `${identity.kind}\0${identity.value}`
     if (seen.has(key)) return
     seen.add(key)
-    if (scope !== undefined && (kind === 'mac' || kind === 'hostname')) identity.evidence_id = scope
+    if (kind === 'mac') {
+      const talking = talkingIp === undefined ? undefined : normalizeIdentityValue('ip', talkingIp)
+      if (talking !== undefined) identity.evidence_id = talking
+    } else if (scope !== undefined && kind === 'hostname') {
+      identity.evidence_id = scope
+    }
     out.push(identity)
   }
 
@@ -194,27 +202,59 @@ export function ipsEvidencingIdentity(identity: Identity, text: string): string[
 /**
  * Record MACs. With no C2-talking focus, every MAC is kept. With a focus IP,
  * only a MAC sourced from that IP is kept; a bidirectional dump cannot persist
- * the far-side NIC.
+ * the far-side NIC. A kept MAC stamps the talking IP on its line when one
+ * sources that eth.src.
  */
 function harvestMacs(
   text: string,
   focusIps: ReadonlySet<string>,
-  add: (kind: IdentityKind, value: string) => void,
+  add: (kind: IdentityKind, value: string, talkingIp?: string) => void,
 ): void {
   if (focusIps.size === 0) {
+    for (const line of text.split(/\r?\n/)) {
+      const sourced = macSourcedFromTalkingIp(line)
+      if (sourced !== undefined) add('mac', sourced.mac, sourced.ip)
+    }
     for (const match of text.matchAll(MAC)) add('mac', match[0])
     return
   }
   let sourced = false
   for (const line of text.split(/\r?\n/)) {
-    const mac = macSourcedFromFocusIp(line, focusIps)
-    if (mac === undefined) continue
+    const found = macSourcedFromTalkingIp(line)
+    if (found === undefined || !focusIps.has(found.ip)) continue
     sourced = true
-    add('mac', mac)
+    add('mac', found.mac, found.ip)
   }
   if (sourced || hasIpv4(text)) return
   const majority = majorityLabeledEthSrc(text)
   if (majority !== undefined) add('mac', majority)
+}
+
+/**
+ * MAC on one line together with the talking IPv4 that sources that eth.src.
+ * Labeled `ip.src`, outbound `ip → peer`, or ARP `is at` qualify.
+ * Inbound `peer → focus` does not source the far-side NIC.
+ * @param line - one tool-output line.
+ * @returns the sourced MAC and talking IP, or undefined when this line has none.
+ */
+function macSourcedFromTalkingIp(line: string): { mac: string; ip: string } | undefined {
+  const ipSrc = labeledIpv4(line, IP_SRC_LABEL)
+  const ethSrc = labeledField(line, ETH_SRC_LABEL)
+  if (ipSrc !== undefined) {
+    const mac = ethSrc ?? firstMac(line)
+    return mac === undefined ? undefined : { mac, ip: ipSrc }
+  }
+  const arp = ARP_IS_AT.exec(line)
+  const arpIp = arp?.[1]
+  const arpMac = arp?.[2]
+  if (arpIp !== undefined && arpMac !== undefined) return { mac: arpMac, ip: arpIp }
+  const conversation = IP_CONVERSATION.exec(line)
+  const srcIp = conversation?.[1]
+  if (srcIp !== undefined) {
+    const mac = ethSrc ?? firstMac(line)
+    return mac === undefined ? undefined : { mac, ip: srcIp }
+  }
+  return undefined
 }
 
 /**
@@ -226,20 +266,9 @@ function harvestMacs(
  * @returns the sourced MAC, or undefined when this line has none.
  */
 function macSourcedFromFocusIp(line: string, focusIps: ReadonlySet<string>): string | undefined {
-  const ipSrc = labeledIpv4(line, IP_SRC_LABEL)
-  const ethSrc = labeledField(line, ETH_SRC_LABEL)
-  if (ipSrc !== undefined) {
-    if (!focusIps.has(ipSrc)) return undefined
-    return ethSrc ?? firstMac(line)
-  }
-  const arp = ARP_IS_AT.exec(line)
-  const arpIp = arp?.[1]
-  const arpMac = arp?.[2]
-  if (arpIp !== undefined && arpMac !== undefined && focusIps.has(arpIp)) return arpMac
-  const conversation = IP_CONVERSATION.exec(line)
-  const srcIp = conversation?.[1]
-  if (srcIp !== undefined && focusIps.has(srcIp)) return ethSrc ?? firstMac(line)
-  return undefined
+  const sourced = macSourcedFromTalkingIp(line)
+  if (sourced === undefined || !focusIps.has(sourced.ip)) return undefined
+  return sourced.mac
 }
 
 /**

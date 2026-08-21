@@ -499,4 +499,41 @@ describe('BindRelationship', () => {
       hostname: HOST,
     })
   })
+
+  it('donates a MAC first stamped on a DC hunt when later frames source it from the victim IP', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const frames = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    const identities = [identityOf('ip', LAN)!, clientMac, dcMac, victimHost]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(identityDonatesToVictim(clientMac, live, identities, frames)).toBe(true)
+    expect(identityDonatesToVictim(dcMac, live, identities, frames)).toBe(false)
+    expect(identityDonatesToVictim(victimHost, live, identities, frames)).toBe(true)
+    const report = requireCaseReport(live, identities, claims, frames)
+    expect(report.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+    })
+    expect(report.where).toEqual(report.who)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(roleForIdentity(clientMac, live, identities, frames)).toBe('victim')
+    expect(roleForIdentity(dcMac, live, identities, frames)).toBe('distractor')
+  })
 })
