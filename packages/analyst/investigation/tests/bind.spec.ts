@@ -566,6 +566,116 @@ describe('BindRelationship', () => {
     expect(report.where).toEqual(projected)
   })
 
+  it('coerces labeled and sentence who/where strings onto the victim after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const dcDonated = {
+      ...identityOf('mac', CLIENT_MAC)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const dcHost = { ...identityOf('hostname', HOST)!, entity_id: DISTRACTOR }
+    const victimName = identityOf('full_name', FULL_NAME)!
+    const dcName = { ...identityOf('full_name', FULL_NAME)!, entity_id: DISTRACTOR }
+    const victimUser = {
+      ...identityOf('user', USER)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const stampedUser = {
+      ...identityOf('user', 'stamp-user')!,
+      evidence_id: LAN,
+      entity_id: DISTRACTOR,
+    }
+    const distractorUser = {
+      ...identityOf('user', DISTRACTOR_USER)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const identities = [
+      identityOf('ip', LAN)!, identityOf('ip', C2)!, dcDonated, dcMac, victimHost, dcHost,
+      victimName, dcName, victimUser, stampedUser, distractorUser,
+    ]
+    const frames = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+      `hostname: ${HOST}\tip.addr: ${LAN}`,
+    ].join('\n')
+    const conversations = [
+      `${LAN} → ${DISTRACTOR}  kerberos.CNameString: ${USER}`,
+      `ip.src: ${DISTRACTOR}\tkerberos.CNameString: ${DISTRACTOR_USER}`,
+    ].join('\n')
+    const evidence = `${frames}\n${conversations}`
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const labeledWho = `User Account: ${USER} / Full Name: ${FULL_NAME} / MAC Address: ${CLIENT_MAC}`
+    const labeledWhoWithHost = `${labeledWho} / Hostname: ${HOST}`
+    const sentenceWhere = `The infected host was identified as ${HOST} (${LAN})`
+    const quotedWhere = `The infected host was identified as ${LAN}, hostname "${HOST}"`
+    const quotedWhereSingle = `The infected host was identified as ${LAN}, hostname '${HOST}'`
+    expect(identityDonatesToVictim(dcDonated, live, identities, evidence)).toBe(false)
+    expect(identityDonatesToVictim(victimUser, live, identities, evidence)).toBe(false)
+    expect(caseReportDenyReason({
+      who: labeledWho,
+      where: sentenceWhere,
+    }, undefined, identities, evidence)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: labeledWho }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: `User Account: ${USER} / Full Name: ${FULL_NAME} / MAC Address: ${CLIENT_MAC.replace(/:/g, '-')}`,
+    }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ who: labeledWhoWithHost }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ where: sentenceWhere }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ where: quotedWhere }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ where: quotedWhereSingle }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: labeledWho,
+      where: quotedWhere,
+    }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ who: `${labeledWho} / ${C2}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: `${labeledWho} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${sentenceWhere} talking to ${C2}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${sentenceWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${quotedWhere} talking to ${C2}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${quotedWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: 'the workstation on the LAN' }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: ' () ' }, live, identities, evidence)).toBe(UNBOUND_REASON)
+    const report = requireCaseReport(live, identities, claims, evidence, {
+      who: labeledWho,
+      where: quotedWhere,
+    })
+    expect(report.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+    expect(report.where).toEqual(report.who)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(report.who.user).not.toBe(DISTRACTOR_USER)
+    expect(report.who).toMatchObject({
+      ip: LAN, hostname: HOST,
+    })
+  })
+
   it('completes the victim row from unique unaffiliated ledger identities after a live bind', () => {
     expect(resolveBind({
       relationship,

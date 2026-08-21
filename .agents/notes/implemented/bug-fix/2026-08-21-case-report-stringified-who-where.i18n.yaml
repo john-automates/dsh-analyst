@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-case-report-stringified-who-where.md
-2026-08-21-case-report-stringified-who-where.md: d9ae54048966f32571127279e59c493345ed06cc
-2026-08-21-case-report-stringified-who-where.zh.md: a9f7e1463f6ccb3918e0d7de8d56d90c24ed8386
+2026-08-21-case-report-stringified-who-where.md: bf2b7d05ef79a6668953afc091b5450dc680bc72
+2026-08-21-case-report-stringified-who-where.zh.md: aaed23285d41fd2b9225802f4b75d7ca9811cf83

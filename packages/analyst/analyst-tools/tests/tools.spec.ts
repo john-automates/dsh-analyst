@@ -598,6 +598,150 @@ describe('analyst tools', () => {
     expect(text(result)).toContain('Who: 10.0.10.2 lan-host lan-user Lan User')
   })
 
+  it('closes case_report when who/where are labeled or sentence victim-row strings after a live bind', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user',
+      value: 'lan-user',
+      label: 'user',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user',
+      value: 'idle-user',
+      label: 'user',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    const evidence = [
+      'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2',
+      'eth.src: 02:00:00:00:00:0b\tip.src: 10.0.10.3',
+      '10.0.10.2 → 10.0.10.3  kerberos.CNameString: lan-user',
+      'ip.src: 10.0.10.3\tkerberos.CNameString: idle-user',
+    ].join('\n')
+    owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-labeled-handle'),
+        content: [{ type: 'text', text: evidence }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const labeledWho = 'User Account: lan-user / Full Name: Lan User / MAC Address: 02:00:00:00:00:0a'
+    const sentenceWhere = 'The infected host was identified as lan-host (10.0.10.2)'
+    const handleSlots = {
+      ...claims,
+      who: labeledWho,
+      where: sentenceWhere,
+    }
+    const unbound = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-unbound'),
+      name: 'case_report',
+      arguments: handleSlots,
+      agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(text(unbound)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-labeled-handle'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const withC2 = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-c2'),
+      name: 'case_report',
+      arguments: { ...claims, who: `${labeledWho} / 198.51.100.80` },
+      agent: owner,
+    })
+    expect(withC2.isError).toBe(true)
+    expect(text(withC2)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const withDcMac = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-dc-mac'),
+      name: 'case_report',
+      arguments: { ...claims, who: `${labeledWho} / 02:00:00:00:00:0b` },
+      agent: owner,
+    })
+    expect(withDcMac.isError).toBe(true)
+    expect(text(withDcMac)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const prose = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-prose'),
+      name: 'case_report',
+      arguments: { ...claims, who: 'the workstation on the LAN' },
+      agent: owner,
+    })
+    expect(prose.isError).toBe(true)
+    expect(text(prose)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-labeled-handle'),
+      name: 'case_report',
+      arguments: handleSlots,
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    expect(text(result)).not.toContain('idle-user')
+  })
+
   it('persists the victim row from unique unaffiliated ledger identities after a live bind', async () => {
     const { ctx, owner } = await setup()
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })

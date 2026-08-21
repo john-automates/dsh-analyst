@@ -12,7 +12,7 @@ Live lumma-r4 (`59ccfdb`) bound the cited conversation correctly (LAN victim / e
 
 ## Decision
 
-`caseReportDenyReason` coerces a `who`/`where` value that is a JSON object string into that object before the free-text check. A live bind can then project `who.entity_id` from a victim-row user handle. The `case_report` schema accepts an object or a string so those arguments reach the deny instead of `INVALID_ARGS`. A string that is not a JSON object is then checked as victim-row handle text ([handle strings](2026-08-21-case-report-victim-handle-strings.md)). Unmatched free text remains unbound. No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
+`caseReportDenyReason` coerces a `who`/`where` value that is a JSON object string into that object before the free-text check. A live bind can then project `who.entity_id` from a victim-row user handle. The `case_report` schema accepts an object or a string so those arguments reach the deny instead of `INVALID_ARGS`. A string that is not a JSON object is then checked as victim-row handle text ([handle strings](2026-08-21-case-report-victim-handle-strings.md), [labeled handle strings](2026-08-21-case-report-labeled-victim-handle-strings.md)). Unmatched free text remains unbound. No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
 
 Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET peer, and a user on that victim row.
 

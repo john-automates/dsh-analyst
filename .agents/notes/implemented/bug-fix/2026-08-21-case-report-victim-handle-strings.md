@@ -12,7 +12,7 @@ Live lumma-r6 (`3880fd9`) bound the cited conversation twice, both correct (LAN 
 
 ## Decision
 
-After a live bind, `caseReportDenyReason` coerces a `who`/`where` string into `{ entity_id: victim.addr }` when every identity-like token in it is a victim-row handle (bound victim IP, or a ledger user / full_name / hostname / MAC that donates to that victim). The existing victim-row projection then writes the packet. JSON-object-string coerce stays first. No live bind still denies. A string that names the c2, a distractor, another IPv4, or unmatched prose stays unbound. Tokens are not swapped. `report.md` is not parsed. Slots are not invented.
+After a live bind, `caseReportDenyReason` coerces a `who`/`where` string into `{ entity_id: victim.addr }` when every identity token in it is a victim-row handle (bound victim IP, or a ledger user / full_name / hostname / MAC that donates to that victim or is evidenced on that victim). The existing victim-row projection then writes the packet. JSON-object-string coerce stays first. No live bind still denies. A string that names the c2, a distractor, another IPv4, or unmatched identity tokens stays unbound. Tokens are not swapped. `report.md` is not parsed. Slots are not invented. Labeled field names, sentence wrappers, multi-word `full_name` matching, and handles evidenced on the victim without donate are [labeled handle strings](2026-08-21-case-report-labeled-victim-handle-strings.md).
 
 Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET peer, and handles on that victim row.
 
