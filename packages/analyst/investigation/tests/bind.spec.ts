@@ -269,4 +269,27 @@ describe('BindRelationship', () => {
     expect(caseReportDenyReason({ who: { evidence_id: 'slot-c2' } }, bind(), [foreign])).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: { evidence_id: LAN } }, bind())).toBeUndefined()
   })
+
+  it('closes case_report when who.entity_id is the victim-row user', () => {
+    const live = bind()
+    const identities = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('user', USER)!, entity_id: LAN },
+    ]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(caseReportDenyReason({
+      who: { entity_id: USER },
+      where: { entity_id: LAN },
+    }, undefined, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: { entity_id: C2 } }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: { entity_id: '   ' } }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({
+      who: { entity_id: USER },
+      where: { entity_id: LAN },
+    }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({ where: { entity_id: USER } }, live, identities)).toBeUndefined()
+    const report = requireCaseReport(live, identities, claims)
+    expect(report.who).toEqual({ entity_id: LAN, ip: LAN, user: USER })
+    expect(report.where).toEqual({ entity_id: LAN, ip: LAN, user: USER })
+  })
 })

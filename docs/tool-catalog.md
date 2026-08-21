@@ -2326,23 +2326,23 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
     },
     "who": {
       "type": "object",
-      "description": "Optional victim entity_id. Must match the bound victim. Free-text who is denied.",
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text who is denied.",
       "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
-          "description": "Bound victim entity id."
+          "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
         }
       }
     },
     "where": {
       "type": "object",
-      "description": "Optional victim entity_id. Must match the bound victim. Free-text where is denied.",
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text where is denied.",
       "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
-          "description": "Bound victim entity id."
+          "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
         }
       }
     }

@@ -301,8 +301,10 @@ export function requireCaseReport(
 
 /**
  * Deny reason for case_report or an attempt to set who/where.
- * Missing bind, inverted entity_id, free-text who/where, and identity slots
- * whose evidence_id points at a non-victim all return {@link UNBOUND_REASON}.
+ * Missing bind, a non-victim or other IPv4 entity_id, free-text who/where,
+ * and identity slots whose evidence_id points at a non-victim all return
+ * {@link UNBOUND_REASON}. A user, hostname, MAC, or full_name is a victim-row
+ * handle, not an entity id; the persisted packet still uses the victim address.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -326,13 +328,28 @@ export function caseReportDenyReason(
     if (slot.entity_id !== undefined) {
       if (typeof slot.entity_id !== 'string') return UNBOUND_REASON
       const entityId = normalizeEndpointAddr(slot.entity_id)
-      if (entityId !== victim.addr) return UNBOUND_REASON
+      if (entityId === undefined) return UNBOUND_REASON
+      if (namesNonVictimEndpoint(entityId, bind)) return UNBOUND_REASON
     }
     if (typeof slot.evidence_id === 'string' && pointsAtNonVictim(slot.evidence_id, bind, identities)) {
       return UNBOUND_REASON
     }
   }
   return undefined
+}
+
+/**
+ * Whether a submitted entity_id names a non-victim conversation endpoint or
+ * another IPv4. Those values stay inverted or unbound. A user, hostname, MAC,
+ * or full_name is not an endpoint address.
+ * @param entityId - normalized submitted entity id.
+ * @param bind - live bind with exactly one victim.
+ * @returns true when the close must stay denied.
+ */
+function namesNonVictimEndpoint(entityId: string, bind: RelationshipBind): boolean {
+  const named = bind.endpoints.find(endpoint => endpoint.addr === entityId)
+  if (named !== undefined) return named.role !== 'victim'
+  return isIpv4(entityId)
 }
 
 /**
