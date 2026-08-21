@@ -448,7 +448,8 @@ function uniqueUnaffiliatedOfKind(
     && !affiliatedWithDifferentEntity(other, victim.addr, identities, evidenceText)
     && !pointsAtNonVictim(other.evidence_id, bind, identities)
   ))
-  return candidates.length === 1 && candidates[0].value === identity.value
+  const unique = candidates.length === 1 ? candidates[0] : undefined
+  return unique !== undefined && unique.value === identity.value
 }
 
 /**
