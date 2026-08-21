@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。被引用的会话必须包含线索或观测地址（[拒绝两端都在 LAN 的绑定](../bug-fix/2026-08-21-refuse-both-lan-bind.md)）。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；该拒绝点名为该线索猎取 LAN `ip.src` 的 [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md)。角色 `c2` 不能是 LAN 地址。不会对调 token。两端都在 LAN 的拒绝不下发 hunt。成功绑定且有唯一 LAN victim 与唯一非 LAN C2 时，对该 victim 下发 [`extra-wan`](../bug-fix/2026-08-21-extra-wan-c2-hunt-after-live-bind.md)，并对每个 C2 IPv4（已绑定加上收割到的额外地址）下发 [`c2-domain`](../bug-fix/2026-08-21-c2-domain-hunt-after-live-bind.md)。其余未指定地址默认 `unknown`。
+`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。被引用的会话必须包含线索或观测地址（[拒绝两端都在 LAN 的绑定](../bug-fix/2026-08-21-refuse-both-lan-bind.md)）。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；该拒绝点名为该线索猎取 LAN `ip.src` 的 [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md)。角色 `c2` 不能是 LAN 地址。角色 `c2` 不能是知名 CDN 或更新目的地址（[拒绝 CDN／更新 C2](../bug-fix/2026-08-21-refuse-cdn-update-c2.md)）。不会对调 token。两端都在 LAN 或 CDN／更新 C2 的拒绝不下发 hunt。成功绑定且有唯一 LAN victim 与唯一非 LAN C2 时，对该 victim 下发 [`extra-wan`](../bug-fix/2026-08-21-extra-wan-c2-hunt-after-live-bind.md)，并对每个剩余 C2 IPv4（已绑定加上收割到的额外地址）下发 [`c2-domain`](../bug-fix/2026-08-21-c2-domain-hunt-after-live-bind.md)。其余未指定地址默认 `unknown`。
 
 当前绑定通过 `investigation:ledger` 发布焦点／角色卡片。那张卡片不是又一条收件箱拼接。hunt 通知点名已经跑过的过滤器。
 

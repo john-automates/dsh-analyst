@@ -1,12 +1,15 @@
 /**
  * BindRelationship: assign victim vs c2 on a cited conversation before
  * Who/Where. The conversation must include a cue/observation address.
- * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
+ * Cue/observation addresses default to c2. Role c2 cannot be a LAN address
+ * or a well-known CDN or update destination.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, extra WAN destinations whose `evidence_id` is the
- * victim persist as `c2_ips` and a dotted name evidenced on any of those
- * C2 IPs persists as `c2_domain`. A who/where string whose leftover
+ * victim persist as `c2_ips` unless an evidenced hostname on that IP is
+ * a well-known CDN or update name. A dotted name evidenced on any
+ * remaining C2 IP persists as `c2_domain` when it is not CDN/update.
+ * A who/where string whose leftover
  * identity tokens are victim-row handles is coerced to
  * `{ entity_id: victim }` even when labels or a sentence wrap those
  * handles. Locator leftovers (client / ip /
@@ -24,7 +27,10 @@
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
-import { ipsEvidencingIdentity, isC2DomainName, normalizeIdentityValue } from './harvest.ts'
+import {
+  hostnamesEvidencedOnIp, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName,
+  normalizeIdentityValue,
+} from './harvest.ts'
 import {
   c2DomainHunt, extraWanHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
 } from './hunts.ts'
@@ -74,8 +80,8 @@ export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefine
 
 /**
  * C2-domain hunt for a live bind whose unique `c2` endpoint is a non-LAN
- * IPv4. A both-LAN deny never reaches a live bind, so this hunt is not
- * issued for a LAN C2.
+ * IPv4. A both-LAN or CDN/update C2 deny never reaches a live bind, so
+ * this hunt is not issued for those denies.
  * @param bind - accepted conversation bind.
  * @returns the hunt for that C2 IPv4, or undefined when none is unique.
  */
@@ -86,8 +92,8 @@ export function c2DomainHuntForBind(bind: RelationshipBind): Hunt | undefined {
 
 /**
  * Extra-WAN hunt for a live bind with a unique LAN victim and unique
- * non-LAN C2. A both-LAN deny never reaches a live bind, so this hunt
- * is not issued.
+ * non-LAN C2. A both-LAN or CDN/update C2 deny never reaches a live
+ * bind, so this hunt is not issued.
  * @param bind - accepted conversation bind.
  * @returns the hunt for that victim IPv4, or undefined when the pair is not unique.
  */
@@ -100,15 +106,18 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
 
 /**
  * C2-domain hunts for the bound C2 plus extra WAN IPv4s stamped on the victim.
+ * IPs whose evidenced hostname is a well-known CDN or update name are omitted.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
- * @returns one hunt per C2 IPv4, bound first.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @returns one hunt per remaining C2 IPv4, bound first.
  */
 export function c2DomainHuntsForBind(
   bind: RelationshipBind,
   identities: readonly Identity[] = [],
+  evidenceText = '',
 ): Hunt[] {
-  return acceptedC2Ips(bind, identities).map(c2DomainHunt)
+  return acceptedC2Ips(bind, identities, evidenceText).map(c2DomainHunt)
 }
 
 /**
@@ -125,50 +134,64 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 
 /**
  * Bound C2 IPv4 plus extra non-LAN unicast IPs whose `evidence_id` is
- * the bound victim. LAN / DC / gateway / multicast / unbound WAN stay
- * off. Who/where are not updated. A second bind is not invented.
+ * the bound victim. An IP whose evidenced hostname is a well-known CDN
+ * or update name is omitted, including the bound C2. LAN / DC / gateway
+ * / multicast / unbound WAN stay off. Who/where are not updated. A
+ * second bind is not invented.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
- * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 exists.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 remains.
  */
 export function acceptedC2Ips(
   bind: RelationshipBind,
   identities: readonly Identity[],
+  evidenceText = '',
 ): string[] {
   const bound = boundC2Ipv4(bind)
   if (bound === undefined) return []
   const victim = victimOf(bind)
-  const seen = new Set<string>([bound])
-  const out = [bound]
+  const seen = new Set<string>()
+  const out: string[] = []
+  const consider = (ip: string): void => {
+    if (seen.has(ip)) return
+    seen.add(ip)
+    if (ipHasCdnOrUpdateName(ip, identities, evidenceText)) return
+    out.push(ip)
+  }
+  consider(bound)
   if (victim === undefined) return out
   for (const identity of identities) {
-    if (identity.kind !== 'ip' || seen.has(identity.value)) continue
+    if (identity.kind !== 'ip') continue
     if (!isNonLanUnicastIpv4(identity.value)) continue
     if (identity.evidence_id !== victim.addr) continue
-    seen.add(identity.value)
-    out.push(identity.value)
+    consider(identity.value)
   }
   return out
 }
 
 /**
- * Harvested TLS SNI or DNS name evidenced on any bound or extra C2 IPv4.
- * LAN / DC / gateway / victim hostnames stay off. The name is not invented
- * and does not donate who/where.
+ * Harvested TLS SNI or DNS name evidenced on any remaining C2 IPv4.
+ * Well-known CDN / update names never win. LAN / DC / gateway / victim
+ * hostnames stay off. The name is not invented and does not donate
+ * who/where.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
- * @returns the first C2-stamped DNS name, or undefined when none exists.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @returns the first non-CDN C2-stamped DNS name, or undefined when none exists.
  */
 export function acceptedC2Domain(
   bind: RelationshipBind,
   identities: readonly Identity[],
+  evidenceText = '',
 ): string | undefined {
-  const c2s = new Set(acceptedC2Ips(bind, identities))
+  const c2s = new Set(acceptedC2Ips(bind, identities, evidenceText))
   if (c2s.size === 0) return undefined
   for (const identity of identities) {
     if (identity.kind !== 'hostname' || identity.evidence_id === undefined) continue
     if (!c2s.has(identity.evidence_id)) continue
-    if (isC2DomainName(identity.value)) return identity.value
+    if (!isC2DomainName(identity.value) || isCdnOrUpdateName(identity.value)) continue
+    return identity.value
   }
   return undefined
 }
@@ -188,6 +211,13 @@ export const BOTH_LAN_CONVERSATION_REASON =
 
 /** Deny text when bind_relationship assigns c2 to a LAN address. Tokens are not swapped. */
 export const LAN_C2_REASON = 'unbound: role c2 cannot be a LAN address.'
+
+/**
+ * Deny text when the unique C2 is a well-known CDN or update destination.
+ * Does not invent a replacement C2. Tokens are not swapped.
+ */
+export const CDN_C2_REASON =
+  'unbound: role c2 cannot be a well-known CDN or update destination.'
 
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
@@ -393,14 +423,23 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
  * addresses default to `c2`. The cited conversation must include a
  * cue/observation address; a both-LAN conversation is unbound and does not
  * issue a hunt. Role `c2` cannot be a LAN address; tokens are not swapped.
- * Assigning `victim` to a cue/observation address is always unbound and names
- * the other-end hunt for that cue. Zero or two victims fail. A JSON array
- * string of endpoint objects and a numeric-string dport are coerced first;
- * a missing dport is not invented. These checks run on the coerced request.
+ * Role `c2` cannot be a well-known CDN or update destination evidenced by a
+ * harvested hostname or cited-conversation SNI / HTTP host / DNS name on
+ * that unique C2 IPv4; a replacement C2 is not invented. Assigning `victim`
+ * to a cue/observation address is always unbound and names the other-end
+ * hunt for that cue. Zero or two victims fail. A JSON array string of
+ * endpoint objects and a numeric-string dport are coerced first; a missing
+ * dport is not invented. These checks run on the coerced request.
  * @param request - relationship plus submitted endpoints.
+ * @param identities - folded ledger identities used for the CDN/update check.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
  * @returns the bind, or a deny reason.
  */
-export function resolveBind(request: BindRequest): BindResolution {
+export function resolveBind(
+  request: BindRequest,
+  identities: readonly Identity[] = [],
+  evidenceText = '',
+): BindResolution {
   const coerced = coerceBindRequest(request)
   if (typeof coerced === 'string') return { ok: false, reason: coerced }
   const relationship = normalizeRelationship(coerced.relationship)
@@ -427,7 +466,11 @@ export function resolveBind(request: BindRequest): BindResolution {
   }
   const victims = endpoints.filter(endpoint => endpoint.role === 'victim')
   if (victims.length !== 1) return { ok: false, reason: VICTIM_COUNT_REASON }
-  return { ok: true, bind: { relationship, endpoints } }
+  const bind = { relationship, endpoints }
+  if (uniqueC2IsCdnOrUpdate(bind, identities, evidenceText)) {
+    return { ok: false, reason: CDN_C2_REASON }
+  }
+  return { ok: true, bind }
 }
 
 /**
@@ -660,9 +703,11 @@ export function completeAcceptedSlot(
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP
  * frames source that MAC only from a non-victim. Bound C2 plus extra
- * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`. A
- * harvested C2 DNS/SNI name evidenced on any of those IPs persists as
- * `c2_domain` and does not fill who/where hostname.
+ * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`,
+ * omitting an IP whose evidenced hostname is a well-known CDN or update
+ * name. A harvested C2 DNS/SNI name evidenced on any remaining C2 IP
+ * persists as `c2_domain` when it is not CDN/update and does not fill
+ * who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -689,9 +734,9 @@ export function projectCaseReport(
     why: claims.why,
     how: claims.how,
   }
-  const ips = acceptedC2Ips(bind, identities)
+  const ips = acceptedC2Ips(bind, identities, evidenceText)
   if (ips.length > 0) report.c2_ips = ips
-  const domain = acceptedC2Domain(bind, identities)
+  const domain = acceptedC2Domain(bind, identities, evidenceText)
   if (domain !== undefined) report.c2_domain = domain
   return report
 }
@@ -909,6 +954,40 @@ function resolveEndpoint(
   if (role === 'c2' && isLanIpv4(addr)) return LAN_C2_REASON
   seen.add(addr)
   return { addr, role, because }
+}
+
+/**
+ * Whether the unique non-LAN C2 has an evidenced well-known CDN or
+ * update hostname. A replacement C2 is not invented.
+ * @param bind - resolved conversation bind before persist.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @returns true when that unique C2 must stay unbound.
+ */
+function uniqueC2IsCdnOrUpdate(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  const c2 = boundC2Ipv4(bind)
+  if (c2 === undefined) return false
+  return ipHasCdnOrUpdateName(c2, identities, evidenceText)
+}
+
+/**
+ * Whether an IPv4 has a harvested or cited-conversation hostname whose
+ * suffix is a well-known CDN or update domain.
+ * @param ip - candidate C2 IPv4.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns true when that IP must stay off `c2_ips` and cannot bind as c2.
+ */
+function ipHasCdnOrUpdateName(
+  ip: string,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  return hostnamesEvidencedOnIp(ip, identities, evidenceText).some(isCdnOrUpdateName)
 }
 
 /**

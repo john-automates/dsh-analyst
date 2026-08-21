@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   acceptedC2Domain, acceptedC2Ips, BOTH_LAN_CONVERSATION_REASON, boundC2Ipv4,
-  caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind, completeAcceptedSlot,
-  cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON, extraWanHuntForBind,
-  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
-  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
-  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
+  caseReportDenyReason, CDN_C2_REASON, c2DomainHuntForBind, c2DomainHuntsForBind,
+  completeAcceptedSlot, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON,
+  extraWanHuntForBind, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
+  LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
+  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
+  VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { harvestIdentities, identityOf } from '../src/harvest.ts'
@@ -16,8 +17,11 @@ const LAN_CIDR = '10.0.10.0/24'
 const OTHER_CIDR = '172.16.0.0/12'
 const C2 = '198.51.100.80'
 const EXTRA_WAN = '203.0.113.50'
+const CDN_DEST = '203.0.113.80'
 const DISTRACTOR_WAN = '203.0.113.99'
 const DISTRACTOR = '10.0.10.3'
+const PAYLOAD = 'payload.example.test'
+const CDN_NAME = 'update.microsoft.com'
 const CLIENT_MAC = '02:00:00:00:00:0a'
 const DISTRACTOR_MAC = '02:00:00:00:00:0b'
 const HOST = 'lan-host'
@@ -315,6 +319,96 @@ describe('BindRelationship', () => {
     expect(acceptedC2Ips(bind({
       endpoints: [{ addr: C2, role: 'c2', because: 'cue/observation address' }],
     }), extras)).toEqual([C2])
+  })
+
+  it('denies a CDN/update C2 and skips those dests on leftover extras', () => {
+    const cdnRelationship = { ...relationship, dst: CDN_DEST, evidence_id: 'conv-cdn' }
+    const cdnBecause = `${LAN} talking to ${CDN_DEST} in evidence conv-cdn`
+    const cdnEndpoints = [{ addr: LAN, role: 'victim' as const, because: cdnBecause }]
+    const cdnHost = { ...identityOf('hostname', CDN_NAME)!, evidence_id: CDN_DEST }
+    const akamaiHost = { ...identityOf('hostname', 'a1.akamai.net')!, evidence_id: CDN_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const payloadOnExtra = { ...identityOf('hostname', PAYLOAD)!, evidence_id: EXTRA_WAN }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    expect(resolveBind({
+      relationship: cdnRelationship,
+      endpoints: cdnEndpoints,
+    }, [cdnHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(CDN_C2_REASON).toBe(
+      'unbound: role c2 cannot be a well-known CDN or update destination.',
+    )
+    expect(otherEndHuntForDeniedBind({
+      relationship: cdnRelationship,
+      endpoints: cdnEndpoints,
+    })).toBeUndefined()
+    expect(resolveBind({
+      relationship: cdnRelationship,
+      endpoints: cdnEndpoints,
+    }, [akamaiHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: cdnRelationship,
+      endpoints: cdnEndpoints,
+    }, [], `ip.addr: ${CDN_DEST}\ttls.handshake.extensions_server_name: ${CDN_NAME}`))
+      .toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: cdnRelationship,
+      endpoints: cdnEndpoints,
+    }, [], `ip.dst: ${CDN_DEST}\thttp.host: a1.akamai.net`))
+      .toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: LAN, role: 'victim', because: conversationBecause }],
+    }, [payloadOnC2])).toEqual({
+      ok: true,
+      bind: {
+        relationship,
+        endpoints: [
+          { addr: LAN, role: 'victim', because: conversationBecause },
+          { addr: C2, role: 'c2', because: 'cue/observation address' },
+        ],
+      },
+    })
+    const live = bind()
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', CDN_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      victimHost,
+      cdnHost,
+      payloadOnExtra,
+    ]
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).not.toContain(CDN_DEST)
+    expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === CDN_DEST))
+      .toBe(false)
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, [cdnHost, payloadOnExtra, victimHost])).toBe(PAYLOAD)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).not.toContain(CDN_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(CDN_NAME)
+    expect(report.where.hostname).not.toBe(CDN_NAME)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+    const boundCdn = bind({
+      relationship: cdnRelationship,
+      endpoints: [
+        { addr: LAN, role: 'victim', because: cdnBecause },
+        { addr: CDN_DEST, role: 'c2', because: 'cue/observation address' },
+      ],
+    })
+    expect(acceptedC2Ips(boundCdn, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cdnHost,
+      payloadOnExtra,
+    ])).toEqual([EXTRA_WAN])
+    expect(acceptedC2Domain(boundCdn, [cdnHost, payloadOnExtra])).toBe(PAYLOAD)
   })
 
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {

@@ -128,14 +128,16 @@ export interface CaseReport {
   how: string
   /**
    * Bound C2 IPv4 plus extra WAN destination IPs whose `evidence_id` is
-   * that victim. Omitted when none exist. Not a who/where slot and not
-   * a second bind.
+   * that victim, omitting an IP whose evidenced hostname is a well-known
+   * CDN or update name. Omitted when none remain. Not a who/where slot
+   * and not a second bind.
    */
   c2_ips?: string[]
   /**
-   * TLS SNI or DNS name evidenced on any of those C2 IPv4s (bound plus
-   * extras). Omitted when none was harvested. Not a who/where hostname
-   * and not a victim-row donate.
+   * TLS SNI or DNS name evidenced on any remaining C2 IPv4s (bound plus
+   * extras) that is not a well-known CDN or update name. Omitted when
+   * none was harvested. Not a who/where hostname and not a victim-row
+   * donate.
    */
   c2_domain?: string
 }
@@ -154,11 +156,13 @@ declare module '@deepseek-ai/dsh-session/types' {
      * peer, those identity hunts issue only for that C2-talking IP. Assigning
      * victim to a cue/observation address issues `other-end` for that cue IP
      * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
-     * LAN victim and unique non-LAN C2 issues `extra-wan` for that victim
-     * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each C2
-     * IPv4 (bound plus harvested extras; TLS SNI / DNS). A both-LAN
-     * conversation deny does not issue `other-end`, `extra-wan`, or
-     * `c2-domain` and does not invent a C2. When `autoHunt` is true,
+     * LAN victim and unique non-LAN C2 that is not a well-known CDN or
+     * update destination issues `extra-wan` for that victim
+     * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each
+     * remaining C2 IPv4 (bound plus harvested extras; TLS SNI / DNS). A
+     * both-LAN or CDN/update C2 deny does not issue `other-end`,
+     * `extra-wan`, or `c2-domain` and does not invent a C2. When `autoHunt`
+     * is true,
      * outstanding issued hunts execute through `pcap_filter` with the scoped
      * display filter; `other-end` and `c2-domain` auto-run even though the
      * subject is the cue or C2, and `extra-wan` auto-runs for the LAN victim
@@ -185,9 +189,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      * without a conversation-client stamp. A machine SAM ending in `$` is
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
-     * plus extra WAN destinations whose `evidence_id` is that victim, when
-     * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
-     * on any of those C2 IPv4s, when one exists.
+     * plus extra WAN destinations whose `evidence_id` is that victim, omitting
+     * an IP whose evidenced hostname is a well-known CDN or update name, when
+     * any remain. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+     * on any remaining C2 IPv4s that is not CDN/update, when one exists.
      */
     'investigation/report': CaseReport
   }

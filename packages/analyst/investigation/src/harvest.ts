@@ -134,12 +134,102 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
 /**
  * Whether a harvested hostname is a DNS name that may persist as `c2_domain`.
  * Single-label NetBIOS / LAN / DC names and dotted IPv4s are not domains.
+ * Well-known CDN / update names still pass; {@link isCdnOrUpdateName} is
+ * the additional persist and bind check.
  * @param value - normalized hostname.
  * @returns true when the value contains a dot and is not an IPv4.
  */
 export function isC2DomainName(value: string): boolean {
   if (!value.includes('.') || DOTTED_IPV4.test(value)) return false
   return true
+}
+
+/**
+ * Registrable suffixes of well-known public CDN and software-update
+ * domains. Subdomains match. IPv4 ranges are not this list. Live-case
+ * gold hostnames are not listed.
+ */
+const CDN_OR_UPDATE_SUFFIXES = [
+  'microsoft.com',
+  'windows.com',
+  'windowsupdate.com',
+  'office.com',
+  'live.com',
+  'akamai.net',
+  'akamaiedge.net',
+  'akamaihd.net',
+  'akadns.net',
+  'edgesuite.net',
+  'edgekey.net',
+  'cloudflare.com',
+  'cloudfront.net',
+  'fastly.net',
+] as const
+
+const CONVERSATION_HOST_LABEL = new RegExp(
+  String.raw`(?:^|[\s,;|])(?:hostname|host|http\.host|nbns\.name|dns\.qry\.name|dns\.resp\.name|` +
+    String.raw`tls\.handshake\.extensions_server_name)\s*[:=]\s*(\w[\w.-]{0,253})`,
+  'gi',
+)
+
+/**
+ * Whether a hostname is a well-known public CDN or software-update domain.
+ * Matches the registrable suffix and its subdomains
+ * (`update.microsoft.com`, `a1.akamai.net`). IPv4 ranges are not this
+ * test. Live-case gold names are not listed.
+ * @param value - raw or normalized hostname.
+ * @returns true when the hostname is that suffix or a subdomain of it.
+ */
+export function isCdnOrUpdateName(value: string): boolean {
+  const host = normalizeIdentityValue('hostname', value)?.replace(/\.+$/, '')
+  if (host === undefined || host === '') return false
+  for (const suffix of CDN_OR_UPDATE_SUFFIXES) {
+    if (host === suffix || host.endsWith(`.${suffix}`)) return true
+  }
+  return false
+}
+
+/**
+ * Hostnames evidenced on one IPv4. A harvested hostname whose
+ * `evidence_id` is that IP counts. A hostname whose tool-result line
+ * names that IP (`ip.src` / `ip.addr`) counts. A cited-conversation
+ * TLS SNI, HTTP host, or DNS name on a line that names that IP counts.
+ * @param ip - normalized IPv4.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns unique hostnames in first-seen order.
+ */
+export function hostnamesEvidencedOnIp(
+  ip: string,
+  identities: readonly Identity[],
+  evidenceText = '',
+): string[] {
+  const names: string[] = []
+  const seen = new Set<string>()
+  const add = (raw: string): void => {
+    const value = normalizeIdentityValue('hostname', raw)
+    if (value === undefined || seen.has(value)) return
+    seen.add(value)
+    names.push(value)
+  }
+  for (const identity of identities) {
+    if (identity.kind !== 'hostname') continue
+    if (
+      identity.evidence_id === ip
+      || ipsEvidencingIdentity(identity, evidenceText).includes(ip)
+    ) {
+      add(identity.value)
+    }
+  }
+  for (const line of evidenceText.split(/\r?\n/)) {
+    if (!lineMentionsIp(line, ip)) continue
+    CONVERSATION_HOST_LABEL.lastIndex = 0
+    for (const match of line.matchAll(CONVERSATION_HOST_LABEL)) {
+      const host = regexCapture(match)
+      if (host !== '' && !DOTTED_IPV4.test(host)) add(host)
+    }
+  }
+  return names
 }
 
 /**
