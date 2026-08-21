@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-案件范围内的调查账本。插件记录唯一的带标签身份，在新 IP 后自动下发 MAC、名称服务、Kerberos，然后 SAMR 的 hunt，并通过 `pcap_filter` 自动运行这些已下发且尚未执行的 hunt，拒绝写入证据以及案件目录外的操作，要求在 `case_report` 之前完成 BindRelationship，并持久化 who/where 从被绑定受害端投影的 5W1H 结案包。状态从会话日志折叠得出。
+案件范围内的调查账本。插件记录唯一的带标签身份，在新 IP 后自动下发 MAC、名称服务、Kerberos，然后 SAMR 的 hunt，并通过 `pcap_filter` 自动运行这些已下发且尚未执行的 hunt，拒绝写入证据以及案件目录外的操作，要求在 `case_report` 之前完成 BindRelationship，拒绝 write/edit 案件根目录的 `report.md` 及同类结案文件，并持久化 who/where 从被绑定受害端投影的 5W1H 结案包。状态从会话日志折叠得出。
 
 ## 服务：`Investigation`（ctx 键：`investigation`）
 
@@ -10,12 +10,12 @@
 
 - `identities(session)` / `hunts(session)` / `report(session)` / `bind(session)` 折叠日志。
 - `recordIdentity` / `recordHunt` 仅在 kind+value（或 kind+subject）为新值时追加。
-- `recordBind` 以整值替换当前会话绑定。`recordReport` 以整值替换 5W1H 结案包。在当前绑定恰好有一个 victim 之前，`case_report` 会被拒绝；`who` 和 `where` 从该受害端实体行投影。who/where 的 `entity_id` 若是该行上的用户、主机名、MAC 或全名，只是句柄；持久化结案包使用被绑定的 victim 地址。带 `entity_id` 的 JSON 对象字符串会在自由文本检查之前被强制转换成该对象。对调的 victim／c2 结案会被拒绝。不会编造姓名。`c2TalkingLanVictim` 只归属唯一的来源 `eth.src` MAC，不改写槽位。
+- `recordBind` 以整值替换当前会话绑定。`recordReport` 以整值替换 5W1H 结案包。在当前绑定恰好有一个 victim 之前，`case_report` 会被拒绝；`who` 和 `where` 从该受害端实体行投影。who/where 的 `entity_id` 若是该行上的用户、主机名、MAC 或全名，只是句柄；持久化结案包使用被绑定的 victim 地址。带 `entity_id` 的 JSON 对象字符串会在自由文本检查之前被强制转换成该对象。对调的 victim／c2 结案会被拒绝。不会编造姓名。对案件根目录 `report.md`（及同类结案文件）的 `write` / `edit` 会被拒绝；不会把 `report.md` 解析进 who/where。`c2TalkingLanVictim` 只归属唯一的来源 `eth.src` MAC，不改写槽位。
 - `resolveInsideCase`、`isEvidence`、`isWritable` 和 `contains` 强制案件目录范围。
 
-`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。当一个 LAN IP 与非 LAN 单播对等体出现在同一行时，这些身份 hunt 只对该 C2 通信 IP 下发；`eth-src` 通知使用 `ip.src ==` 该主体，且 MAC 收割只记录来自该 IP 的 `eth.src`，而不是对端或空闲工作站的网卡。其他以 IP 为主体的通知使用 `ip.addr ==` 该主体。当 `autoHunt` 为 true 时，已下发且尚未执行的 hunt 会用同一套限定范围的 `display_filter` 和字段跑 `pcap_filter`；插件不等模型调用 `pcap_filter`。优先正在与 C2 通信的 LAN 主体；非 LAN / C2 IP 主体不会自动运行。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。
+`tools/pre-execute` 拒绝写入证据和捕获文件、write/edit 案件根目录结案文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。当一个 LAN IP 与非 LAN 单播对等体出现在同一行时，这些身份 hunt 只对该 C2 通信 IP 下发；`eth-src` 通知使用 `ip.src ==` 该主体，且 MAC 收割只记录来自该 IP 的 `eth.src`，而不是对端或空闲工作站的网卡。其他以 IP 为主体的通知使用 `ip.addr ==` 该主体。当 `autoHunt` 为 true 时，已下发且尚未执行的 hunt 会用同一套限定范围的 `display_filter` 和字段跑 `pcap_filter`；插件不等模型调用 `pcap_filter`。优先正在与 C2 通信的 LAN 主体；非 LAN / C2 IP 主体不会自动运行。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。
 
-`investigation:policy` 章节陈述 DINQ、Who/Where 之前的 BindRelationship、5W1H、证据优先工作，以及有效的 tshark 4.4.16 字段。`investigation:ledger` 是列出当前角色卡片、已记录身份与 hunt 的动态上下文。设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)、[case_report 受害端行 entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md) 与 [字符串化的 who/where](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-stringified-who-where.md)。
+`investigation:policy` 章节陈述 DINQ、Who/Where 之前的 BindRelationship、5W1H、证据优先工作，以及有效的 tshark 4.4.16 字段。`investigation:ledger` 是列出当前角色卡片、已记录身份与 hunt 的动态上下文。设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)、[case_report 受害端行 entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md)、[字符串化的 who/where](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-stringified-who-where.md) 与 [拒绝写入结案文件](../../../.agents/notes/implemented/bug-fix/2026-08-21-deny-close-file-writes.md)。
 
 ## 配置
 
@@ -86,7 +86,7 @@ You are a network-security investigation analyst, not a coding agent. Define the
 
 #### 模型看到什么
 
-被拒绝的写入、越出案件目录或恶意软件运行器调用会返回错误结果，点名案件目录或只读证据规则。未绑定、对调或自由文本的 `case_report`（或任何设置 `who` / `where` 的工具）返回 `unbound: assign victim vs c2 on the cited conversation.`
+被拒绝的写入、越出案件目录或恶意软件运行器调用会返回错误结果，点名案件目录或只读证据规则。write/edit 案件根目录 `report.md`（或同类结案文件）返回 `close with case_report after BindRelationship.` 未绑定、对调或自由文本的 `case_report`（或任何设置 `who` / `where` 的工具）返回 `unbound: assign victim vs c2 on the cited conversation.`
 
 #### Token 影响
 

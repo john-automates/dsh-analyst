@@ -1,10 +1,17 @@
 /**
  * Case-scoped tool-call policy: evidence stays read-only, work stays inside
- * the case directory, and captured binaries are not executed.
+ * the case directory, captured binaries are not executed, and write/edit of
+ * case-root close files is denied. Close is `case_report` after BindRelationship.
  * @module @deepseek-ai/dsh-investigation/policy
  */
 
-import { isEvidencePath, isInsideCase, isWritablePath, looksLikePath, resolveInsideCase } from './paths.ts'
+import {
+  isCaseRootClosePath, isEvidencePath, isInsideCase, isWritablePath, looksLikePath,
+  resolveInsideCase,
+} from './paths.ts'
+
+/** Deny text when write/edit targets a case-root close file. */
+export const CLOSE_FILE_REASON = 'close with case_report after BindRelationship.'
 
 /** Tools that write a `file_path` or `path` argument. */
 const WRITE_TOOLS = new Set(['write', 'edit', 'str_replace_editor'])
@@ -58,6 +65,7 @@ export function stringArg(args: unknown, keys: readonly string[]): string | unde
 
 /**
  * Why one tool call must be denied, or undefined to allow it.
+ * write/edit of a case-root close file returns {@link CLOSE_FILE_REASON}.
  * @param exec - tool name and parsed arguments.
  * @param caseDir - absolute case directory.
  * @param evidenceReadOnly - when true, evidence and capture files cannot be written.
@@ -72,6 +80,9 @@ export function denyReason(
   if (pathValue !== undefined && PATH_TOOLS.has(exec.name)) {
     if (!isInsideCase(caseDir, pathValue)) {
       return `refusing ${exec.name}: ${pathValue} is outside the case directory ${caseDir}`
+    }
+    if (WRITE_TOOLS.has(exec.name) && isCaseRootClosePath(caseDir, pathValue)) {
+      return CLOSE_FILE_REASON
     }
     if (WRITE_TOOLS.has(exec.name) && evidenceReadOnly) {
       if (isEvidencePath(caseDir, pathValue) && !isWritablePath(caseDir, pathValue)) {
@@ -173,4 +184,6 @@ function commandWritesEvidence(command: string, tokens: readonly string[], caseD
 }
 
 /** Re-export containment helpers used by the tools package. */
-export { isEvidencePath, isInsideCase, isWritablePath, looksLikePath, resolveInsideCase }
+export {
+  isCaseRootClosePath, isEvidencePath, isInsideCase, isWritablePath, looksLikePath, resolveInsideCase,
+}

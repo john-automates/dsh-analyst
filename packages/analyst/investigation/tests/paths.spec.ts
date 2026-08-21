@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  isEvidencePath, isInsideCase, isWritablePath, looksLikePath, relativeEscapesRoot, resolveInsideCase,
+  CASE_ROOT_CLOSE_FILES, isCaseRootClosePath, isEvidencePath, isInsideCase, isWritablePath,
+  looksLikePath, relativeEscapesRoot, resolveInsideCase,
 } from '../src/paths.ts'
 
 const CASE = '/cases/alpha'
@@ -28,6 +29,15 @@ describe('case path containment', () => {
     expect(isWritablePath(CASE, 'notes')).toBe(true)
     expect(isWritablePath(CASE, 'report.md')).toBe(true)
     expect(isWritablePath(CASE, 'evidence/a.pcap')).toBe(false)
+    expect(CASE_ROOT_CLOSE_FILES).toContain('report.md')
+    expect(isCaseRootClosePath(CASE, 'report.md')).toBe(true)
+    expect(isCaseRootClosePath(CASE, 'REPORT.md')).toBe(true)
+    expect(isCaseRootClosePath(CASE, 'report.txt')).toBe(true)
+    expect(isCaseRootClosePath(CASE, 'case_report.md')).toBe(true)
+    expect(isCaseRootClosePath(CASE, join(CASE, 'report.md'))).toBe(true)
+    expect(isCaseRootClosePath(CASE, 'notes/report.md')).toBe(false)
+    expect(isCaseRootClosePath(CASE, 'notes/a.md')).toBe(false)
+    expect(isCaseRootClosePath(CASE, CASE)).toBe(false)
     expect(looksLikePath('/tmp/a')).toBe(true)
     expect(looksLikePath('./a')).toBe(true)
     expect(looksLikePath('../a')).toBe(true)

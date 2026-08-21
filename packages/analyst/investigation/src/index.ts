@@ -3,8 +3,8 @@
  * tool results, auto-issue hunts after new identities, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
- * and persist a 5W1H close packet whose who/where project from the bound
- * victim entity row.
+ * deny write/edit of case-root close files, and persist a 5W1H close packet
+ * whose who/where project from the bound victim entity row.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -58,10 +58,11 @@ export {
 } from './bind.ts'
 export type { BindEndpointInput, BindRequest, BindResolution, CaseReportClaims } from './bind.ts'
 export {
-  denyCommand, denyReason, stringArg, tokenizeCommand,
+  CLOSE_FILE_REASON, denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
 export {
-  isEvidencePath, isInsideCase, isWritablePath, looksLikePath, relativeEscapesRoot, resolveInsideCase,
+  CASE_ROOT_CLOSE_FILES, isCaseRootClosePath, isEvidencePath, isInsideCase, isWritablePath,
+  looksLikePath, relativeEscapesRoot, resolveInsideCase,
 } from './paths.ts'
 
 /** Methodology rendered as the `investigation:policy` prompt section. */

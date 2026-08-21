@@ -4,7 +4,7 @@
 
 `analyst` 预设是调查 Agent，不是编码 Agent 换皮。标准、极简、Code 与创造模式仍然可选。在 Web UI 预设选择器中选择**调查分析**，或用下面的 overlay 让 headless 默认使用 `analyst`。
 
-案件目录依次取 `DSH_CASE_DIR`、`DSH_CWD`、进程工作目录。设置 `DSH_CASE_DIR` 时，会话工作区、工具 cwd 和 persona 中的案件目录都是该路径，因此 glob 与 read 能看到其中的 `TASK.md` 和捕获文件。隔离规则仍拒绝写入案件之外的路径，并保持证据只读。将捕获文件放在 `evidence/` 下，或作为案件内的 `*.pcap` / `*.pcapng` / `*.cap` / `*.log`。可写路径是 `notes/` 和 `report.md`。
+案件目录依次取 `DSH_CASE_DIR`、`DSH_CWD`、进程工作目录。设置 `DSH_CASE_DIR` 时，会话工作区、工具 cwd 和 persona 中的案件目录都是该路径，因此 glob 与 read 能看到其中的 `TASK.md` 和捕获文件。隔离规则仍拒绝写入案件之外的路径，并保持证据只读。将捕获文件放在 `evidence/` 下，或作为案件内的 `*.pcap` / `*.pcapng` / `*.cap` / `*.log`。可写路径是 `notes/`。对案件根目录 `report.md` 的 `write` / `edit` 会被拒绝；在 BindRelationship 之后用 `case_report` 结案。
 
 ## 对案件目录运行 headless
 

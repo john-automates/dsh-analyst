@@ -10,8 +10,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
-  Config, foldHunts, foldIdentities, foldReport, METHODOLOGY_SECTION, resolveCaseDir,
-  setsWhoWhere,
+  CLOSE_FILE_REASON, Config, foldHunts, foldIdentities, foldReport, METHODOLOGY_SECTION,
+  resolveCaseDir, setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -54,6 +54,16 @@ async function setup(over: Partial<ConstructorParameters<typeof Investigation>[1
     output: {
       schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
       render: () => [{ type: 'text', text: 'wrote' }],
+    },
+    execute: () => Promise.resolve({ ok: true }),
+  }))
+  ctx.tools.register(defineTool({
+    name: 'edit',
+    description: 'Edit stand-in.',
+    parameters: { file_path: { type: 'string', required: true } },
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
+      render: () => [{ type: 'text', text: 'edited' }],
     },
     execute: () => Promise.resolve({ ok: true }),
   }))
@@ -611,7 +621,7 @@ describe('investigation service', () => {
   })
 
   it('binds a conversation and denies case_report until a live victim exists', async () => {
-    const { ctx, owner } = await setup()
+    const { ctx, caseDir, owner } = await setup()
     ctx.tools.register(defineTool({
       name: 'case_report',
       description: 'Close stand-in.',
@@ -668,6 +678,28 @@ describe('investigation service', () => {
     })
     expect(bound.isError).toBe(false)
     expect(ctx.investigation.bind(owner.session)?.endpoints.some(endpoint => endpoint.role === 'victim')).toBe(true)
+    const wroteClose = await ctx.tools.execute({
+      signal,
+      callId: CallId('write-report'),
+      name: 'write',
+      arguments: { file_path: join(caseDir, 'report.md') },
+      agent: owner,
+    })
+    expect(wroteClose.isError).toBe(true)
+    expect(wroteClose.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      CLOSE_FILE_REASON,
+    )
+    const editedClose = await ctx.tools.execute({
+      signal,
+      callId: CallId('edit-report'),
+      name: 'edit',
+      arguments: { file_path: join(caseDir, 'report.md') },
+      agent: owner,
+    })
+    expect(editedClose.isError).toBe(true)
+    expect(editedClose.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      CLOSE_FILE_REASON,
+    )
     const closed = await ctx.tools.execute({
       signal, callId: CallId('close-ok'), name: 'case_report', arguments: claims, agent: owner,
     })
