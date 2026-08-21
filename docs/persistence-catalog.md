@@ -488,7 +488,7 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 'investigation/bind': RelationshipBind
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:160`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -501,18 +501,22 @@ Source: [`packages/analyst/investigation/src/types.ts:160`](../packages/analyst/
  * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
  * peer, those identity hunts issue only for that C2-talking IP. Assigning
  * victim to a cue/observation address issues `other-end` for that cue IP
- * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a non-LAN
- * C2 issues `c2-domain` for that C2 IPv4 (TLS SNI / DNS). A both-LAN
- * conversation deny does not issue `other-end` or `c2-domain` and does
- * not invent a C2. When `autoHunt` is true, outstanding issued hunts
- * execute through `pcap_filter` with the scoped display filter;
- * `other-end` and `c2-domain` auto-run even though the subject is the
- * cue or C2. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
+ * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
+ * LAN victim and unique non-LAN C2 issues `extra-wan` for that victim
+ * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each C2
+ * IPv4 (bound plus harvested extras; TLS SNI / DNS). A both-LAN
+ * conversation deny does not issue `other-end`, `extra-wan`, or
+ * `c2-domain` and does not invent a C2. When `autoHunt` is true,
+ * outstanding issued hunts execute through `pcap_filter` with the scoped
+ * display filter; `other-end` and `c2-domain` auto-run even though the
+ * subject is the cue or C2, and `extra-wan` auto-runs for the LAN victim
+ * even when a C2-talking focus IP exists. A new hostname issues Kerberos
+ * then SAMR. A new user issues SAMR.
  */
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:155`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:168`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -526,7 +530,7 @@ Source: [`packages/analyst/investigation/src/types.ts:155`](../packages/analyst/
 'investigation/identity': Identity
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:140`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:149`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -536,19 +540,25 @@ Source: [`packages/analyst/investigation/src/types.ts:140`](../packages/analyst/
 /**
  * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
  * who/where are the projected victim entity row; omitted model keys are
- * filled from that row after deny/coerce. Omitted mac persists the
- * unique ledger MAC that is not DC/gateway-only when a sticky DC donate
- * or uniqueness left the row empty. Omitted user still persists from
- * victim-IP evidence. A submitted user, hostname, or full_name is kept
- * when the row has no donated value and that identity does not donate to
- * a different entity. A submitted mac is kept unless talking-IP frames
- * source that MAC only from a non-victim. `c2_domain` is the harvested
- * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
+ * filled from that row after deny/coerce. Omitted who/where also fold
+ * sibling top-level identity keys (ip, mac, hostname, user, full_name)
+ * from the same case_report arguments into that submitted slot. Omitted
+ * mac persists the unique ledger MAC that is not DC/gateway-only when a
+ * sticky DC donate or uniqueness left the row empty. Omitted user still
+ * persists from victim-IP evidence. A submitted user, hostname, or
+ * full_name is kept when the row has no donated value and that identity
+ * does not donate to a different entity. A submitted human user is kept
+ * without a conversation-client stamp. A machine SAM ending in `$` is
+ * not persisted as user. A submitted mac is kept unless talking-IP frames
+ * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
+ * plus extra WAN destinations whose `evidence_id` is that victim, when
+ * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+ * on any of those C2 IPv4s, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:192`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

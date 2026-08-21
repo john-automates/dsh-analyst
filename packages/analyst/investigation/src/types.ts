@@ -27,7 +27,8 @@ export interface Identity {
    * field-only `eth.src` dump with no talking IP. A user or full_name stamps
    * the conversation client IPv4 (LAN / non-DC end), including a field-only
    * SAMR/CName dump whose evidence text names that client talking to a DC.
-   * A `name-service` hunt-subject IPv4 scopes a hostname. A slot whose
+   * A `name-service` hunt-subject IPv4 scopes a hostname. An IP stamps
+   * hunt-subject `scopeIp` when that scope is set. A slot whose
    * `evidence_id` points at a non-victim entity cannot donate who/where,
    * except a MAC later sourced from the bound victim IP or restamped from a
    * victim-IP-scoped `eth.src` dump — including overwrite of a DC/peer first
@@ -45,6 +46,7 @@ export type HuntKind =
   | 'name-service'
   | 'other-end'
   | 'c2-domain'
+  | 'extra-wan'
 
 /** Subject kinds a hunt can attach to. */
 export type HuntSubjectKind = 'ip' | 'hostname' | 'user'
@@ -125,8 +127,15 @@ export interface CaseReport {
   /** How it happened, as evidenced. */
   how: string
   /**
-   * TLS SNI or DNS name evidenced on the bound C2 IPv4. Omitted when none
-   * was harvested. Not a who/where hostname and not a victim-row donate.
+   * Bound C2 IPv4 plus extra WAN destination IPs whose `evidence_id` is
+   * that victim. Omitted when none exist. Not a who/where slot and not
+   * a second bind.
+   */
+  c2_ips?: string[]
+  /**
+   * TLS SNI or DNS name evidenced on any of those C2 IPv4s (bound plus
+   * extras). Omitted when none was harvested. Not a who/where hostname
+   * and not a victim-row donate.
    */
   c2_domain?: string
 }
@@ -144,13 +153,17 @@ declare module '@deepseek-ai/dsh-session/types' {
      * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
      * peer, those identity hunts issue only for that C2-talking IP. Assigning
      * victim to a cue/observation address issues `other-end` for that cue IP
-     * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a non-LAN
-     * C2 issues `c2-domain` for that C2 IPv4 (TLS SNI / DNS). A both-LAN
-     * conversation deny does not issue `other-end` or `c2-domain` and does
-     * not invent a C2. When `autoHunt` is true, outstanding issued hunts
-     * execute through `pcap_filter` with the scoped display filter;
-     * `other-end` and `c2-domain` auto-run even though the subject is the
-     * cue or C2. A new hostname issues Kerberos then SAMR. A new user issues SAMR.
+     * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
+     * LAN victim and unique non-LAN C2 issues `extra-wan` for that victim
+     * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each C2
+     * IPv4 (bound plus harvested extras; TLS SNI / DNS). A both-LAN
+     * conversation deny does not issue `other-end`, `extra-wan`, or
+     * `c2-domain` and does not invent a C2. When `autoHunt` is true,
+     * outstanding issued hunts execute through `pcap_filter` with the scoped
+     * display filter; `other-end` and `c2-domain` auto-run even though the
+     * subject is the cue or C2, and `extra-wan` auto-runs for the LAN victim
+     * even when a C2-talking focus IP exists. A new hostname issues Kerberos
+     * then SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**
@@ -171,8 +184,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      * does not donate to a different entity. A submitted human user is kept
      * without a conversation-client stamp. A machine SAM ending in `$` is
      * not persisted as user. A submitted mac is kept unless talking-IP frames
-     * source that MAC only from a non-victim. `c2_domain` is the harvested
-     * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
+     * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
+     * plus extra WAN destinations whose `evidence_id` is that victim, when
+     * any exist. `c2_domain` is the harvested TLS SNI or DNS name evidenced
+     * on any of those C2 IPv4s, when one exists.
      */
     'investigation/report': CaseReport
   }

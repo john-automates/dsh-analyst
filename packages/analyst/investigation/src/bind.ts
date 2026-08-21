@@ -4,9 +4,12 @@
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
- * After a live bind, a who/where string whose leftover identity tokens are
- * victim-row handles is coerced to `{ entity_id: victim }` even when labels
- * or a sentence wrap those handles. Locator leftovers (client / ip /
+ * After a live bind, extra WAN destinations whose `evidence_id` is the
+ * victim persist as `c2_ips` and a dotted name evidenced on any of those
+ * C2 IPs persists as `c2_domain`. A who/where string whose leftover
+ * identity tokens are victim-row handles is coerced to
+ * `{ entity_id: victim }` even when labels or a sentence wrap those
+ * handles. Locator leftovers (client / ip /
  * located / at / on / network) are wrappers. A leftover CIDR that contains
  * the bound victim IP is dropped so `/` does not shatter it into a
  * non-victim IPv4 plus a prefix. A leftover MAC that talking-IP frames
@@ -22,7 +25,9 @@
  */
 
 import { ipsEvidencingIdentity, isC2DomainName, normalizeIdentityValue } from './harvest.ts'
-import { c2DomainHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt } from './hunts.ts'
+import {
+  c2DomainHunt, extraWanHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
+} from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
   BoundEndpoint, CaseIdentitySlot, CaseReport, EndpointRole, Hunt, Identity, IdentityKind,
@@ -80,7 +85,74 @@ export function c2DomainHuntForBind(bind: RelationshipBind): Hunt | undefined {
 }
 
 /**
- * Harvested TLS SNI or DNS name evidenced on the bound C2 IPv4.
+ * Extra-WAN hunt for a live bind with a unique LAN victim and unique
+ * non-LAN C2. A both-LAN deny never reaches a live bind, so this hunt
+ * is not issued.
+ * @param bind - accepted conversation bind.
+ * @returns the hunt for that victim IPv4, or undefined when the pair is not unique.
+ */
+export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
+  const victim = victimOf(bind)
+  if (victim === undefined || !isLanIpv4(victim.addr)) return undefined
+  if (boundC2Ipv4(bind) === undefined) return undefined
+  return extraWanHunt(victim.addr)
+}
+
+/**
+ * C2-domain hunts for the bound C2 plus extra WAN IPv4s stamped on the victim.
+ * @param bind - accepted conversation bind.
+ * @param identities - folded ledger identities.
+ * @returns one hunt per C2 IPv4, bound first.
+ */
+export function c2DomainHuntsForBind(
+  bind: RelationshipBind,
+  identities: readonly Identity[] = [],
+): Hunt[] {
+  return acceptedC2Ips(bind, identities).map(c2DomainHunt)
+}
+
+/**
+ * Unique non-LAN IPv4 bound as role `c2`.
+ * @param bind - live bind.
+ * @returns that address, or undefined when it is missing or not unique.
+ */
+export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
+  const c2s = bind.endpoints.filter(endpoint => (
+    endpoint.role === 'c2' && isNonLanUnicastIpv4(endpoint.addr)
+  ))
+  return c2s.length === 1 ? c2s[0]?.addr : undefined
+}
+
+/**
+ * Bound C2 IPv4 plus extra non-LAN unicast IPs whose `evidence_id` is
+ * the bound victim. LAN / DC / gateway / multicast / unbound WAN stay
+ * off. Who/where are not updated. A second bind is not invented.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 exists.
+ */
+export function acceptedC2Ips(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+): string[] {
+  const bound = boundC2Ipv4(bind)
+  if (bound === undefined) return []
+  const victim = victimOf(bind)
+  const seen = new Set<string>([bound])
+  const out = [bound]
+  if (victim === undefined) return out
+  for (const identity of identities) {
+    if (identity.kind !== 'ip' || seen.has(identity.value)) continue
+    if (!isNonLanUnicastIpv4(identity.value)) continue
+    if (identity.evidence_id !== victim.addr) continue
+    seen.add(identity.value)
+    out.push(identity.value)
+  }
+  return out
+}
+
+/**
+ * Harvested TLS SNI or DNS name evidenced on any bound or extra C2 IPv4.
  * LAN / DC / gateway / victim hostnames stay off. The name is not invented
  * and does not donate who/where.
  * @param bind - live bind.
@@ -91,10 +163,11 @@ export function acceptedC2Domain(
   bind: RelationshipBind,
   identities: readonly Identity[],
 ): string | undefined {
-  const c2 = boundC2Ipv4(bind)
-  if (c2 === undefined) return undefined
+  const c2s = new Set(acceptedC2Ips(bind, identities))
+  if (c2s.size === 0) return undefined
   for (const identity of identities) {
-    if (identity.kind !== 'hostname' || identity.evidence_id !== c2) continue
+    if (identity.kind !== 'hostname' || identity.evidence_id === undefined) continue
+    if (!c2s.has(identity.evidence_id)) continue
     if (isC2DomainName(identity.value)) return identity.value
   }
   return undefined
@@ -586,8 +659,10 @@ export function completeAcceptedSlot(
  * arguments into that submitted slot. A submitted human user is kept
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP
- * frames source that MAC only from a non-victim. A harvested C2 DNS/SNI
- * name persists as `c2_domain` and does not fill who/where hostname.
+ * frames source that MAC only from a non-victim. Bound C2 plus extra
+ * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`. A
+ * harvested C2 DNS/SNI name evidenced on any of those IPs persists as
+ * `c2_domain` and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -614,6 +689,8 @@ export function projectCaseReport(
     why: claims.why,
     how: claims.how,
   }
+  const ips = acceptedC2Ips(bind, identities)
+  if (ips.length > 0) report.c2_ips = ips
   const domain = acceptedC2Domain(bind, identities)
   if (domain !== undefined) report.c2_domain = domain
   return report
@@ -781,18 +858,6 @@ function normalizeRelationship(raw: BindRelationshipInput): Relationship | strin
  */
 function conversationIncludesCue(src: string, dst: string): boolean {
   return isCueObservationAddr(src) || isCueObservationAddr(dst)
-}
-
-/**
- * Unique non-LAN IPv4 bound as role `c2`.
- * @param bind - live bind.
- * @returns that address, or undefined when it is missing or not unique.
- */
-function boundC2Ipv4(bind: RelationshipBind): string | undefined {
-  const c2s = bind.endpoints.filter(endpoint => (
-    endpoint.role === 'c2' && isNonLanUnicastIpv4(endpoint.addr)
-  ))
-  return c2s.length === 1 ? c2s[0]?.addr : undefined
 }
 
 /**

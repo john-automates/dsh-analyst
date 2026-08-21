@@ -1,8 +1,9 @@
 /**
  * Case-scoped investigation ledger: harvest unique labeled identities from
  * tool results, auto-issue hunts after new identities, auto-issue `other-end`
- * when bind_relationship assigns a cue as victim, auto-issue `c2-domain`
- * on a successful bind with a non-LAN C2, auto-run outstanding
+ * when bind_relationship assigns a cue as victim, auto-issue `extra-wan`
+ * then `c2-domain` on a successful bind with a unique LAN victim and
+ * unique non-LAN C2, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
  * deny write/edit of case-root close files, and persist a 5W1H close packet
@@ -27,8 +28,9 @@ import {
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
-  caseReportDenyReason, c2DomainHuntForBind, ENDPOINT_ROLES, foldBind, formatRolesCard,
-  otherEndHuntForDeniedBind, resolveBind, victimOf,
+  caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind, ENDPOINT_ROLES,
+  extraWanHuntForBind, foldBind, formatRolesCard, otherEndHuntForDeniedBind, resolveBind,
+  victimOf, boundC2Ipv4,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
@@ -48,8 +50,9 @@ export {
 } from './harvest.ts'
 export {
   c2DomainDisplayFilter, c2DomainHunt, c2TalkingLanIps, displayFilterFor, evidenceTextForHunts,
-  foldToolResultText, huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun,
-  isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
+  extraWanDisplayFilter, extraWanHunt, foldToolResultText, huntFilterSpec, huntKey, huntNotice,
+  huntsForNewIdentities, huntsToAutoRun, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter,
+  otherEndHunt, shouldAutoRunHunt,
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
@@ -60,7 +63,8 @@ export {
   entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
   LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
   projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf,
-  VICTIM_COUNT_REASON, acceptedC2Domain, c2DomainHuntForBind,
+  VICTIM_COUNT_REASON, acceptedC2Domain, acceptedC2Ips, boundC2Ipv4, c2DomainHuntForBind,
+  c2DomainHuntsForBind, extraWanHuntForBind,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
@@ -104,11 +108,14 @@ export interface Config {
    * SAMR QueryUserInfo hunts; a new hostname issues Kerberos and SAMR; a new
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
    * those identity hunts issue only for that C2-talking IP. A cue-as-victim
-   * bind issues `other-end` for that cue. A successful bind with a non-LAN
-   * C2 issues `c2-domain` for that C2 IPv4. Outstanding issued hunts then run
-   * through `pcap_filter` with the scoped display_filter and fields; results
-   * harvest into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
-   * `other-end` and `c2-domain`. Defaults to true.
+   * bind issues `other-end` for that cue. A successful bind with a unique LAN
+   * victim and unique non-LAN C2 issues `extra-wan` for that victim and
+   * `c2-domain` for each C2 IPv4 (bound plus harvested extras). Outstanding
+   * issued hunts then run through `pcap_filter` with the scoped
+   * display_filter and fields; results harvest into the ledger. Non-LAN /
+   * C2 IP subjects do not auto-run, except `other-end` and `c2-domain`.
+   * `extra-wan` auto-runs for the LAN victim even when a C2-talking focus
+   * IP exists. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -405,11 +412,18 @@ export class Investigation extends Service {
           throw new Error(resolved.reason)
         }
         this.recordBind(exec.agent.session, resolved.bind)
+        let issued = false
+        const extraWan = extraWanHuntForBind(resolved.bind)
+        if (extraWan !== undefined) {
+          this.recordHunt(exec.agent.session, extraWan)
+          issued = true
+        }
         const hunt = c2DomainHuntForBind(resolved.bind)
         if (hunt !== undefined) {
           this.recordHunt(exec.agent.session, hunt)
-          if (this.autoHunt) await this.harvestIssueAutoRun(exec, exec.agent.session, '')
+          issued = true
         }
+        if (issued && this.autoHunt) await this.harvestIssueAutoRun(exec, exec.agent.session, '')
         return {
           ...resolved.bind.relationship,
           endpoints: resolved.bind.endpoints,
@@ -601,7 +615,7 @@ export class Investigation extends Service {
 
   /**
    * Harvest identities from `current`, issue identity hunts, and auto-run
-   * outstanding issued hunts (including `other-end` and `c2-domain`).
+   * outstanding issued hunts (including `other-end`, `extra-wan`, and `c2-domain`).
    * @param exec - triggering execution (path and cancellation).
    * @param session - session whose ledger is folded.
    * @param current - text of the triggering tool result, or empty on a denied bind.
@@ -633,6 +647,15 @@ export class Investigation extends Service {
       await this.autoRunOutstanding(exec, session, current, (text, hunt) => {
         const before = added.length
         harvestFrom(text, `${evidence()}\n${text}`, scopeIpFromHunt(hunt))
+        if (hunt.kind === 'extra-wan') {
+          const bind = foldBind(session.events)
+          if (bind !== undefined) {
+            for (const next of c2DomainHuntsForBind(bind, foldIdentities(session.events))) {
+              if (this.recordHunt(session, next)) issued.push(next)
+            }
+          }
+          return
+        }
         if (hunt.kind !== 'c2-domain') issueFrom(added.slice(before))
       })
     }
@@ -666,7 +689,8 @@ export class Investigation extends Service {
       )[0]
       if (hunt === undefined) break
       executed.add(huntKey(hunt))
-      const spec = huntFilterSpec(hunt)
+      const live = foldBind(session.events)
+      const spec = huntFilterSpec(hunt, live === undefined ? undefined : boundC2Ipv4(live))
       const args: Record<string, unknown> = { path, display_filter: spec.display_filter }
       if (spec.fields.length > 0) args.fields = [...spec.fields]
       let value: unknown
@@ -683,13 +707,20 @@ export class Investigation extends Service {
 }
 
 /**
- * Hunt-subject IPv4 for an `eth-src`, `name-service`, or `c2-domain` dump.
+ * Hunt-subject IPv4 for an `eth-src`, `name-service`, `c2-domain`, or
+ * `extra-wan` dump. Extra-wan scopes the bound victim so harvested dest
+ * IPs stamp that victim as `evidence_id`.
  * @param hunt - issued hunt whose dump is being harvested.
  * @returns the IP subject, or undefined when the hunt is not IP-scoped.
  */
 function scopeIpFromHunt(hunt: Hunt): string | undefined {
   if (hunt.subjectKind !== 'ip') return undefined
-  if (hunt.kind === 'eth-src' || hunt.kind === 'name-service' || hunt.kind === 'c2-domain') {
+  if (
+    hunt.kind === 'eth-src'
+    || hunt.kind === 'name-service'
+    || hunt.kind === 'c2-domain'
+    || hunt.kind === 'extra-wan'
+  ) {
     return hunt.subject
   }
   return undefined

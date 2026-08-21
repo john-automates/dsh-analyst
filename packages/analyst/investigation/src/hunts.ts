@@ -1,7 +1,8 @@
 /**
  * Auto-issued hunt selection after newly recorded identities, the
  * other-end hunt issued when bind_relationship assigns a cue as victim,
- * and the c2-domain hunt issued on a successful bind with a non-LAN C2.
+ * the extra-wan hunt issued on a successful bind for other WAN peers of
+ * the bound victim, and the c2-domain hunt issued for each C2 IPv4.
  * @module @deepseek-ai/dsh-investigation/hunts
  */
 
@@ -60,6 +61,40 @@ export function c2DomainDisplayFilter(c2: string): string {
  */
 export function c2DomainHunt(c2: string): Hunt {
   return { kind: 'c2-domain', subjectKind: 'ip', subject: c2 }
+}
+
+/**
+ * Display-filter clauses that keep `ip.dst` off LAN, loopback, link-local,
+ * multicast, reserved, and 0.0.0.0. Gateway and DC addresses in RFC1918
+ * stay out. Broadcast 255.255.255.255 is in 224.0.0.0/3.
+ */
+const NON_LAN_UNICAST_DST = [
+  'not (ip.dst == 10.0.0.0/8 or ip.dst == 172.16.0.0/12 or ip.dst == 192.168.0.0/16)',
+  'not (ip.dst == 127.0.0.0/8 or ip.dst == 169.254.0.0/16 or ip.dst == 224.0.0.0/3)',
+  'not ip.dst == 0.0.0.0',
+].join(' and ')
+
+/**
+ * Display filter that finds `ip.src ==` the bound victim talking to a
+ * non-LAN unicast destination that is not the already-bound C2.
+ * @param victim - normalized LAN victim IPv4.
+ * @param boundC2 - unique bound non-LAN C2 IPv4, when known.
+ * @returns `ip.src` plus non-LAN dest exclusions, and `not ip.dst ==` the C2.
+ */
+export function extraWanDisplayFilter(victim: string, boundC2?: string): string {
+  const parts = [`ip.src == ${victim}`, NON_LAN_UNICAST_DST]
+  if (boundC2 !== undefined) parts.push(`not ip.dst == ${boundC2}`)
+  return parts.join(' and ')
+}
+
+/**
+ * Hunt for other WAN destinations of a bound victim IPv4.
+ * Subject is that victim IP. The filter does not invent a peer.
+ * @param victim - normalized LAN victim IPv4.
+ * @returns an `extra-wan` hunt for that victim.
+ */
+export function extraWanHunt(victim: string): Hunt {
+  return { kind: 'extra-wan', subjectKind: 'ip', subject: victim }
 }
 
 /**
@@ -218,9 +253,11 @@ export interface HuntFilterSpec {
  * Scoped display_filter and fields for one issued hunt.
  * Matches the filters named in {@link huntNotice}.
  * @param hunt - the hunt to execute or notice.
+ * @param boundC2 - unique bound non-LAN C2 IPv4, used to exclude that dest
+ * from `extra-wan`.
  * @returns filter and fields for `pcap_filter`.
  */
-export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
+export function huntFilterSpec(hunt: Hunt, boundC2?: string): HuntFilterSpec {
   switch (hunt.kind) {
     case 'eth-src':
       return { display_filter: displayFilterFor('eth.src', hunt), fields: ['eth.src'] }
@@ -247,6 +284,11 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
           'dns.resp.name',
         ],
       }
+    case 'extra-wan':
+      return {
+        display_filter: extraWanDisplayFilter(hunt.subject, boundC2),
+        fields: ['ip.dst'],
+      }
     default:
       return assertNever(hunt.kind, 'huntFilterSpec')
   }
@@ -255,9 +297,11 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
 /**
  * Whether an issued hunt may be auto-run against a capture.
  * Non-LAN / C2 IP subjects never run, except `other-end` (LAN `ip.src`
- * talking to that cue) and `c2-domain` (TLS SNI / DNS on that C2). When a
- * C2-talking LAN IP is known, only hunts for that IP run (and those two
- * exceptions). Otherwise LAN IP, hostname, and user subjects run.
+ * talking to that cue) and `c2-domain` (TLS SNI / DNS on that C2).
+ * `extra-wan` runs for a LAN victim subject even when a C2-talking focus
+ * IP exists. When a C2-talking LAN IP is known, only hunts for that IP
+ * run (and those exceptions). Otherwise LAN IP, hostname, and user
+ * subjects run.
  * @param hunt - one issued hunt.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @returns true when the plugin should execute this hunt.
@@ -265,6 +309,9 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
 export function shouldAutoRunHunt(hunt: Hunt, evidenceText: string): boolean {
   if (hunt.kind === 'other-end' || hunt.kind === 'c2-domain') {
     return hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)
+  }
+  if (hunt.kind === 'extra-wan') {
+    return hunt.subjectKind === 'ip' && isLanIpv4(hunt.subject)
   }
   if (hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)) return false
   const focus = c2TalkingLanIps(evidenceText)
@@ -342,6 +389,13 @@ export function huntNotice(hunt: Hunt): string {
         `Hunt issued: c2-domain for ${hunt.subjectKind} ${hunt.subject}.`,
         `Filter \`${spec.display_filter}\``,
         `fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`, \`${spec.fields[2]}\`.`,
+      ].join(' ')
+    }
+    case 'extra-wan': {
+      const spec = huntFilterSpec(hunt)
+      return [
+        `Hunt issued: extra-wan for ${hunt.subjectKind} ${hunt.subject}.`,
+        `Filter \`${spec.display_filter}\` field \`${spec.fields[0]}\`.`,
       ].join(' ')
     }
     default:

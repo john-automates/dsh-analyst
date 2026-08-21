@@ -12,11 +12,11 @@ Status: implemented
 
 ## 决策
 
-成功的 `bind_relationship` 在唯一非 LAN 的 `c2` IPv4 上，下发主体为该 C2 的 `c2-domain` hunt。过滤器是 `tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name`，并用 `ip.addr ==` 该 C2 限定范围。这三个名字是有效的 tshark 4.4.16 字段。两端都在 LAN 的拒绝到不了当前绑定，因此不会对 LAN C2 下发该 hunt（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)）。
+成功的 `bind_relationship` 在唯一非 LAN 的 `c2` IPv4 上，下发主体为该 C2 的 `c2-domain` hunt，然后 [extra-WAN](2026-08-21-extra-wan-c2-hunt-after-live-bind.md) 对每个收割到的额外 WAN IPv4 下发同样的 hunt。过滤器是 `tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name`，并用 `ip.addr ==` 该 C2 限定范围。这三个名字是有效的 tshark 4.4.16 字段。两端都在 LAN 的拒绝到不了当前绑定，因此不会对 LAN C2 下发该 hunt（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)）。
 
 当 `autoHunt` 为 true 时，`c2-domain` 像 `other-end` 一样通过 `pcap_filter` 自动运行，即使其主体是 C2。[身份 hunt 自动运行](2026-08-21-auto-run-outstanding-identity-hunts.md) 仍对 `eth-src`、`name-service`、Kerberos 和 SAMR 跳过非 LAN 主体。
 
-收割把 SNI 或 DNS 名记为主机名，`evidence_id` 为该 C2 IP。工作组和 NBNS token 仍按今天的规则拒绝。在非 LAN C2 的 `scopeIp` 下，单标签的 LAN／域控／NetBIOS 名不会被记录。该主机名不捐出 who/where（[BindRelationship](../feature/2026-08-21-bind-relationship.md)）。已接受的 `case_report` 把第一个带 C2 戳记的带点 DNS 名复制到可选的 `c2_domain`。没有收割到时省略该字段。不会编造域名。
+收割把 SNI 或 DNS 名记为主机名，`evidence_id` 为该 C2 IP。工作组和 NBNS token 仍按今天的规则拒绝。在非 LAN C2 的 `scopeIp` 下，单标签的 LAN／域控／NetBIOS 名不会被记录。该主机名不捐出 who/where（[BindRelationship](../feature/2026-08-21-bind-relationship.md)）。已接受的 `case_report` 把证据落在那些 C2 IPv4（已绑定加上额外地址）上的第一个带点 DNS 名复制到可选的 `c2_domain`。没有收割到时省略该字段。不会编造域名。
 
 scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲／域控 LAN 对等体和 `c2.example.test`。
 
