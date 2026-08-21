@@ -57,6 +57,6 @@ describe('tshark field validation', () => {
     expect(unwrapPcapDisplayFilter('  "ip.addr == 1.2.3.4"  ')).toBe('ip.addr == 1.2.3.4')
     expect(unwrapPcapDisplayFilter('ip.addr == 1.2.3.4')).toBe('ip.addr == 1.2.3.4')
     expect(unwrapPcapDisplayFilter('http.host == "example.com"')).toBe('http.host == "example.com"')
-    expect(unwrapPcapDisplayFilter('"smb" or nbns')).toBe('"smb" or nbns')
+    expect(unwrapPcapDisplayFilter('"smb" or "nbns"')).toBe('"smb" or "nbns"')
   })
 })

@@ -30,7 +30,7 @@ Scout, leftover-report harvest bans, auto-run hunts, family harvest, and new eva
 
 ## Testing
 
-`packages/analyst/analyst-tools/tests/tools.spec.ts` executes `pcap_filter` with `display_filter: "\"ip.addr == 1.2.3.4\""`. The call must spawn `tshark` with `-Y ip.addr == 1.2.3.4`. The same path with a quoted `display_filter` and `fields: "ldap.sAMAccountName"` must fail with the invalid-field diagnostic, not `INVALID_ARGS`. `fields.spec.ts` pins single, double, escaped, and mixed wrappers, and leaves `http.host == "example.com"` and `"smb" or nbns` unchanged.
+`packages/analyst/analyst-tools/tests/tools.spec.ts` executes `pcap_filter` with `display_filter: "\"ip.addr == 1.2.3.4\""`. The call must spawn `tshark` with `-Y ip.addr == 1.2.3.4`. The same path with a quoted `display_filter` and `fields: "ldap.sAMAccountName"` must fail with the invalid-field diagnostic, not `INVALID_ARGS`. `fields.spec.ts` pins single, double, escaped, and mixed wrappers, and leaves `http.host == "example.com"` and `"smb" or "nbns"` unchanged.
 
 ## Consequences
 

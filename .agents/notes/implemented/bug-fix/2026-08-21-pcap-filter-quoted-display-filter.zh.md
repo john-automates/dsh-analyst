@@ -30,7 +30,7 @@ scout、遗留报告收割禁令、自动运行 hunt、家族收割以及新评�
 
 ## 测试
 
-`packages/analyst/analyst-tools/tests/tools.spec.ts` 以 `display_filter: "\"ip.addr == 1.2.3.4\""` 执行 `pcap_filter`。该调用必须以 `-Y ip.addr == 1.2.3.4` 启动 `tshark`。同一路径在带引号的 `display_filter` 且 `fields: "ldap.sAMAccountName"` 时必须因无效字段诊断失败，而不是 `INVALID_ARGS`。`fields.spec.ts` 固定单引号、双引号、转义与混合包裹，并保持 `http.host == "example.com"` 和 `"smb" or nbns` 不变。
+`packages/analyst/analyst-tools/tests/tools.spec.ts` 以 `display_filter: "\"ip.addr == 1.2.3.4\""` 执行 `pcap_filter`。该调用必须以 `-Y ip.addr == 1.2.3.4` 启动 `tshark`。同一路径在带引号的 `display_filter` 且 `fields: "ldap.sAMAccountName"` 时必须因无效字段诊断失败，而不是 `INVALID_ARGS`。`fields.spec.ts` 固定单引号、双引号、转义与混合包裹，并保持 `http.host == "example.com"` 和 `"smb" or "nbns"` 不变。
 
 ## 后果
 
