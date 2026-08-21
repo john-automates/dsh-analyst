@@ -14,7 +14,7 @@ Adding another one-off hostname suffix does not fix the next customer name on th
 
 `isCloudflareIpv4` matches the published Cloudflare IPv4 anycast prefixes ([Cloudflare IP ranges](https://www.cloudflare.com/ips/)), including `104.16.0.0/13`. A dest in those ranges is CDN even when the evidenced hostname is a customer domain. Generic VPS / hosting ranges are not this check. Live-case gold IPs are not listed. `isCdnOrUpdateName` stays suffix-only; `evilcloudflare.com` stays false.
 
-`acceptedC2Ips` omits a published Cloudflare dest — bound C2 included — the same way it omits a dest whose evidenced hostname is CDN/update. Victim-stamped extras that are not Cloudflare and not CDN/update still persist. `acceptedC2Domain` / `projectCaseReport` persist the first dotted `isC2DomainName` that is not CDN/update, evidenced on any remaining C2 IP. A hostname evidenced only on a dropped Cloudflare dest does not win. Who/where stay the victim row.
+`acceptedC2Ips` omits a published Cloudflare dest — bound C2 included — the same way it omits a dest whose evidenced hostname is CDN/update. Persist is the bound C2 (when it is not CDN/CF) plus dests that evidence the accepted non-CDN `c2_domain`; a leftover unnamed extra does not persist ([persist attested C2 dests](2026-08-21-persist-attested-c2-dests.md)). `acceptedC2Domain` / `projectCaseReport` persist the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested dest. A hostname evidenced only on a dropped Cloudflare dest does not win. Who/where stay the victim row.
 
 `resolveBind` treats a unique non-LAN C2 in a published Cloudflare prefix as unbound, with the same deny text as a CDN/update hostname. A replacement C2 is not invented. extra-wan and c2-domain are not issued.
 
