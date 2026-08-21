@@ -639,5 +639,29 @@ describe('BindRelationship', () => {
       user: USER,
       full_name: FULL_NAME,
     })
+    const fieldOnlyUser = { ...identityOf('user', USER)!, evidence_id: LAN }
+    const dcUser = { ...identityOf('user', DISTRACTOR_USER)!, evidence_id: DISTRACTOR }
+    const fieldOnlyDump = [
+      `${LAN} → ${DISTRACTOR}`,
+      `kerberos.CNameString: ${USER}`,
+      `ip.src: ${DISTRACTOR}\tkerberos.CNameString: ${DISTRACTOR_USER}`,
+    ].join('\n')
+    const fieldOnlyLedger = [identityOf('ip', LAN)!, fieldOnlyUser, dcUser]
+    expect(identityDonatesToVictim(fieldOnlyUser, live, fieldOnlyLedger, fieldOnlyDump)).toBe(true)
+    expect(identityDonatesToVictim(dcUser, live, fieldOnlyLedger, fieldOnlyDump)).toBe(false)
+    expect(requireCaseReport(live, fieldOnlyLedger, claims, fieldOnlyDump).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+    })
+    expect(requireCaseReport(live, fieldOnlyLedger, claims, fieldOnlyDump).where).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+    })
+    const untaggedFieldOnly = identityOf('user', USER)!
+    const untaggedLedger = [identityOf('ip', LAN)!, untaggedFieldOnly, dcUser]
+    expect(identityDonatesToVictim(untaggedFieldOnly, live, untaggedLedger, fieldOnlyDump)).toBe(true)
+    expect(requireCaseReport(live, untaggedLedger, claims, fieldOnlyDump).who.user).toBe(USER)
   })
 })

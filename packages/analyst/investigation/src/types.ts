@@ -24,10 +24,12 @@ export interface Identity {
   /**
    * Conversation or entity this identity was taken from. A MAC stamps the
    * talking IPv4 that sources that eth.src. A user or full_name stamps the
-   * conversation client IPv4 (LAN / non-DC end). A `name-service` hunt-subject
-   * IPv4 scopes a hostname. A slot whose `evidence_id` points at a non-victim
-   * entity cannot donate who/where, except a MAC later sourced from the bound
-   * victim IP, or a user or full_name whose conversation `ip.src` is that victim.
+   * conversation client IPv4 (LAN / non-DC end), including a field-only
+   * SAMR/CName dump whose evidence text names that client talking to a DC.
+   * A `name-service` hunt-subject IPv4 scopes a hostname. A slot whose
+   * `evidence_id` points at a non-victim entity cannot donate who/where,
+   * except a MAC later sourced from the bound victim IP, or a user or
+   * full_name whose conversation `ip.src` is that victim.
    */
   evidence_id?: string
 }

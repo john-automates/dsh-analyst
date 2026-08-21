@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-reject-protocol-field-stamp-field-only-samr.md
+2026-08-21-reject-protocol-field-stamp-field-only-samr.md: 2654bbc58df345cc730d6f5bc8b2ee7a366711eb
+2026-08-21-reject-protocol-field-stamp-field-only-samr.zh.md: b688e16f54906b9365f32c0153a159bc63720901
