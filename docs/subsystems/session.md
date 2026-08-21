@@ -676,8 +676,9 @@ recordIdentity(session: Session, identity: Identity): boolean
 recordHunt(session: Session, hunt: Hunt): boolean
 
 /**
- * Append a whole-value 5W1H close packet. Re-merges leftover extras from
- * the Report hook so a later accepted close keeps them.
+ * Append a 5W1H close packet. Re-merges leftover extras from the Report
+ * hook so a later accepted close keeps them. Merges this close's victim
+ * row with already-published victim rows by `entity_id`.
  * @param session - session to append to.
  * @param report - 5W1H fields.
  */
@@ -685,6 +686,9 @@ recordReport(session: Session, report: CaseReport): void
 
 /**
  * Append a whole-value conversation bind. The last bind is the live bind.
+ * When a 5W1H packet already exists, persist this bind's completed victim
+ * row onto that packet. A different victim appends; the same victim
+ * updates that row. Does not invent a close when none exists.
  * @param session - session to append to.
  * @param bind - resolved relationship and endpoints.
  */
@@ -765,7 +769,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:317`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:330`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

@@ -10,8 +10,10 @@
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
  * deny write/edit of case-root close files, persist leftover extras from
- * the Report hook even when prose case_report stays unbound, and persist a
- * 5W1H close packet whose who/where project from the bound victim entity row.
+ * the Report hook even when prose case_report stays unbound, persist a
+ * 5W1H close packet whose who/where project from the bound victim entity row,
+ * and persist every bound victim row so a later live bind that names a
+ * different victim does not replace an already-published row.
  * The plugin stamps Mission at session start to scope the case. Auto-hunts
  * run only when Plan is ready. Bind still needs a named C2 hypothesis.
  * A text-only stop is not a completed investigation while Mission is still
@@ -36,9 +38,10 @@ import {
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
-  caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind, ENDPOINT_ROLES,
-  extraWanHuntForBind, foldBind, formatRolesCard, otherEndHuntForDeniedBind, resolveBind,
-  victimOf, boundC2Ipv4,
+  boundVictimSlot, caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind,
+  ENDPOINT_ROLES, extraWanHuntForBind, foldBind, foldPublishedVictimRows, formatRolesCard,
+  mergePublishedVictimRows, otherEndHuntForDeniedBind, publishedVictimRows, resolveBind,
+  victimOf, boundC2Ipv4, withPublishedVictimRows,
 } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
@@ -95,7 +98,9 @@ export {
   CDN_C2_REASON, LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind,
   projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
   UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON, acceptedC2Domain, acceptedC2Ips, boundC2Ipv4,
-  c2DomainHuntForBind, c2DomainHuntsForBind, extraWanHuntForBind,
+  boundVictimSlot, c2DomainHuntForBind, c2DomainHuntsForBind, extraWanHuntForBind,
+  foldPublishedVictimRows, mergePublishedVictimRows, publishedVictimRows, victimRowKey,
+  withPublishedVictimRows,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
@@ -280,18 +285,25 @@ export function foldHunts(events: readonly SessionEvent[]): Hunt[] {
 
 /**
  * Fold the latest 5W1H report from a log prefix.
- * Overlays leftover extras from the Report hook. Extras-only persist
- * without a 5W1H packet is not a close: this returns undefined then.
+ * Claims, who/where, and extras on the last packet win. Victim rows from
+ * every accepted close fold by `entity_id` so a later different victim
+ * does not replace an earlier published row. Overlays leftover extras
+ * from the Report hook. Extras-only persist without a 5W1H packet is not
+ * a close: this returns undefined then.
  * @param events - session log or any prefix of it.
- * @returns the last report with extras applied, or undefined when none exists.
+ * @returns the last report with extras and published victim rows applied, or undefined when none exists.
  */
 export function foldReport(events: readonly SessionEvent[]): CaseReport | undefined {
-  let report: CaseReport | undefined
+  const reports: CaseReport[] = []
   for (const event of events) {
-    if (event.type === 'investigation/report') report = event.data
+    if (event.type === 'investigation/report') reports.push(event.data)
   }
+  const report = reports[reports.length - 1]
   if (report === undefined) return undefined
-  return applyHuntExtras(report, foldExtras(events))
+  return applyHuntExtras(
+    withPublishedVictimRows(report, foldPublishedVictimRows(reports)),
+    foldExtras(events),
+  )
 }
 
 /** Join rendered tool-result text blocks. */
@@ -792,22 +804,32 @@ export class Investigation extends Service {
   }
 
   /**
-   * Append a whole-value 5W1H close packet. Re-merges leftover extras from
-   * the Report hook so a later accepted close keeps them.
+   * Append a 5W1H close packet. Re-merges leftover extras from the Report
+   * hook so a later accepted close keeps them. Merges this close's victim
+   * row with already-published victim rows by `entity_id`.
    * @param session - session to append to.
    * @param report - 5W1H fields.
    */
   recordReport(session: Session, report: CaseReport): void {
-    session.append('investigation/report', applyHuntExtras(report, foldExtras(session.events)))
+    const prior = acceptedReports(session.events)
+    const rows = mergePublishedVictimRows(foldPublishedVictimRows(prior), report.who)
+    session.append(
+      'investigation/report',
+      applyHuntExtras(withPublishedVictimRows(report, rows), foldExtras(session.events)),
+    )
   }
 
   /**
    * Append a whole-value conversation bind. The last bind is the live bind.
+   * When a 5W1H packet already exists, persist this bind's completed victim
+   * row onto that packet. A different victim appends; the same victim
+   * updates that row. Does not invent a close when none exists.
    * @param session - session to append to.
    * @param bind - resolved relationship and endpoints.
    */
   recordBind(session: Session, bind: RelationshipBind): void {
     session.append('investigation/bind', bind)
+    this.persistBoundVictimRow(session, bind)
   }
 
   /**
@@ -1008,10 +1030,36 @@ export class Investigation extends Service {
     if (extras === undefined) return
     if (sameHuntExtras(foldExtras(session.events), extras)) return
     session.append('investigation/extras', extras)
-    const existing = lastAcceptedReport(session.events)
+    const existing = foldReport(session.events)
     if (existing !== undefined) {
       session.append('investigation/report', applyHuntExtras(existing, extras))
     }
+  }
+
+  /**
+   * Persist this live bind's victim row onto an already-accepted close.
+   * Does not invent 5W1H. Bind role infra is not a victim row.
+   * @param session - session whose report and identities are folded.
+   * @param bind - just-recorded live bind.
+   */
+  private persistBoundVictimRow(session: Session, bind: RelationshipBind): void {
+    const existing = foldReport(session.events)
+    if (existing === undefined) return
+    const slot = boundVictimSlot(
+      bind,
+      foldIdentities(session.events),
+      foldToolResultText(session.events),
+    )
+    if (slot === undefined) return
+    const rows = mergePublishedVictimRows(publishedVictimRows(existing), slot)
+    const who = existing.who.entity_id === slot.entity_id ? slot : existing.who
+    const where = existing.where.entity_id === slot.entity_id ? slot : existing.where
+    const merged = applyHuntExtras(
+      withPublishedVictimRows({ ...existing, who, where }, rows),
+      foldExtras(session.events),
+    )
+    if (JSON.stringify(merged) === JSON.stringify(existing)) return
+    session.append('investigation/report', merged)
   }
 
   /**
@@ -1252,14 +1300,14 @@ export function setsWhoWhere(args: unknown): boolean {
 }
 
 /**
- * Last accepted 5W1H packet, without overlaying extras.
+ * Accepted 5W1H packets in log order, without overlaying extras.
  * @param events - session log or any prefix of it.
- * @returns the last report payload, or undefined.
+ * @returns those payloads.
  */
-function lastAcceptedReport(events: readonly SessionEvent[]): CaseReport | undefined {
-  let report: CaseReport | undefined
+function acceptedReports(events: readonly SessionEvent[]): CaseReport[] {
+  const reports: CaseReport[] = []
   for (const event of events) {
-    if (event.type === 'investigation/report') report = event.data
+    if (event.type === 'investigation/report') reports.push(event.data)
   }
-  return report
+  return reports
 }

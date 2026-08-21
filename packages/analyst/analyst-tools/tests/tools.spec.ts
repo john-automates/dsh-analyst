@@ -2549,4 +2549,131 @@ describe('analyst tools', () => {
     await failed.ctx.fiber.dispose()
     await rm(staging, { recursive: true, force: true })
   })
+
+  it('persists every bound victim row after two live binds', async () => {
+    const { ctx, owner } = await setup()
+    const first = {
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      c2: '198.51.100.80',
+    }
+    const second = {
+      ip: '10.0.10.8',
+      mac: '02:00:00:00:00:0c',
+      hostname: 'lan-host-b',
+      user: 'lan-user-b',
+      c2: '198.51.100.81',
+    }
+    const dc = '10.0.10.3'
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: first.ip, label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: first.mac, label: 'MAC', entity_id: first.ip, evidence_id: first.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: first.hostname, label: 'hostname', entity_id: first.ip, evidence_id: first.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user', value: first.user, label: 'user', entity_id: first.ip, evidence_id: first.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: second.ip, label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: second.mac, label: 'MAC', entity_id: second.ip, evidence_id: second.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: second.hostname, label: 'hostname', entity_id: second.ip, evidence_id: second.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user', value: second.user, label: 'user', entity_id: second.ip, evidence_id: second.ip,
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: dc, label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', entity_id: dc,
+    })
+    const claims = { what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https' }
+    const bindOne = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-a'),
+      name: 'bind_relationship',
+      arguments: {
+        src: first.ip,
+        dst: first.c2,
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: first.ip, role: 'victim', because: `${first.ip} talking to ${first.c2}` },
+          { addr: first.c2, because: 'cue/observation address' },
+          { addr: dc, role: 'infra', because: 'dc' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bindOne.isError).toBe(false)
+    const closeOne = await ctx.tools.execute({
+      signal, callId: CallId('report-a'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(closeOne.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.victims).toBeUndefined()
+    expect(ctx.investigation.report(owner.session)?.who).toEqual({
+      entity_id: first.ip, ip: first.ip, mac: first.mac, hostname: first.hostname, user: first.user,
+    })
+    const bindTwo = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-b'),
+      name: 'bind_relationship',
+      arguments: {
+        src: second.ip,
+        dst: second.c2,
+        dport: 443,
+        t: '2026-08-21T00:01:00Z',
+        evidence_id: 'conv-2',
+        endpoints: [
+          { addr: second.ip, role: 'victim', because: `${second.ip} talking to ${second.c2}` },
+          { addr: second.c2, because: 'cue/observation address' },
+          { addr: dc, role: 'infra', because: 'dc' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bindTwo.isError).toBe(false)
+    const afterBind = ctx.investigation.report(owner.session)
+    expect(afterBind?.who.entity_id).toBe(first.ip)
+    expect(afterBind?.victims).toEqual([
+      { entity_id: first.ip, ip: first.ip, mac: first.mac, hostname: first.hostname, user: first.user },
+      { entity_id: second.ip, ip: second.ip, mac: second.mac, hostname: second.hostname, user: second.user },
+    ])
+    expect(afterBind?.victims?.some(row => row.entity_id === dc)).toBe(false)
+    const closeTwo = await ctx.tools.execute({
+      signal, callId: CallId('report-b'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(closeTwo.isError).toBe(false)
+    const published = ctx.investigation.report(owner.session)
+    expect(published?.who).toEqual({
+      entity_id: second.ip,
+      ip: second.ip,
+      mac: second.mac,
+      hostname: second.hostname,
+      user: second.user,
+    })
+    expect(published?.victims).toEqual([
+      { entity_id: first.ip, ip: first.ip, mac: first.mac, hostname: first.hostname, user: first.user },
+      { entity_id: second.ip, ip: second.ip, mac: second.mac, hostname: second.hostname, user: second.user },
+    ])
+    expect(text(closeTwo)).toContain(`Victim: ${first.ip} ${first.mac} ${first.hostname} ${first.user}`)
+    expect(text(closeTwo)).toContain(`Victim: ${second.ip} ${second.mac} ${second.hostname} ${second.user}`)
+    const closeSame = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-b2'),
+      name: 'case_report',
+      arguments: { ...claims, how: 'https again' },
+      agent: owner,
+    })
+    expect(closeSame.isError).toBe(false)
+    const updated = ctx.investigation.report(owner.session)
+    expect(updated?.how).toBe('https again')
+    expect(updated?.victims).toHaveLength(2)
+    expect(updated?.victims?.filter(row => row.entity_id === second.ip)).toHaveLength(1)
+  })
 })

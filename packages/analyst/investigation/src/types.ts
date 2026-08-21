@@ -223,18 +223,28 @@ export interface CaseIdentitySlot {
 
 /** 5W1H case-close packet stored on `investigation/report`. */
 export interface CaseReport {
-  /** Victim entity row projected into who. */
+  /** Victim entity row projected into who. The latest accepted close. */
   who: CaseIdentitySlot
   /** What happened. */
   what: string
   /** When it happened. */
   when: string
-  /** Victim entity row projected into where. */
+  /** Victim entity row projected into where. The latest accepted close. */
   where: CaseIdentitySlot
   /** Why it happened, as evidenced. */
   why: string
   /** How it happened, as evidenced. */
   how: string
+  /**
+   * Bound victim rows from accepted closes and later live binds, first-seen
+   * `entity_id` order. Present only when two or more distinct victim IPv4s
+   * were published. A later bind that names a different victim appends a
+   * row; a later close of the same victim updates that row. who/where stay
+   * the latest accepted close. Bind role infra, DC, gateway, and
+   * file-server rows are not published. Omitted when only one victim row
+   * exists.
+   */
+  victims?: CaseIdentitySlot[]
   /**
    * Bound C2 IPv4 plus victim-stamped extra-wan dests, omitting an IP
    * in a published Cloudflare or Fastly anycast prefix or whose evidenced
@@ -286,28 +296,36 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'investigation/bind': RelationshipBind
     /**
-     * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
-     * who/where are the projected victim entity row; omitted model keys are
-     * filled from that row after deny/coerce. Omitted who/where also fold
-     * sibling top-level identity keys (ip, mac, hostname, user, full_name)
-     * from the same case_report arguments into that submitted slot. Omitted
-     * mac persists the unique ledger MAC that is not DC/gateway-only when a
-     * sticky DC donate or uniqueness left the row empty. Omitted user still
-     * persists from victim-IP evidence. An AD SRV / DC locator hostname
-     * does not persist as who/where hostname. A submitted or harvested
-     * workstation hostname is kept. Hostname stays omitted when only that
-     * locator is harvested. A submitted user, hostname, or full_name is
-     * kept when the row has no donated value and that identity does not
-     * donate to a different entity. A submitted human user is kept
-     * without a conversation-client stamp. A machine SAM ending in `$` is
-     * not persisted as user. A submitted mac is kept unless talking-IP frames
-     * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
-     * plus victim-stamped extra-wan dests, omitting an IP in a published
-     * Cloudflare or Fastly anycast prefix or whose evidenced hostname is a
-     * well-known CDN or update name, when any remain. Unnamed extra-wan
-     * dests that survive those omits persist. `c2_domain` is the harvested
-     * TLS SNI or DNS name evidenced on an attested dest that is not
-     * CDN/update, when one exists.
+     * 5W1H case-close packet. Claims, who/where, and extras on the last
+     * `investigation/report` win. Published victim rows fold by
+     * `entity_id`: a later accepted close or live bind that names a
+     * different victim appends a row and does not replace an
+     * already-published victim. A later close of the same victim updates
+     * that row. `victims` holds those rows when two or more distinct
+     * victim IPv4s were published; a single-bind close omits it.
+     * who/where are the projected victim entity row of the latest accepted
+     * close; omitted model keys are filled from that row after deny/coerce.
+     * Omitted who/where also fold sibling top-level identity keys (ip, mac,
+     * hostname, user, full_name) from the same case_report arguments into
+     * that submitted slot. Omitted mac persists the unique ledger MAC that
+     * is not DC/gateway-only when a sticky DC donate or uniqueness left the
+     * row empty. Omitted user still persists from victim-IP evidence. An
+     * AD SRV / DC locator hostname does not persist as who/where hostname.
+     * A submitted or harvested workstation hostname is kept. Hostname stays
+     * omitted when only that locator is harvested. A submitted user,
+     * hostname, or full_name is kept when the row has no donated value and
+     * that identity does not donate to a different entity. A submitted
+     * human user is kept without a conversation-client stamp. A machine SAM
+     * ending in `$` is not persisted as user. A submitted mac is kept
+     * unless talking-IP frames source that MAC only from a non-victim.
+     * Bind role infra, DC, gateway, and file-server rows are not published
+     * as victim rows. `c2_ips` is the bound C2 IPv4 plus victim-stamped
+     * extra-wan dests, omitting an IP in a published Cloudflare or Fastly
+     * anycast prefix or whose evidenced hostname is a well-known CDN or
+     * update name, when any remain. Unnamed extra-wan dests that survive
+     * those omits persist. `c2_domain` is the harvested TLS SNI or DNS
+     * name evidenced on an attested dest that is not CDN/update, when one
+     * exists.
      */
     'investigation/report': CaseReport
     /**

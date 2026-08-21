@@ -369,7 +369,8 @@ export function apply(ctx: Context, config: Config): void {
     description: [
       'Close the investigation with a 5W1H packet after bind_relationship.',
       'who and where are projections of the bound victim entity row; do not fill them as free text.',
-      'Send evidenced what, when, why, and how. This replaces any previous case_report on the session log.',
+      'Send evidenced what, when, why, and how.',
+      'A later close of a different victim keeps already-published victim rows; a later close of the same victim updates that row.',
     ].join(' '),
     parameters: {
       what: { type: 'string', required: true, description: 'What happened.' },
@@ -404,6 +405,7 @@ export function apply(ctx: Context, config: Config): void {
           how: { type: 'string', required: true },
           c2_domain: { type: 'string' },
           c2_ips: { type: 'array', items: { type: 'string' } },
+          victims: { type: 'array', items: CASE_IDENTITY_SLOT_SCHEMA },
         },
       },
       render: (_args, value) => [{
@@ -416,6 +418,9 @@ export function apply(ctx: Context, config: Config): void {
           `Where: ${renderIdentitySlot(value.where)}`,
           `Why: ${value.why}`,
           `How: ${value.how}`,
+          ...value.victims === undefined
+            ? []
+            : value.victims.map(row => `Victim: ${renderIdentitySlot(row)}`),
           ...value.c2_ips === undefined ? [] : [`C2 IPs: ${value.c2_ips.join(', ')}`],
           ...value.c2_domain === undefined ? [] : [`C2 domain: ${value.c2_domain}`],
         ].join('\n'),
@@ -449,7 +454,7 @@ export function apply(ctx: Context, config: Config): void {
         full_name: record.full_name,
       })
       ctx.investigation.recordReport(session, report)
-      return Promise.resolve(report)
+      return Promise.resolve(ctx.investigation.report(session) ?? report)
     },
     presentCall: args => ({ card: 'generic', title: 'Case report', kind: 'other', rawInput: args }),
   }))

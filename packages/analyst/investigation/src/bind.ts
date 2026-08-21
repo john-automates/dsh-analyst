@@ -5,6 +5,8 @@
  * or a well-known CDN or update destination.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
+ * Accepted closes and later live binds persist every bound victim row by
+ * `entity_id`. A later different victim does not replace an earlier row.
  * After a live bind, attested extras (bound C2 plus victim-stamped WAN
  * dests that are not a published Cloudflare or Fastly anycast dest and have no
  * well-known CDN or update hostname) persist as `c2_ips` and choose
@@ -789,6 +791,115 @@ export function requireCaseReport(
   const report = projectCaseReport(bind, identities, claims, evidenceText, submitted)
   if (report === undefined) throw new Error(UNBOUND_REASON)
   return report
+}
+
+/**
+ * Identity key for a published victim row. `entity_id` is the bound victim
+ * address.
+ * @param slot - projected who/where row.
+ * @returns that address.
+ */
+export function victimRowKey(slot: CaseIdentitySlot): string {
+  return slot.entity_id
+}
+
+/**
+ * Published victim rows on one close packet.
+ * `victims` when present, else `who`. First-seen `entity_id` order; a later
+ * same-key row replaces that entry.
+ * @param report - accepted close packet.
+ * @returns those rows.
+ */
+export function publishedVictimRows(report: CaseReport): CaseIdentitySlot[] {
+  const rows: CaseIdentitySlot[] = []
+  const seen = new Map<string, number>()
+  const add = (slot: CaseIdentitySlot): void => {
+    const key = victimRowKey(slot)
+    const existing = seen.get(key)
+    if (existing !== undefined) {
+      rows[existing] = slot
+      return
+    }
+    seen.set(key, rows.length)
+    rows.push(slot)
+  }
+  if (report.victims !== undefined) {
+    for (const row of report.victims) add(row)
+  }
+  add(report.who)
+  return rows
+}
+
+/**
+ * Merge `next` into published victim rows. Same `entity_id` updates that
+ * row. A different `entity_id` appends. Callers pass victim rows only;
+ * bind role infra is not added here.
+ * @param prior - already-published victim rows.
+ * @param next - row from this close or live bind.
+ * @returns first-seen rows with that update.
+ */
+export function mergePublishedVictimRows(
+  prior: readonly CaseIdentitySlot[],
+  next: CaseIdentitySlot,
+): CaseIdentitySlot[] {
+  const rows = [...prior]
+  const key = victimRowKey(next)
+  const index = rows.findIndex(row => victimRowKey(row) === key)
+  if (index === -1) rows.push(next)
+  else rows[index] = next
+  return rows
+}
+
+/**
+ * Attach `victims` when more than one distinct victim row is published.
+ * A single-victim packet omits the field so one-bind closes stay one row.
+ * @param report - close packet whose claims and latest who/where stay.
+ * @param rows - folded victim rows.
+ * @returns the packet with `victims` only when two or more rows exist.
+ */
+export function withPublishedVictimRows(
+  report: CaseReport,
+  rows: readonly CaseIdentitySlot[],
+): CaseReport {
+  const { victims: _dropped, ...rest } = report
+  if (rows.length <= 1) return rest
+  return { ...rest, victims: [...rows] }
+}
+
+/**
+ * Fold victim rows from accepted close packets in log order.
+ * Same `entity_id` updates that row. A later different victim does not
+ * drop an earlier row.
+ * @param reports - accepted close packets, oldest first.
+ * @returns first-seen victim rows.
+ */
+export function foldPublishedVictimRows(reports: readonly CaseReport[]): CaseIdentitySlot[] {
+  let rows: CaseIdentitySlot[] = []
+  for (const report of reports) {
+    for (const row of publishedVictimRows(report)) {
+      rows = mergePublishedVictimRows(rows, row)
+    }
+  }
+  return rows
+}
+
+/**
+ * Project then complete the unique victim row on a live bind.
+ * Omitted-slot fill runs from that victim's harvest. Bind role infra
+ * is not a victim row.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for omitted-slot fill.
+ * @returns the completed victim row, or undefined when the bind has no unique victim.
+ */
+export function boundVictimSlot(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText = '',
+): CaseIdentitySlot | undefined {
+  const projected = projectVictimSlot(bind, identities, evidenceText)
+  if (projected === undefined) return undefined
+  return completeAcceptedSlot(projected, undefined, bind, identities, evidenceText)
 }
 
 /**
