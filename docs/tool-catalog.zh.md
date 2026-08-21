@@ -2432,7 +2432,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `investigation_mission`
 
-更新底盘 Mission 的线索指针和槽位 0a 校验线索。目的在会话开始时盖成受害端身份 + C2 调查，不能被覆盖。
+更新底盘 Mission 的线索指针和槽位 0a 校验线索。提交的目的会被忽略。底盘目的保持受害端身份 + C2 调查。
 
 ```json
 {
@@ -2440,7 +2440,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
   "properties": {
     "purpose": {
       "type": "string",
-      "description": "Must remain the chassis purpose: This is a victim-identity + C2 investigation."
+      "description": "Ignored. Chassis purpose stays This is a victim-identity + C2 investigation."
     },
     "cue_addr": {
       "type": "string",

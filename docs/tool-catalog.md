@@ -2428,7 +2428,7 @@ Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/anal
 
 ### `investigation_mission`
 
-Update the chassis Mission cue pointer and slot 0a validate-the-cue. Purpose is stamped at session start as a victim-identity + C2 investigation and cannot be overwritten.
+Update the chassis Mission cue pointer and slot 0a validate-the-cue. Submitted purpose is ignored. Chassis purpose stays a victim-identity + C2 investigation.
 
 ```json
 {
@@ -2436,7 +2436,7 @@ Update the chassis Mission cue pointer and slot 0a validate-the-cue. Purpose is 
   "properties": {
     "purpose": {
       "type": "string",
-      "description": "Must remain the chassis purpose: This is a victim-identity + C2 investigation."
+      "description": "Ignored. Chassis purpose stays This is a victim-identity + C2 investigation."
     },
     "cue_addr": {
       "type": "string",

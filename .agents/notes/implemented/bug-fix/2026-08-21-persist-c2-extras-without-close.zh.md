@@ -14,7 +14,7 @@ Status: implemented
 
 Mission、Plan、Action 和 Report 包裹 DINQ（Observation → Question → Hypothesis → Answer → Bind → Who/Where）。名称保持 Mission／Plan／Action／Report。不改名为 LDSM／ADSM。Thesis-revise 是情景对象（`name` + `claim` + `rule` + `result`），不是第四个 IR 阶段。由 harness 检查（而不是 `METHODOLOGY_SECTION` 文本）拥有这些阶段。
 
-0. **Mission — 目的。** 插件在 `session/created` 盖上 Mission 戳（若日志里还没有，也会在任何 hunt 之前再盖一次），目的是受害端身份 + C2 调查。目的与已关闭手段保持底盘值。底盘的 `cueValidation` `open` 是待定（`cue-pending`），直到 `investigation_mission` 点名真实线索。那个待定线索不是已校验的观测。模型可以更新线索指针和槽位 0a；不同目的会被拒绝（`MISSION_PURPOSE_REASON`）。Mission 只给案件定范围。它不解锁自动 hunt。
+0. **Mission — 目的。** 插件在 `session/created` 盖上 Mission 戳（若日志里还没有，也会在任何 hunt 之前再盖一次），目的是受害端身份 + C2 调查。目的与已关闭手段保持底盘值。底盘的 `cueValidation` `open` 是待定（`cue-pending`），直到 `investigation_mission` 点名真实线索。那个待定线索不是已校验的观测。模型可以更新线索指针和槽位 0a。提交的目的会被忽略；`recordMission` 始终持久化 `CHASSIS_MISSION_PURPOSE`。提交字符串上的句号、空白或大小写不会拒绝线索更新。不同调查措辞也会被忽略，并被底盘目的覆盖。Mission 只给案件定范围。它不解锁自动 hunt。
 
 1. **Plan — 先清单，再点名假设集。** Plan 现场追加、只追加：来源清单与缺口按唯一值拼接；每条假设是 `I believe X because Y` 加上一条证伪测试；候选标签是 `{victim, c2, dc, cdn, update, distractor}`。后一条目增加问题。它不替换更早的假设 id。`planReady` 是唯一的自动运行钥匙：已点名线索为 `valid` 或显式 `open`（不是 cue-pending）、至少一条 C2 假设、至少一条 CDN／DC／更新替代，以及清单。`bind_relationship` 使用同一套检查。拒绝原因是显式的（`CUE_PENDING_REASON`、`CUE_INVALID_REASON`、`PLAN_C2_HYPOTHESIS_REASON`、`PLAN_ALTERNATIVE_REASON`、`PLAN_INVENTORY_REASON`）。仅有 Mission 永远不够。
 
@@ -30,7 +30,9 @@ Mission、Plan、Action 和 Report 包裹 DINQ（Observation → Question → Hy
 
 **把底盘 cue-pending 的 `open` 当成已校验观测。** 否决：槽位 0a 保持待定，直到 `investigation_mission` 点名真实线索。那个待定指针不解锁 hunt 或绑定。
 
-**让模型覆盖 Mission 目的。** 否决：目的是受害端身份 + C2 调查。溯源或家族狩猎是另一类案件。
+**把提交的目的字符串持久化到 Mission 事件上。** 否决：目的保持受害端身份 + C2 调查。溯源或家族狩猎是另一类案件。`recordMission` 用底盘目的覆盖。
+
+**在提交目的不是精确底盘字符串匹配时拒绝 investigation_mission。** 否决：`recordMission` 已经盖上 `CHASSIS_MISSION_PURPOSE`。句号、多余空白或大小写差异会丢掉已点名线索，并让绑定停在 cue-pending。
 
 **把四个阶段改名为 LDSM／ADSM。** 否决：名称保持 Mission／Plan／Action／Report。Thesis-revise 仍是情景对象，不是第四个 IR 阶段。
 
@@ -46,8 +48,8 @@ Mission、Plan、Action 和 Report 包裹 DINQ（Observation → Question → Hy
 
 ## 测试
 
-`packages/analyst/investigation/tests/investigation.spec.ts` 在 `session/created` 盖上底盘 Mission，在仅有 Mission 时从 `pcap_filter` 收割 LAN `10.0.10.2` 且不自动运行 eth-src 或 kerberos，在 Plan 点名 C2 假设之前拒绝绑定（先是 `CUE_PENDING_REASON`，然后是 `PLAN_C2_HYPOTHESIS_REASON`），并在 `investigation_mission`（线索 `open`）加上 `investigation_plan`（C2 H + 替代 + 清单）之后自动运行那些 hunt，且每条 Action 行都带 `hypothesis_id`。同一文件拒绝不同的 Mission 目的（`MISSION_PURPOSE_REASON`），拒绝缺少 CDN／DC 替代（`PLAN_ALTERNATIVE_REASON`）或清单（`PLAN_INVENTORY_REASON`）的已解析绑定，把 LAN `10.0.10.2` 绑定到 TEST-NET C2 `198.51.100.80`，自动运行 extra-wan／c2-domain，在没有 `investigation/report` 的情况下把 `investigation/extras` 持久化为 `198.51.100.80` + `203.0.113.50` 与 `payload.example.test`（省略 CDN 目的地址 `203.0.113.80`），在未绑定的 `case_report` 之后仍保留这些附加项，并在后来被接受的结案包上重新合并它们。两端都在 LAN 或 CDN／更新 C2 的拒绝仍先失败于 `resolveBind`，且不持久化附加项。`mindset.spec.ts` 钉住折叠、含 cue-pending 的 Plan 就绪、显式拒绝原因、主张形式和 thesis-revise。`hunts.spec.ts` 在 Plan 就绪之前让每一次 hunt 离开 `huntsToAutoRun`。无密钥 pcap-case 快照在创建时盖上 Mission，并在绑定之前持久化 Plan。
+`packages/analyst/investigation/tests/investigation.spec.ts` 在 `session/created` 盖上底盘 Mission，在仅有 Mission 时从 `pcap_filter` 收割 LAN `10.0.10.2` 且不自动运行 eth-src 或 kerberos，在 Plan 点名 C2 假设之前拒绝绑定（先是 `CUE_PENDING_REASON`，然后是 `PLAN_C2_HYPOTHESIS_REASON`），并在 `investigation_mission`（线索 `open`）加上 `investigation_plan`（C2 H + 替代 + 清单）之后自动运行那些 hunt，且每条 Action 行都带 `hypothesis_id`。同一文件在提交目的缺少句号或带有多余空白时接受 `investigation_mission`，持久化线索 `198.51.100.80`／`cue_validation` 与底盘目的，在点名线索加上就绪 Plan 之前对 cue-pending 保持拒绝（`CUE_PENDING_REASON`），拒绝缺少 CDN／DC 替代（`PLAN_ALTERNATIVE_REASON`）或清单（`PLAN_INVENTORY_REASON`）的已解析绑定，把 LAN `10.0.10.2` 绑定到 TEST-NET C2 `198.51.100.80`，自动运行 extra-wan／c2-domain，在没有 `investigation/report` 的情况下把 `investigation/extras` 持久化为 `198.51.100.80` + `203.0.113.50` 与 `payload.example.test`（省略 CDN 目的地址 `203.0.113.80`），在未绑定的 `case_report` 之后仍保留这些附加项，并在后来被接受的结案包上重新合并它们。两端都在 LAN 或 CDN／更新 C2 的拒绝仍先失败于 `resolveBind`，且不持久化附加项。`mindset.spec.ts` 钉住折叠、含 cue-pending 的 Plan 就绪、显式拒绝原因、主张形式和 thesis-revise。`hunts.spec.ts` 在 Plan 就绪之前让每一次 hunt 离开 `huntsToAutoRun`。无密钥 pcap-case 快照在创建时盖上 Mission，并在绑定之前持久化 Plan。
 
 ## 后果
 
-任何 hunt 之前就已存在底盘目的。自动 hunt 等待就绪的 Plan，包括已点名线索。一次成功绑定会点名 C2 假设，并已检查 CDN／DC／更新替代。即使散文 `case_report` 保持未绑定，已证明 hunt 之后的遗留 C2 IP 与非 CDN 带点名仍会持久化。who/where 仍是受害端行。
+任何 hunt 之前就已存在底盘目的。即使提交目的因标点不同或点名另一类调查，已点名线索仍会持久化；底盘目的始终被盖上。自动 hunt 等待就绪的 Plan，包括已点名线索。一次成功绑定会点名 C2 假设，并已检查 CDN／DC／更新替代。即使散文 `case_report` 保持未绑定，已证明 hunt 之后的遗留 C2 IP 与非 CDN 带点名仍会持久化。who/where 仍是受害端行。

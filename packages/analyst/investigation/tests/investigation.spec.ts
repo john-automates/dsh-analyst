@@ -13,7 +13,7 @@ import Investigation, {
   BOTH_LAN_CONVERSATION_REASON, CDN_C2_REASON, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
   CLOSE_FILE_REASON, Config, foldActions, foldExtras,
   foldHunts, foldIdentities, foldMission, foldPlan, foldReport, METHODOLOGY_SECTION,
-  CUE_PENDING_REASON, MISSION_PURPOSE_REASON, PLAN_ALTERNATIVE_REASON,
+  CUE_PENDING_REASON, PLAN_ALTERNATIVE_REASON,
   PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, requireCaseReport, resolveCaseDir,
   setsWhoWhere,
 } from '../src/index.ts'
@@ -2033,6 +2033,82 @@ describe('investigation service', () => {
     expect(foldExtras(owner.session.events)).toBeUndefined()
   })
 
+  it('persists a named cue when submitted purpose is not an exact chassis string', async () => {
+    const bindArgs = {
+      src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+    }
+    const { ctx, owner } = await setup({}, { mindset: false })
+    ctx.investigation.recordPlan(owner.session, {
+      inventory: ['evidence/a.pcap'],
+      gaps: ['C2 domain unknown'],
+      hypotheses: [{
+        id: 'h-c2',
+        claim: 'I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue',
+        disconfirm: 'SNI is a CDN or update name',
+        label: 'c2',
+      }, {
+        id: 'h-cdn',
+        claim: 'I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there',
+        disconfirm: 'a non-CDN dotted name is evidenced on that IP',
+        label: 'cdn',
+      }],
+    })
+    const pending = await ctx.tools.execute({
+      signal, callId: CallId('bind-cue-pending-ready-plan'), name: 'bind_relationship',
+      arguments: bindArgs, agent: owner,
+    })
+    expect(pending.isError).toBe(true)
+    expect(pending.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      CUE_PENDING_REASON,
+    )
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('cue-pending')
+
+    const { ctx: ctx2, owner: owner2 } = await setup({}, { mindset: false })
+    const punct = await ctx2.tools.execute({
+      signal,
+      callId: CallId('mission-missing-period'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: '  This is a victim-identity + C2 investigation  ',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'valid',
+      },
+      agent: owner2,
+    })
+    expect(punct.isError).toBe(false)
+    expect(foldMission(owner2.session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(owner2.session.events)?.cue.addr).toBe('198.51.100.80')
+    expect(foldMission(owner2.session.events)?.cue.evidence_id).toBe('conv-1')
+    expect(foldMission(owner2.session.events)?.cueValidation).toBe('valid')
+    const cased = await ctx2.tools.execute({
+      signal,
+      callId: CallId('mission-cased-purpose'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: 'THIS IS A VICTIM-IDENTITY + C2 INVESTIGATION.',
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'open',
+      },
+      agent: owner2,
+    })
+    expect(cased.isError).toBe(false)
+    expect(foldMission(owner2.session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(owner2.session.events)?.cueValidation).toBe('open')
+    const noPlan = await ctx2.tools.execute({
+      signal, callId: CallId('bind-named-cue-no-plan'), name: 'bind_relationship',
+      arguments: bindArgs, agent: owner2,
+    })
+    expect(noPlan.isError).toBe(true)
+    expect(noPlan.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      PLAN_C2_HYPOTHESIS_REASON,
+    )
+    expect(ctx2.investigation.bind(owner2.session)).toBeUndefined()
+    expect(foldExtras(owner2.session.events)).toBeUndefined()
+  })
+
   it('appends Mission and Plan and denies an empty or malformed Plan', async () => {
     const { ctx, owner } = await setup({}, { mindset: false })
     const blank = await ctx.tools.execute({
@@ -2047,10 +2123,10 @@ describe('investigation service', () => {
       },
       agent: owner,
     })
-    expect(blank.isError).toBe(true)
-    expect(blank.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
-      MISSION_PURPOSE_REASON,
-    )
+    expect(blank.isError).toBe(false)
+    expect(foldMission(owner.session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('198.51.100.80')
+    expect(foldMission(owner.session.events)?.cueValidation).toBe('valid')
     const overwrite = await ctx.tools.execute({
       signal,
       callId: CallId('mission-overwrite'),
@@ -2063,10 +2139,9 @@ describe('investigation service', () => {
       },
       agent: owner,
     })
-    expect(overwrite.isError).toBe(true)
-    expect(overwrite.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
-      MISSION_PURPOSE_REASON,
-    )
+    expect(overwrite.isError).toBe(false)
+    expect(foldMission(owner.session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('198.51.100.80')
     const blankCue = await ctx.tools.execute({
       signal,
       callId: CallId('mission-blank-cue'),

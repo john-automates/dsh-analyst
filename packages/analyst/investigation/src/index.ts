@@ -47,7 +47,7 @@ import { formatLedger } from './ledger.ts'
 import {
   actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
   foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt, killedHypothesisIds,
-  MISSION_PURPOSE_REASON, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
+  planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
   sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
@@ -74,7 +74,7 @@ export { formatLedger } from './ledger.ts'
 export {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_CLOSED_MEANS,
   CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
-  isBelieveBecauseClaim, killedHypothesisIds, MISSION_PURPOSE_REASON, planEntryDenyReason,
+  isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
   PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
   projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
@@ -485,13 +485,13 @@ export class Investigation extends Service {
       name: 'investigation_mission',
       description: [
         'Update the chassis Mission cue pointer and slot 0a validate-the-cue.',
-        'Purpose is stamped at session start as a victim-identity + C2 investigation and cannot be overwritten.',
+        'Submitted purpose is ignored. Chassis purpose stays a victim-identity + C2 investigation.',
       ].join(' '),
       parameters: {
         purpose: {
           type: 'string',
           required: true,
-          description: 'Must remain the chassis purpose: This is a victim-identity + C2 investigation.',
+          description: 'Ignored. Chassis purpose stays This is a victim-identity + C2 investigation.',
         },
         cue_addr: { type: 'string', required: true, description: 'Cue or observation address.' },
         cue_evidence_id: { type: 'string', required: true, description: 'Id of the cited cue evidence.' },
@@ -525,14 +525,13 @@ export class Investigation extends Service {
       },
       execute: (args, exec) => {
         if (exec.agent === undefined) throw new Error('investigation_mission requires an owning agent session')
-        const purpose = args.purpose.trim()
         const cueAddr = args.cue_addr.trim()
         const cueEvidence = args.cue_evidence_id.trim()
         if (cueAddr === '' || cueEvidence === '') {
           throw new Error('investigation_mission cue_addr and cue_evidence_id must be non-empty')
         }
-        if (purpose !== CHASSIS_MISSION_PURPOSE) throw new Error(MISSION_PURPOSE_REASON)
         const existing = foldMission(exec.agent.session.events) ?? chassisMission()
+        // Submitted purpose is ignored so punctuation or a different wording cannot drop a named cue.
         const mission: InvestigationMission = {
           purpose: CHASSIS_MISSION_PURPOSE,
           slots: { ...existing.slots, '0a': { value: args.cue_validation } },
