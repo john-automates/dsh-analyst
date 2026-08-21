@@ -381,9 +381,11 @@ function conversationEndpoints(line: string): { src?: string; dst?: string } {
   const labeledSrc = labeledIpv4(line, IP_SRC_LABEL)
   const labeledDst = labeledIpv4(line, IP_DST_LABEL)
   const conversation = IP_CONVERSATION.exec(line)
+  const src = labeledSrc ?? conversation?.[1]
+  const dst = labeledDst ?? conversation?.[2]
   return {
-    src: labeledSrc ?? conversation?.[1],
-    dst: labeledDst ?? conversation?.[2],
+    ...(src === undefined ? {} : { src }),
+    ...(dst === undefined ? {} : { dst }),
   }
 }
 
