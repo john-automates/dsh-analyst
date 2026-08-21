@@ -1,5 +1,6 @@
 /**
- * Auto-issued hunt selection after newly recorded identities.
+ * Auto-issued hunt selection after newly recorded identities, and the
+ * other-end hunt issued when bind_relationship assigns a cue as victim.
  * @module @deepseek-ai/dsh-investigation/hunts
  */
 
@@ -17,6 +18,25 @@ const SKIP_IPS = new Set(['0.0.0.0', '255.255.255.255'])
  */
 export function huntKey(hunt: Hunt): string {
   return `${hunt.kind}\0${hunt.subjectKind}\0${hunt.subject}`
+}
+
+/**
+ * Display filter that finds LAN `ip.src` talking to a cue/observation address.
+ * @param cue - normalized cue/observation IPv4.
+ * @returns `ip.dst == <cue>`.
+ */
+export function otherEndDisplayFilter(cue: string): string {
+  return `ip.dst == ${cue}`
+}
+
+/**
+ * Hunt for LAN sources talking to a cue/observation address.
+ * Subject is the cue IP. The filter does not invent a LAN peer.
+ * @param cue - normalized cue/observation IPv4.
+ * @returns an `other-end` hunt for that cue.
+ */
+export function otherEndHunt(cue: string): Hunt {
+  return { kind: 'other-end', subjectKind: 'ip', subject: cue }
 }
 
 /**
@@ -193,6 +213,8 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
         ),
         fields: ['samr.samr_UserInfo21.account_name', 'samr.samr_UserInfo21.full_name'],
       }
+    case 'other-end':
+      return { display_filter: otherEndDisplayFilter(hunt.subject), fields: ['ip.src'] }
     default:
       return assertNever(hunt.kind, 'huntFilterSpec')
   }
@@ -200,13 +222,16 @@ export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
 
 /**
  * Whether an issued hunt may be auto-run against a capture.
- * Non-LAN / C2 IP subjects never run. When a C2-talking LAN IP is known,
- * only hunts for that IP run. Otherwise LAN IP, hostname, and user subjects run.
+ * Non-LAN / C2 IP subjects never run, except `other-end`, which hunts LAN
+ * `ip.src` talking to that cue. When a C2-talking LAN IP is known, only
+ * hunts for that IP run (and `other-end`). Otherwise LAN IP, hostname, and
+ * user subjects run.
  * @param hunt - one issued hunt.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @returns true when the plugin should execute this hunt.
  */
 export function shouldAutoRunHunt(hunt: Hunt, evidenceText: string): boolean {
+  if (hunt.kind === 'other-end') return hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)
   if (hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)) return false
   const focus = c2TalkingLanIps(evidenceText)
   if (focus.length > 0) return hunt.subjectKind === 'ip' && focus.includes(hunt.subject)
@@ -268,6 +293,13 @@ export function huntNotice(hunt: Hunt): string {
         `Filter \`${spec.display_filter}\``,
         `fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`.`,
         'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
+      ].join(' ')
+    }
+    case 'other-end': {
+      const spec = huntFilterSpec(hunt)
+      return [
+        `Hunt issued: other-end for ${hunt.subjectKind} ${hunt.subject}.`,
+        `Filter \`${spec.display_filter}\` field \`${spec.fields[0]}\`.`,
       ].join(' ')
     }
     default:

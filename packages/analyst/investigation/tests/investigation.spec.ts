@@ -666,6 +666,13 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(flip.isError).toBe(true)
+    const flipText = flip.content.map(block => 'text' in block ? block.text : '').join('')
+    expect(flipText).toContain('unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).')
+    expect(flipText).not.toContain('unbound: assign victim vs c2 on the cited conversation.')
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'other-end', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     const citedFlip = await ctx.tools.execute({
       signal,
       callId: CallId('bind-cited-flip'),
@@ -681,6 +688,11 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(citedFlip.isError).toBe(true)
+    expect(citedFlip.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    expect(ctx.investigation.hunts(owner.session).filter(hunt => hunt.kind === 'other-end')).toHaveLength(1)
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     const bound = await ctx.tools.execute({
       signal,
       callId: CallId('bind-ok'),
@@ -747,6 +759,162 @@ describe('investigation service', () => {
     expect(unboundWho.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
       'unbound: assign victim vs c2 on the cited conversation.',
     )
+  })
+
+  it('auto-runs other-end after a cue-as-victim deny and harvests the LAN peer', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const calls: { path?: unknown; display_filter?: unknown; fields?: unknown }[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter === 'ip.dst == 198.51.100.80') {
+          return Promise.resolve({ text: 'ip.src: 10.0.10.2\tip.dst: 198.51.100.80' })
+        }
+        return Promise.resolve({ text: '' })
+      },
+    }))
+    ctx.tools.register(defineTool({
+      name: 'case_report',
+      description: 'Close stand-in.',
+      parameters: {
+        what: { type: 'string', required: true },
+        when: { type: 'string', required: true },
+        why: { type: 'string', required: true },
+        how: { type: 'string', required: true },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
+        render: () => [{ type: 'text', text: 'closed' }],
+      },
+      execute: () => Promise.resolve({ ok: true }),
+    }))
+    const denied = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cue'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{ addr: '198.51.100.80', role: 'victim', because: 'the alert named this IP' }],
+      },
+      agent: owner,
+    })
+    expect(denied.isError).toBe(true)
+    expect(denied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    expect(calls).toEqual(expect.arrayContaining([
+      {
+        path: 'evidence/a.pcap',
+        display_filter: 'ip.dst == 198.51.100.80',
+        fields: ['ip.src'],
+      },
+    ]))
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(ctx.investigation.identities(owner.session).some(item => item.value === '10.0.10.2')).toBe(true)
+    expect(owner.session.events.some(event => event.type === 'investigation/bind')).toBe(false)
+    expect(owner.session.events.some(event => event.type === 'investigation/report')).toBe(false)
+    const again = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cue-again'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '198.51.100.80', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '198.51.100.80', role: 'victim', because: 'same cue' },
+          { addr: '198.51.100.80', role: 'c2', because: 'same cue' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(again.isError).toBe(true)
+    expect(again.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    const claims = { what: 'beacon', when: 'now', why: 'c2', how: 'https' }
+    const unbound = await ctx.tools.execute({
+      signal, callId: CallId('close-still-unbound'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(unbound.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: assign victim vs c2 on the cited conversation.',
+    )
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-lan'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(ctx.investigation.bind(owner.session)?.endpoints.some(endpoint => (
+      endpoint.role === 'victim' && endpoint.addr === '10.0.10.2'
+    ))).toBe(true)
+    const closed = await ctx.tools.execute({
+      signal, callId: CallId('close-after-hunt'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(closed.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.who.entity_id).toBe('10.0.10.2')
+  })
+
+  it('records other-end on cue-as-victim when autoHunt is off and does not run pcap_filter', async () => {
+    const { ctx, caseDir, owner } = await setup({ autoHunt: false })
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const calls: unknown[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        return Promise.resolve({ text: 'ip.src: 10.0.10.2' })
+      },
+    }))
+    const denied = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cue-no-auto'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{ addr: '198.51.100.80', role: 'victim', because: 'the alert named this IP' }],
+      },
+      agent: owner,
+    })
+    expect(denied.isError).toBe(true)
+    expect(denied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    expect(ctx.investigation.hunts(owner.session)).toEqual([
+      { kind: 'other-end', subjectKind: 'ip', subject: '198.51.100.80' },
+    ])
+    expect(calls).toEqual([])
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(ctx.investigation.identities(owner.session)).toEqual([])
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-auto-run-outstanding-identity-hunts.md
-2026-08-21-auto-run-outstanding-identity-hunts.md: 782a0e02d4e266e2be133195deca5474c1ea075a
-2026-08-21-auto-run-outstanding-identity-hunts.zh.md: 3fcc4498390bb9e012991a1960745aa4d5278ff4
+2026-08-21-auto-run-outstanding-identity-hunts.md: b3e9c4c8457cdaa090fac678c1c06963c6957091
+2026-08-21-auto-run-outstanding-identity-hunts.zh.md: 496dfc6ac9ef4c0b26db621ebb8c7a82728c2baa

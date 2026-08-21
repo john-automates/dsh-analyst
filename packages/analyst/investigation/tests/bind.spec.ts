@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseReportDenyReason, defaultRoleForAddr, foldBind, formatRolesCard,
-  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, projectCaseReport,
-  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
-  VICTIM_COUNT_REASON,
+  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, foldBind, formatRolesCard,
+  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, otherEndHuntForDeniedBind,
+  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
+  UNBOUND_REASON, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { identityOf } from '../src/harvest.ts'
@@ -87,11 +87,21 @@ describe('BindRelationship', () => {
       relationship,
       endpoints: [{ addr: C2, role: 'victim', because }],
     })
-    expect(denied('the alert named this IP')).toEqual({ ok: false, reason: UNBOUND_REASON })
-    expect(denied(conversationBecause)).toEqual({ ok: false, reason: UNBOUND_REASON })
-    expect(denied('evidence conv-1')).toEqual({ ok: false, reason: UNBOUND_REASON })
-    expect(denied(`${LAN} ${C2}`)).toEqual({ ok: false, reason: UNBOUND_REASON })
-    expect(denied('dport 443')).toEqual({ ok: false, reason: UNBOUND_REASON })
+    const cueReason = cueVictimUnboundReason(C2)
+    expect(cueReason).toBe(`unbound: hunt LAN ip.src talking to ${C2} (ip.dst == ${C2}).`)
+    expect(denied('the alert named this IP')).toEqual({ ok: false, reason: cueReason })
+    expect(denied(conversationBecause)).toEqual({ ok: false, reason: cueReason })
+    expect(denied('evidence conv-1')).toEqual({ ok: false, reason: cueReason })
+    expect(denied(`${LAN} ${C2}`)).toEqual({ ok: false, reason: cueReason })
+    expect(denied('dport 443')).toEqual({ ok: false, reason: cueReason })
+    expect(otherEndHuntForDeniedBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ kind: 'other-end', subjectKind: 'ip', subject: C2 })
+    expect(otherEndHuntForDeniedBind({
+      relationship,
+      endpoints: [{ addr: LAN, role: 'victim', because: conversationBecause }],
+    })).toBeUndefined()
     const live = resolveBind({
       relationship,
       endpoints: [{ addr: LAN, role: 'victim', because: conversationBecause }],
@@ -359,7 +369,7 @@ describe('BindRelationship', () => {
     expect(resolveBind({
       relationship,
       endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
-    })).toEqual({ ok: false, reason: UNBOUND_REASON })
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
     const live = bind({
       endpoints: [
         { addr: LAN, role: 'victim', because: conversationBecause },

@@ -633,7 +633,13 @@ describe('analyst tools', () => {
       agent: owner,
     })
     expect(cueVictim.isError).toBe(true)
-    expect(text(cueVictim)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    expect(text(cueVictim)).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'other-end', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     const bind = await ctx.tools.execute({
       signal,
       callId: CallId('bind-unaffiliated'),

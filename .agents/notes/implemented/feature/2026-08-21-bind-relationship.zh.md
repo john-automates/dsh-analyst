@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；其余未指定地址默认 `unknown`。
+`bind_relationship` 是思考原语。它记录 `investigation/bind`，字段为 `{src, dst, dport, t, evidence_id}`，端点为 `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`。恰好一个 victim。线索或观测地址（非 LAN 单播）默认 `c2`，且不能作为 victim（[拒绝将线索指定为 victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)）；该拒绝点名为该线索猎取 LAN `ip.src` 的 [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md)。其余未指定地址默认 `unknown`。
 
 当前绑定通过 `investigation:ledger` 发布焦点／角色卡片。那张卡片不是又一条收件箱拼接。hunt 通知点名已经跑过的过滤器。
 

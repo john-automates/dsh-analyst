@@ -14,7 +14,7 @@ A silent rewrite of `who`/`where` onto the C2-talking LAN IP hid inversion inste
 
 ## Decision
 
-`bind_relationship` is the thinking primitive. It records `investigation/bind` with `{src, dst, dport, t, evidence_id}` and endpoints `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`. Exactly one victim. A cue or observation address (non-LAN unicast) defaults to `c2` and cannot be victim ([refuse cue-as-victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)); every other unassigned address defaults to `unknown`.
+`bind_relationship` is the thinking primitive. It records `investigation/bind` with `{src, dst, dport, t, evidence_id}` and endpoints `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`. Exactly one victim. A cue or observation address (non-LAN unicast) defaults to `c2` and cannot be victim ([refuse cue-as-victim](../bug-fix/2026-08-21-refuse-cue-as-victim.md)); that deny names the [other-end hunt](../bug-fix/2026-08-21-other-end-hunt-on-cue-victim.md) for LAN `ip.src` talking to the cue. Every other unassigned address defaults to `unknown`.
 
 The live bind publishes a focus/roles card through `investigation:ledger`. That card is not another inbox splice. Hunt notices name the filter that already ran.
 

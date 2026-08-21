@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-线索或观测地址不能作为 victim。只要 `role === 'victim' && isCueObservationAddr(addr)`，就返回 `UNBOUND_REASON`。`isCueObservationAddr` 是非 LAN 单播 IPv4；主机名不是线索。线索或观测地址仍默认 `c2`。不会对调 token。恰好一个 victim。对调的 `case_report` 会被拒绝。受害端行句柄字符串强制转换仍适用于未对调的当前绑定。
+线索或观测地址不能作为 victim。只要 `role === 'victim' && isCueObservationAddr(addr)`，就返回 `cueVictimUnboundReason`，其中点名为该线索的 [other-end hunt](2026-08-21-other-end-hunt-on-cue-victim.md)。`isCueObservationAddr` 是非 LAN 单播 IPv4；主机名不是线索。线索或观测地址仍默认 `c2`。不会对调 token。恰好一个 victim。对调的 `case_report` 会被拒绝。受害端行句柄字符串强制转换仍适用于未对调的当前绑定。
 
 [BindRelationship](../feature/2026-08-21-bind-relationship.md) 仍拥有结案前绑定。scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端和 TEST-NET 对等体。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）和 TEST-NET 对等体（`198.51.100.80`）。把 `victim` 指定给 TEST-NET 地址时，无论 `because` 是告警字符串，还是引用了会话、`evidence_id`、两个端点或 `dport`，都会被拒绝。LAN victim 加 TEST-NET `c2` 仍能绑定，且 `case_report` 仍能结案。`packages/analyst/investigation/tests/investigation.spec.ts` 通过 `tools.execute` 拒绝把线索指定为 victim 且 `because` 引用会话的绑定。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）和 TEST-NET 对等体（`198.51.100.80`）。把 `victim` 指定给 TEST-NET 地址时，无论 `because` 是告警字符串，还是引用了会话、`evidence_id`、两个端点或 `dport`，都会被拒绝；拒绝文本点名为该 TEST-NET 地址的 other-end hunt。LAN victim 加 TEST-NET `c2` 仍能绑定，且 `case_report` 仍能结案。`packages/analyst/investigation/tests/investigation.spec.ts` 通过 `tools.execute` 拒绝把线索指定为 victim 且 `because` 引用会话的绑定。
 
 ## 后果
 

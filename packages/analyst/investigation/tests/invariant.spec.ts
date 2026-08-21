@@ -70,6 +70,9 @@ describe('investigation invariants', () => {
     session.append('investigation/identity', {
       kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', entity_id: '10.0.10.2', evidence_id: 'conv-1',
     })
+    session.append('investigation/hunt', {
+      kind: 'other-end', subjectKind: 'ip', subject: '198.51.100.80',
+    })
     session.append('investigation/bind', {
       relationship: {
         src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
