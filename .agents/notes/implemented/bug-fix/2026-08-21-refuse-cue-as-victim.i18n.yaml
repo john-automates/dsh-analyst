@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-refuse-cue-as-victim.md
+2026-08-21-refuse-cue-as-victim.md: 204a653a10c0482694c1d412000f9ac1c128c3a3
+2026-08-21-refuse-cue-as-victim.zh.md: 40883df2b4d34657a8b799e9e151beb77c8ef214

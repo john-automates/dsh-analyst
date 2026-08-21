@@ -51,7 +51,7 @@ export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  caseReportDenyReason, citesConversation, defaultRoleForAddr, ENDPOINT_ROLES, entityIdForIdentity,
+  caseReportDenyReason, defaultRoleForAddr, ENDPOINT_ROLES, entityIdForIdentity,
   foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
   projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
   UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
@@ -70,7 +70,7 @@ export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
-  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. Cue and observation addresses default to c2.',
+  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
   'Work evidence-first and question-driven: every tool call answers a named question.',
   'Label unverified ideas as hunches and verify them in this case.',
@@ -267,7 +267,7 @@ export class Investigation extends Service {
               because: {
                 type: 'string',
                 required: true,
-                description: 'Why this role. Flipping a cue address to victim must cite the conversation, not the alert.',
+                description: 'Why this role. A cue/observation address cannot be victim.',
               },
             },
           },
@@ -656,9 +656,8 @@ export default Investigation
 const BIND_RELATIONSHIP_DESCRIPTION = [
   'Bind the cited conversation before Who/Where.',
   'Assign victim vs c2 (or infra, distractor, unknown) on each endpoint.',
-  'Cue and observation addresses default to c2.',
+  'Cue and observation addresses default to c2 and cannot be victim.',
   'Exactly one victim.',
-  'Flipping a cue or observation address to victim requires a because that cites the conversation, not the alert string.',
 ].join(' ')
 
 /**
