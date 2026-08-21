@@ -352,7 +352,8 @@ export class Investigation extends Service {
     const issueFrom = (batch: readonly Identity[]): void => {
       if (!this.autoHunt) return
       for (const hunt of huntsForNewIdentities(batch, foldHunts(session.events), evidence())) {
-        if (this.recordHunt(session, hunt)) issued.push(hunt)
+        this.recordHunt(session, hunt)
+        issued.push(hunt)
       }
     }
     harvestFrom(current, evidence())

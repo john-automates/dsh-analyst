@@ -236,33 +236,40 @@ export function huntsToAutoRun(
  * @returns notice text naming the valid tshark 4.4.16 fields.
  */
 export function huntNotice(hunt: Hunt): string {
-  const spec = huntFilterSpec(hunt)
   switch (hunt.kind) {
-    case 'eth-src':
+    case 'eth-src': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: eth-src for ${hunt.subjectKind} ${hunt.subject}.`,
         `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
       ].join(' ')
-    case 'name-service':
+    }
+    case 'name-service': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: name-service for ${hunt.subjectKind} ${hunt.subject}.`,
         `Run pcap_filter with display_filter \`${spec.display_filter}\`.`,
         'Those filters produce DESKTOP-* names, NBNS Registration, and BROWSER Host Announcement lines.',
       ].join(' ')
-    case 'kerberos-cname':
+    }
+    case 'kerberos-cname': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
         `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
         'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
         'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
       ].join(' ')
-    case 'samr-userinfo':
+    }
+    case 'samr-userinfo': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: samr-userinfo for ${hunt.subjectKind} ${hunt.subject}.`,
         `Run pcap_filter with display_filter \`${spec.display_filter}\``,
         `and fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`.`,
         'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
       ].join(' ')
+    }
     default:
       return assertNever(hunt.kind, 'huntNotice')
   }
