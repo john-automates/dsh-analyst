@@ -140,12 +140,13 @@ describe('analyst mindset chassis', () => {
   it('projects leftover extras without inventing who/where', () => {
     const identities: Identity[] = [
       { kind: 'ip', value: EXTRA, label: 'IP', evidence_id: LAN },
+      { kind: 'ip', value: '203.0.113.60', label: 'IP', evidence_id: LAN },
       { kind: 'hostname', value: PAYLOAD, label: 'hostname', evidence_id: EXTRA },
       { kind: 'hostname', value: 'update.microsoft.com', label: 'hostname', evidence_id: '203.0.113.80' },
       { kind: 'ip', value: '203.0.113.80', label: 'IP', evidence_id: LAN },
     ]
     expect(projectHuntExtras(bind(), identities)).toEqual({
-      c2_ips: [C2, EXTRA],
+      c2_ips: [C2, EXTRA, '203.0.113.60'],
       c2_domain: PAYLOAD,
     })
     expect(projectHuntExtras(bind(), identities)?.c2_ips).not.toContain('203.0.113.80')

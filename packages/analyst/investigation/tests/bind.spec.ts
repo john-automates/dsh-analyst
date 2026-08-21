@@ -269,8 +269,8 @@ describe('BindRelationship', () => {
       victimHost,
       extraHost,
     ]
-    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
-    expect(acceptedC2Ips(live, identities)).not.toContain(UNNAMED_WAN)
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(DISTRACTOR_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(DISTRACTOR)
     expect(acceptedC2Ips(live, identities)).not.toContain('10.0.10.1')
@@ -299,10 +299,10 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
-    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
     expect(report.c2_ips).toContain(C2)
     expect(report.c2_ips).toContain(EXTRA_WAN)
-    expect(report.c2_ips).not.toContain(UNNAMED_WAN)
+    expect(report.c2_ips).toContain(UNNAMED_WAN)
     expect(report.c2_ips).not.toContain(DISTRACTOR_WAN)
     expect(report.c2_ips).not.toContain(DISTRACTOR)
     expect(report.c2_ips).not.toContain('10.0.10.1')
@@ -315,8 +315,8 @@ describe('BindRelationship', () => {
     expect(report.where.ip).toBe(LAN)
     expect(live.endpoints.filter(endpoint => endpoint.role === 'c2')).toHaveLength(1)
     const extras = [{ ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN }]
-    expect(acceptedC2Ips(live, extras)).toEqual([C2])
-    expect(acceptedC2Ips(live, extras)).not.toContain(EXTRA_WAN)
+    expect(acceptedC2Ips(live, extras)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, extras)).toContain(EXTRA_WAN)
     expect(acceptedC2Domain(live, extras)).toBeUndefined()
     expect(acceptedC2Ips(bind({
       endpoints: [
@@ -328,6 +328,51 @@ describe('BindRelationship', () => {
     expect(acceptedC2Ips(bind({
       endpoints: [{ addr: C2, role: 'c2', because: 'cue/observation address' }],
     }), extras)).toEqual([C2])
+  })
+
+  it('persists unnamed extra-wan dests that survive CDN/CF omit', () => {
+    const CF_DEST = '104.16.1.1'
+    const live = bind()
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const cdnHost = { ...identityOf('hostname', CDN_NAME)!, evidence_id: CDN_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', UNNAMED_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', CDN_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', CF_DEST)!, evidence_id: LAN },
+      victimHost,
+      cdnHost,
+      payloadOnC2,
+    ]
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
+    expect(acceptedC2Ips(live, identities)).not.toContain(CDN_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(CF_DEST)
+    expect(acceptedC2Ips(live, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', UNNAMED_WAN)!, evidence_id: LAN },
+    ])).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Domain(live, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', UNNAMED_WAN)!, evidence_id: LAN },
+    ])).toBeUndefined()
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    const slot = projectVictimSlot(live, identities)
+    expect(slot).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(report.c2_ips).not.toContain(CDN_DEST)
+    expect(report.c2_ips).not.toContain(CF_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who).toEqual(slot)
+    expect(report.where).toEqual(slot)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
   })
 
   it('denies a CDN/update C2 and skips those dests on leftover extras', () => {
@@ -388,12 +433,12 @@ describe('BindRelationship', () => {
       cdnHost,
       payloadOnExtra,
     ]
-    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
     expect(acceptedC2Ips(live, [
       ...identities,
       { ...identityOf('ip', C2)!, evidence_id: LAN },
-    ])).toEqual([C2, EXTRA_WAN])
-    expect(acceptedC2Ips(live, identities)).not.toContain(UNNAMED_WAN)
+    ])).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(CDN_DEST)
     expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === CDN_DEST))
       .toBe(false)
@@ -407,8 +452,8 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
-    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
-    expect(report.c2_ips).not.toContain(UNNAMED_WAN)
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(report.c2_ips).toContain(UNNAMED_WAN)
     expect(report.c2_ips).not.toContain(CDN_DEST)
     expect(report.c2_domain).toBe(PAYLOAD)
     expect(report.who.hostname).toBe(HOST)
@@ -464,9 +509,9 @@ describe('BindRelationship', () => {
       relationship: { ...relationship, dst: MSN_DEST, evidence_id: 'conv-msn' },
       endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${MSN_DEST}` }],
     }, [msnHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
-    expect(acceptedC2Ips(live, identities)).toEqual([C2])
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
     expect(acceptedC2Ips(live, identities)).toContain(C2)
-    expect(acceptedC2Ips(live, identities)).not.toContain(EXTRA_WAN)
+    expect(acceptedC2Ips(live, identities)).toContain(EXTRA_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(MSN_DEST)
     expect(acceptedC2Ips(live, identities)).not.toContain(MICROSOFT_DEST)
     expect(acceptedC2Ips(live, identities)).not.toContain(AKAMAI_DEST)
@@ -478,8 +523,8 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
-    expect(report.c2_ips).toEqual([C2])
-    expect(report.c2_ips).not.toContain(EXTRA_WAN)
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).toContain(EXTRA_WAN)
     expect(report.c2_ips).not.toContain(MSN_DEST)
     expect(report.c2_domain).toBe(PAYLOAD)
     expect(report.who.hostname).toBe(HOST)
@@ -541,9 +586,9 @@ describe('BindRelationship', () => {
       relationship: { ...relationship, dst: SFX_DEST, evidence_id: 'conv-sfx' },
       endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${SFX_DEST}` }],
     }, [sfxHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
-    expect(acceptedC2Ips(live, identities)).toEqual([C2])
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
     expect(acceptedC2Ips(live, identities)).toContain(C2)
-    expect(acceptedC2Ips(live, identities)).not.toContain(EXTRA_WAN)
+    expect(acceptedC2Ips(live, identities)).toContain(EXTRA_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(BING_DEST)
     expect(acceptedC2Ips(live, identities)).not.toContain(MSO_DEST)
     expect(acceptedC2Ips(live, identities)).not.toContain(SFX_DEST)
@@ -560,8 +605,8 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
-    expect(report.c2_ips).toEqual([C2])
-    expect(report.c2_ips).not.toContain(EXTRA_WAN)
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).toContain(EXTRA_WAN)
     expect(report.c2_ips).not.toContain(BING_DEST)
     expect(report.c2_domain).toBe(PAYLOAD)
     expect(report.who.hostname).toBe(HOST)
@@ -599,9 +644,9 @@ describe('BindRelationship', () => {
       relationship: { ...relationship, dst: CF_DEST, evidence_id: 'conv-cf' },
       endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${CF_DEST}` }],
     }, [cfHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
-    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
     expect(acceptedC2Ips(live, identities)).toContain(C2)
-    expect(acceptedC2Ips(live, identities)).not.toContain(UNNAMED_WAN)
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(CF_DEST)
     expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === CF_DEST))
       .toBe(false)
@@ -616,8 +661,8 @@ describe('BindRelationship', () => {
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
-    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
-    expect(report.c2_ips).not.toContain(UNNAMED_WAN)
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(report.c2_ips).toContain(UNNAMED_WAN)
     expect(report.c2_ips).not.toContain(CF_DEST)
     expect(report.c2_domain).toBe(PAYLOAD)
     expect(report.who.hostname).toBe(HOST)

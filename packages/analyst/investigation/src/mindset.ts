@@ -185,8 +185,9 @@ export function applyHuntExtras(report: CaseReport, extras?: CaseReportExtras): 
 
 /**
  * Compute Report-hook extras from a live bind and harvested identities.
- * CDN/update dests and leftover unnamed extras stay off `c2_ips`.
- * First non-CDN dotted name on an attested dest wins `c2_domain`.
+ * CDN/update dests stay off `c2_ips`. Unnamed extra-wan dests that
+ * survive those omits persist. First non-CDN dotted name on an
+ * attested dest wins `c2_domain`.
  * LAN / DC / gateway stay off. Does not invent 5W1H.
  * @param bind - live bind.
  * @param identities - folded ledger identities.

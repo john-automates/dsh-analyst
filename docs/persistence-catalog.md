@@ -489,7 +489,7 @@ Source: [`packages/hooks/hook-protocol/src/types.ts:31`](../packages/hooks/hook-
 'investigation/action': InvestigationAction
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:322`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:327`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationbind--log-only"></a>
 
@@ -503,7 +503,7 @@ Source: [`packages/analyst/investigation/src/types.ts:322`](../packages/analyst/
 'investigation/bind': RelationshipBind
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:284`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:287`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationextras--log-only"></a>
 
@@ -519,7 +519,7 @@ Source: [`packages/analyst/investigation/src/types.ts:284`](../packages/analyst/
 'investigation/extras': CaseReportExtras
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:329`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:334`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -549,7 +549,7 @@ Source: [`packages/analyst/investigation/src/types.ts:329`](../packages/analyst/
 'investigation/hunt': Hunt
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:279`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:282`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -563,7 +563,7 @@ Source: [`packages/analyst/investigation/src/types.ts:279`](../packages/analyst/
 'investigation/identity': Identity
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:258`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:261`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationmission--log-only"></a>
 
@@ -579,7 +579,7 @@ Source: [`packages/analyst/investigation/src/types.ts:258`](../packages/analyst/
 'investigation/mission': InvestigationMission
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:311`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationplan--log-only"></a>
 
@@ -593,7 +593,7 @@ Source: [`packages/analyst/investigation/src/types.ts:311`](../packages/analyst/
 'investigation/plan': InvestigationPlanEntry
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:321`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -614,15 +614,17 @@ Source: [`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP frames
  * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
- * plus extra WAN destinations whose `evidence_id` is that victim, omitting
- * an IP whose evidenced hostname is a well-known CDN or update name, when
- * any remain. `c2_domain` is the harvested TLS SNI or DNS name evidenced
- * on any remaining C2 IPv4s that is not CDN/update, when one exists.
+ * plus victim-stamped extra-wan dests, omitting an IP in a published
+ * Cloudflare anycast prefix or whose evidenced hostname is a
+ * well-known CDN or update name, when any remain. Unnamed extra-wan
+ * dests that survive those omits persist. `c2_domain` is the harvested
+ * TLS SNI or DNS name evidenced on an attested dest that is not
+ * CDN/update, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:304`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:309`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 
