@@ -737,6 +737,47 @@ describe('analyst tools', () => {
     })
     expect(leftover.isError).toBe(true)
     expect(text(leftover)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const locatorWho = 'Client IP: 10.0.10.2 / MAC Address: 02:00:00:00:00:0a'
+    const locatorWhere = 'The client was located at 10.0.10.2 on the 10.0.10.0/24 network'
+    const locatorC2 = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-locator-c2'),
+      name: 'case_report',
+      arguments: { ...claims, who: `${locatorWho} / 198.51.100.80` },
+      agent: owner,
+    })
+    expect(locatorC2.isError).toBe(true)
+    expect(text(locatorC2)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const locatorOtherCidr = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-locator-other-cidr'),
+      name: 'case_report',
+      arguments: { ...claims, where: `${locatorWhere} / 172.16.0.0/12` },
+      agent: owner,
+    })
+    expect(locatorOtherCidr.isError).toBe(true)
+    expect(text(locatorOtherCidr)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const locatorLeftover = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-locator-leftover'),
+      name: 'case_report',
+      arguments: { ...claims, who: `${locatorWho} leftover` },
+      agent: owner,
+    })
+    expect(locatorLeftover.isError).toBe(true)
+    expect(text(locatorLeftover)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const locator = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-locator-cidr'),
+      name: 'case_report',
+      arguments: { ...claims, who: locatorWho, where: locatorWhere },
+      agent: owner,
+    })
+    expect(locator.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.who).toEqual(projected)
+    expect(ctx.investigation.report(owner.session)?.where).toEqual(projected)
+    expect(ctx.investigation.report(owner.session)?.who.mac).not.toBe('02:00:00:00:00:0b')
+    expect(text(locator)).not.toContain('02:00:00:00:00:0b')
     const prose = await ctx.tools.execute({
       signal,
       callId: CallId('report-labeled-prose'),
