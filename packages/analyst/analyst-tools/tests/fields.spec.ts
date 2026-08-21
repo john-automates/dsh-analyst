@@ -4,6 +4,7 @@ import {
   INVALID_TSHARK_FIELDS,
   RECOMMENDED_TSHARK_FIELDS,
   rejectInvalidTsharkFields,
+  unwrapPcapDisplayFilter,
 } from '../src/fields.ts'
 
 describe('tshark field validation', () => {
@@ -40,5 +41,22 @@ describe('tshark field validation', () => {
       'ldap.displayName',
     )
     expect(() => rejectInvalidTsharkFields(coercePcapFilterFields('samr.full_name'))).toThrow('samr.full_name')
+  })
+
+  it('strips wrapping quotes from display_filter and leaves inner quotes alone', () => {
+    expect(unwrapPcapDisplayFilter(undefined)).toBeUndefined()
+    expect(unwrapPcapDisplayFilter('')).toBeUndefined()
+    expect(unwrapPcapDisplayFilter('   ')).toBeUndefined()
+    expect(unwrapPcapDisplayFilter('""')).toBeUndefined()
+    expect(unwrapPcapDisplayFilter('"ip.addr == 1.2.3.4"')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter("'llmnr or nbns or browser'")).toBe('llmnr or nbns or browser')
+    expect(unwrapPcapDisplayFilter('\\"ip.addr == 1.2.3.4\\"')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter("'\\\"ip.addr == 1.2.3.4\\\"'")).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter('\'"ip.addr == 1.2.3.4"\'')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter('""ip.addr == 1.2.3.4""')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter('  "ip.addr == 1.2.3.4"  ')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter('ip.addr == 1.2.3.4')).toBe('ip.addr == 1.2.3.4')
+    expect(unwrapPcapDisplayFilter('http.host == "example.com"')).toBe('http.host == "example.com"')
+    expect(unwrapPcapDisplayFilter('"smb" or "nbns"')).toBe('"smb" or "nbns"')
   })
 })

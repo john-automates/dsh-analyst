@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-pcap-filter-quoted-display-filter.md
+2026-08-21-pcap-filter-quoted-display-filter.md: b72ebc2f6bd4aedd01f435be31431d1cad07f28c
+2026-08-21-pcap-filter-quoted-display-filter.zh.md: 417726bae62edfad2d6ad8462206b7cf49f042d4

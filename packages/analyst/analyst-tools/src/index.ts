@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-investigation'
-import { coercePcapFilterFields, rejectInvalidTsharkFields } from './fields.ts'
+import { coercePcapFilterFields, rejectInvalidTsharkFields, unwrapPcapDisplayFilter } from './fields.ts'
 
 export { INVALID_TSHARK_FIELDS, RECOMMENDED_TSHARK_FIELDS, rejectInvalidTsharkFields } from './fields.ts'
 
@@ -199,10 +199,11 @@ export function apply(ctx: Context, config: Config): void {
     isConcurrencySafe: () => true,
     execute: async (args, exec) => {
       const file = await existingFile(investigation.resolveInsideCase(args.path))
+      const displayFilter = unwrapPcapDisplayFilter(args.display_filter)
       const fields = rejectInvalidTsharkFields(coercePcapFilterFields(args.fields))
       const argv = ['-r', file]
-      if (args.display_filter !== undefined && args.display_filter.trim() !== '') {
-        argv.push('-Y', args.display_filter)
+      if (displayFilter !== undefined) {
+        argv.push('-Y', displayFilter)
       }
       if (fields.length > 0) {
         argv.push('-T', 'fields')

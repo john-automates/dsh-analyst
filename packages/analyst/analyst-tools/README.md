@@ -6,7 +6,7 @@ SOC/NSM tools for the `analyst` preset: `pcap_info`, `pcap_filter`, `logs`, and 
 
 ## Tools
 
-`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; a string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet to the calling session.
+`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; wrapping quotes on `display_filter` are stripped before `-Y`. A string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet to the calling session.
 
 Helpers spawn with `execFile` (no shell), `cwd` set to the case directory, and the tool's `signal`.
 
@@ -48,7 +48,7 @@ The catalog is stable for the life of the mount.
 
 #### What the model sees
 
-Successful calls return clipped text. `pcap_filter` with `fields` labels each column as `field: value` so harvest can record identities. A string `kerberos.CNameString` becomes `-e kerberos.CNameString`. Invalid fields fail before tshark starts.
+Successful calls return clipped text. `pcap_filter` with `fields` labels each column as `field: value` so harvest can record identities. A quoted `display_filter` such as `"ip.addr == 1.2.3.4"` becomes `-Y ip.addr == 1.2.3.4`. A string `kerberos.CNameString` becomes `-e kerberos.CNameString`. Invalid fields fail before tshark starts.
 
 #### Token effect
 
