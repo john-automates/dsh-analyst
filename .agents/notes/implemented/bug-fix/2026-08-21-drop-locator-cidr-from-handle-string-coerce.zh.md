@@ -14,7 +14,7 @@ Status: implemented
 
 当前绑定之后，`identityLikeTokens` 把定位剩余词 `client`／`ip`／`located`／`at`／`on`／`network` 当成包裹，而不是无法匹配的 token。它在分隔符切分之前把剩余的 IPv4／前缀 CIDR 抽成一个 token，以免 `/` 把它拆碎。`isVictimHandleText` 随后在该 CIDR 包含被绑定 victim IP 时丢弃它。剩余的受害端行句柄仍把字符串强制转换成 `{ entity_id: victim }`。
 
-剩余的 C2 IPv4、干扰项用户或主机名、另一个不是该包含受害端 CIDR 的非 victim IPv4、不包含 victim 的 CIDR，或无法匹配的剩余词仍保持未绑定。没有剩余受害端行句柄的字符串仍保持未绑定。域控／网关网卡不会被持久化。不丢弃 ip、hostname、user 或 `full_name`。收割戳记、绑定接受／拒绝、省略 mac 持久化和 C2-domain 持久化保持不变。
+LAN／网关／域控剩余项和剩余 LAN 基础设施 IPv4／域公告 token 由[另一规则丢弃](2026-08-21-drop-lan-gateway-dc-from-handle-string-coerce.md)。剩余的 C2 IPv4、干扰项用户或主机名、另一个不是该包含受害端 CIDR 的剩余具名非 infra IPv4、不包含 victim 的 CIDR，或无法匹配的剩余词仍保持未绑定。没有剩余受害端行句柄的字符串仍保持未绑定，LAN／网关／域控丢弃之后的空剩余项除外。域控／网关网卡不会被持久化。不丢弃 ip、hostname、user 或 `full_name`。收割戳记、绑定接受／拒绝、省略 mac 持久化和 C2-domain 持久化保持不变。
 
 漏洞在 `packages/analyst/investigation/src/bind.ts` 的 `isVictimHandleText`／`identityLikeTokens`／`HANDLE_WRAPPER_WORDS`。将线索指定为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行、合成 `CLIENT_MAC` 对 `DISTRACTOR_MAC`，以及包含该客户端的合成 LAN CIDR。
 

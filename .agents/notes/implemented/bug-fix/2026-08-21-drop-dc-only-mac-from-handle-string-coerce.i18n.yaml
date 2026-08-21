@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md
-2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md: 0cb42a06a9de69d962f660c1ba11a2af6b705bd6
-2026-08-21-drop-dc-only-mac-from-handle-string-coerce.zh.md: 720ef4d8ff3c044df2ae4c6d1f53768a6b4286d8
+2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md: 66032582078f3dc48532aa4dc10030e7743a01f9
+2026-08-21-drop-dc-only-mac-from-handle-string-coerce.zh.md: 312f776661bbda4e0a8700f666dbf9b44185347e

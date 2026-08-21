@@ -15,11 +15,17 @@
  * identity tokens are victim-row handles is coerced to
  * `{ entity_id: victim }` even when labels or a sentence wrap those
  * handles. Locator leftovers (client / ip /
- * located / at / on / network) are wrappers. A leftover CIDR that contains
- * the bound victim IP is dropped so `/` does not shatter it into a
- * non-victim IPv4 plus a prefix. A leftover MAC that talking-IP frames
- * source only from a non-victim is dropped so remaining victim-row handles
- * still coerce. Omitted mac persists the unique ledger MAC that is not
+ * located / at / on / network) and LAN / gateway / DC / AD-domain wrappers
+ * (lan / gateway / dc / ad / domain / workgroup / controller) are wrappers.
+ * A leftover CIDR that contains the bound victim IP is dropped so `/` does
+ * not shatter it into a non-victim IPv4 plus a prefix. A leftover MAC that
+ * talking-IP frames source only from a non-victim is dropped. A leftover
+ * LAN IPv4 that is bind role infra, or that talking-IP frames source a
+ * DC/gateway-only MAC from and is not a leftover non-infra bind handle, is
+ * dropped. A leftover dotted name that is not a victim handle and is not
+ * C2-stamped is dropped as a domain / workgroup announcement. After those
+ * drops, empty leftovers coerce to the victim row. A leftover C2 IPv4, a
+ * leftover named non-infra IPv4, or unmatched words still deny. Omitted mac persists the unique ledger MAC that is not
  * DC/gateway-only when a sticky DC donate or uniqueness left the projected
  * row empty. Omitted user still persists from victim-IP evidence. A
  * submitted user, hostname, or full_name is kept when the row has no
@@ -216,15 +222,22 @@ const IPV4_EXACT = new RegExp(`^${IPV4_DOTTED}$`)
 const CIDR_PREFIX = String.raw`(?:3[0-2]|[12]?\d)`
 const CIDR_EXACT = new RegExp(`^(${IPV4_DOTTED})/(${CIDR_PREFIX})$`)
 /**
- * Field labels, locator words, and sentence wrappers that are not identity
- * tokens. A leftover word outside this set still denies when it is not a
- * handle, except a leftover MAC that talking-IP frames source only from a
- * non-victim, and a leftover CIDR that contains the bound victim IP.
+ * Field labels, locator words, LAN / gateway / DC / AD-domain role words,
+ * and sentence wrappers that are not identity tokens. A leftover word
+ * outside this set still denies when it is not a handle, except a leftover
+ * MAC that talking-IP frames source only from a non-victim, a leftover
+ * CIDR that contains the bound victim IP, a leftover LAN infra IPv4, and a
+ * leftover domain / workgroup announcement.
  */
 const HANDLE_WRAPPER_WORDS = new Set([
   'user', 'account', 'full', 'name', 'mac', 'address', 'hostname', 'host',
   'the', 'infected', 'was', 'identified', 'as',
   'client', 'ip', 'located', 'at', 'on', 'network',
+  'lan', 'gateway', 'dc', 'ad', 'domain', 'workgroup', 'controller',
+])
+/** Role words that mark LAN / gateway / DC / AD-domain leftover prose. */
+const LAN_INFRA_WRAPPER_WORDS = new Set([
+  'lan', 'gateway', 'dc', 'ad', 'domain', 'workgroup', 'controller',
 ])
 /** Who/where delimiters: whitespace, punctuation, and ASCII quotes. */
 const HANDLE_TOKEN_DELIMITERS = String.raw`\s,;:|/'"`
@@ -765,17 +778,25 @@ export function requireCaseReport(
  * victim IP, or a ledger user / full_name / hostname / MAC that donates to
  * that victim or is evidenced on that victim the same way omitted mac/user
  * persist) is coerced to `{ entity_id: victim.addr }`. Label words, locator
- * leftovers (client / ip / located / at / on / network), sentence wrappers,
- * wrapping ASCII quotes, a leftover MAC that talking-IP frames source only
- * from a non-victim, and a leftover CIDR that contains the bound victim IP
- * are not identity tokens. A multi-word full_name is one handle. A user,
- * hostname, MAC, or full_name is a victim-row handle, not an entity id; the
- * persisted packet still uses the victim address. A string that names the
- * c2, a distractor user or hostname, another IPv4 that is not that
- * victim-containing CIDR, a CIDR that does not contain the victim, or
- * unmatched leftover words stays unbound. A string that is only that
- * DC/gateway-only MAC, or that has no remaining victim-row handle, stays
- * unbound.
+ * leftovers (client / ip / located / at / on / network), LAN / gateway /
+ * DC / AD-domain wrappers (lan / gateway / dc / ad / domain / workgroup /
+ * controller), sentence wrappers, wrapping ASCII quotes, a leftover MAC
+ * that talking-IP frames source only from a non-victim, a leftover CIDR
+ * that contains the bound victim IP, a leftover LAN IPv4 that is bind
+ * role infra or that talking-IP frames source a DC/gateway-only MAC from
+ * and is not a leftover non-infra bind handle, and a leftover dotted name
+ * that is not a victim handle and is not C2-stamped are not identity
+ * tokens. A multi-word full_name is one handle. A user, hostname, MAC, or
+ * full_name is a victim-row handle, not an entity id; the persisted packet
+ * still uses the victim address. After those drops, empty leftovers coerce
+ * to the victim row when LAN / gateway / DC / AD-domain wrappers or
+ * leftover LAN infra IPv4 / domain announcement tokens were present. A
+ * string that names the c2, a distractor user or hostname, another IPv4
+ * that is a leftover non-infra handle, a CIDR that does not contain the
+ * victim, or unmatched leftover words stays unbound. A string that is only
+ * that DC/gateway-only MAC or only that victim-containing CIDR, and has no
+ * LAN / gateway / DC / AD-domain wrappers or leftover LAN infra IPv4,
+ * stays unbound.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -1367,11 +1388,13 @@ function submittedSlotRecord(submitted: unknown): Record<string, unknown> | unde
  * parameters as trimmed JSON text, so who/where can arrive as strings. After a
  * live bind, a string whose leftover identity tokens are all victim-row
  * handles projects through the existing victim-row path, including labeled or
- * sentence-wrapped handles. Locator leftovers are wrappers. A leftover CIDR
- * that contains the bound victim IP is dropped. A leftover MAC that
- * talking-IP frames source only from a non-victim is dropped. A string that
- * is not a JSON object and not a victim-row handle stays a string for the
- * free-text deny.
+ * sentence-wrapped handles. Locator leftovers and LAN / gateway / DC /
+ * AD-domain wrappers are wrappers. A leftover CIDR that contains the bound
+ * victim IP is dropped. A leftover MAC that talking-IP frames source only
+ * from a non-victim is dropped. A leftover LAN infra IPv4 and a leftover
+ * domain / workgroup announcement are dropped. Empty leftovers after those
+ * drops coerce to the victim row. A string that is not a JSON object and
+ * not a victim-row handle stays a string for the free-text deny.
  * @param value - raw who/where argument.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1404,12 +1427,16 @@ function coerceIdentitySlotArg(
  * Whether leftover identity tokens in `text` are all victim-row handles.
  * The whole trimmed string may itself be one handle (user, full_name,
  * hostname, MAC, or bound victim IP). Label words, locator leftovers,
- * sentence wrappers, wrapping ASCII quotes, a leftover MAC that talking-IP
- * frames source only from a non-victim, and a leftover CIDR that contains
- * the bound victim IP are ignored. A multi-word full_name is one handle.
- * An empty leftover set, including a string that is only that
- * DC/gateway-only MAC or only that victim-containing CIDR, is not a
- * victim-row handle.
+ * LAN / gateway / DC / AD-domain wrappers, sentence wrappers, wrapping
+ * ASCII quotes, a leftover MAC that talking-IP frames source only from a
+ * non-victim, a leftover CIDR that contains the bound victim IP, a leftover
+ * LAN infra IPv4, and a leftover domain / workgroup announcement are
+ * ignored. A multi-word full_name is one handle. Empty leftovers after
+ * those drops coerce when LAN / gateway / DC / AD-domain wrappers or
+ * leftover LAN infra IPv4 / domain announcement tokens were present. A
+ * string that is only that DC/gateway-only MAC or only that
+ * victim-containing CIDR, with no such wrappers, is not a victim-row
+ * handle.
  * @param text - trimmed who/where string.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1426,10 +1453,24 @@ function isVictimHandleText(
 ): boolean {
   const handles = victimRowHandles(bind, identities, victim, evidenceText)
   if (matchesVictimHandle(text, handles)) return true
-  const tokens = identityLikeTokens(text, handles)
-    .filter(token => !dcOrGatewayOnlyMacToken(token, victim.addr, evidenceText))
-    .filter(token => !leftoverCidrContainsVictim(token, victim.addr))
-  return tokens.length > 0 && tokens.every(token => matchesVictimHandle(token, handles))
+  const raw = identityLikeTokens(text, handles)
+  const remaining: string[] = []
+  let lanInfra = hasLanInfraWrapperWord(text)
+  for (const token of raw) {
+    if (dcOrGatewayOnlyMacToken(token, victim.addr, evidenceText)) continue
+    if (leftoverCidrContainsVictim(token, victim.addr)) continue
+    if (leftoverLanInfraIpv4(token, victim.addr, bind, identities, evidenceText)) {
+      lanInfra = true
+      continue
+    }
+    if (leftoverAdDomainToken(token, bind, identities, victim, evidenceText, handles)) {
+      lanInfra = true
+      continue
+    }
+    remaining.push(token)
+  }
+  if (remaining.length > 0) return remaining.every(token => matchesVictimHandle(token, handles))
+  return lanInfra
 }
 
 /**
@@ -1462,6 +1503,113 @@ function leftoverCidrContainsVictim(token: string, victimAddr: string): boolean 
   // `<< 32` wraps to `<< 0` in JavaScript, so prefix 0 cannot use that shift.
   const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
   return (ipv4ToInt(victimAddr) & mask) === (ipv4ToInt(match[1] as string) & mask)
+}
+
+/**
+ * Whether `text` contains a LAN / gateway / DC / AD-domain role word.
+ * Those words are wrappers, not leftover identity tokens.
+ * @param text - trimmed who/where string.
+ * @returns true when a role word is present.
+ */
+function hasLanInfraWrapperWord(text: string): boolean {
+  for (const match of text.matchAll(new RegExp(`[^${HANDLE_TOKEN_DELIMITERS}]+`, 'g'))) {
+    if (LAN_INFRA_WRAPPER_WORDS.has(match[0].toLowerCase())) return true
+  }
+  return false
+}
+
+/**
+ * Whether one leftover token is a LAN IPv4 that is already known as
+ * DC/gateway infra and is not the bound victim. Bind role `infra` is
+ * known. Talking-IP frames that source a DC/gateway-only MAC from that
+ * IPv4 are known. A leftover named non-infra bind endpoint stays a
+ * leftover handle. A leftover C2 IPv4 is not LAN and is not dropped.
+ * @param token - one leftover identity-like token.
+ * @param victimAddr - bound victim IPv4.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns true when the token may be ignored during handle-string coerce.
+ */
+function leftoverLanInfraIpv4(
+  token: string,
+  victimAddr: string,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  if (!isIpv4(token) || token === victimAddr || !isLanIpv4(token)) return false
+  const named = bind.endpoints.find(endpoint => endpoint.addr === token)
+  if (named !== undefined && named.role !== 'infra') return false
+  if (named?.role === 'infra') return true
+  return ipSourcesDcOrGatewayOnlyMac(token, victimAddr, identities, evidenceText)
+}
+
+/**
+ * Whether talking-IP frames source a DC/gateway-only MAC from this IPv4.
+ * Ledger MACs and MAC-shaped tokens in `evidenceText` are the known set.
+ * Absence of talking-IP evidence is not DC/gateway-only.
+ * @param ip - leftover LAN IPv4.
+ * @param victimAddr - bound victim IPv4.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @returns true when this IP sources a DC/gateway-only MAC.
+ */
+function ipSourcesDcOrGatewayOnlyMac(
+  ip: string,
+  victimAddr: string,
+  identities: readonly Identity[],
+  evidenceText: string,
+): boolean {
+  const macs = new Set<string>()
+  for (const identity of identities) {
+    if (identity.kind === 'mac') macs.add(identity.value)
+  }
+  for (const match of evidenceText.matchAll(LEFTOVER_MAC_TOKEN)) {
+    const mac = normalizeIdentityValue('mac', match[0])
+    if (mac !== undefined) macs.add(mac)
+  }
+  for (const mac of macs) {
+    if (!macIsDcOrGatewayOnly(mac, victimAddr, evidenceText)) continue
+    if (ipsEvidencingIdentity({ kind: 'mac', value: mac, label: 'MAC' }, evidenceText).includes(ip)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Whether one leftover token is a dotted domain / workgroup announcement
+ * that is not a victim-row handle and is not C2-stamped. Single-label
+ * leftover hostnames stay leftover handles. A leftover dotted name
+ * evidenced on an attested C2 dest, or that donates to a non-LAN entity,
+ * stays a leftover handle.
+ * @param token - one leftover identity-like token.
+ * @param bind - live bind with exactly one victim.
+ * @param identities - folded ledger identities.
+ * @param victim - unique victim endpoint on that bind.
+ * @param evidenceText - tool-result text.
+ * @param handles - victim-row handle values.
+ * @returns true when the token may be ignored during handle-string coerce.
+ */
+function leftoverAdDomainToken(
+  token: string,
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  victim: BoundEndpoint,
+  evidenceText: string,
+  handles: ReadonlySet<string>,
+): boolean {
+  if (matchesVictimHandle(token, handles)) return false
+  const host = normalizeIdentityValue('hostname', token)
+  if (host === undefined || !host.includes('.') || isIpv4(host)) return false
+  for (const ip of attestedC2Ips(bind, identities, evidenceText)) {
+    if (hostnamesEvidencedOnIp(ip, identities, evidenceText).includes(host)) return false
+  }
+  const identity = identities.find(item => item.kind === 'hostname' && item.value === host)
+  if (identity === undefined) return true
+  const entityId = entityIdForIdentity(identity, bind, identities, evidenceText)
+  return entityId === undefined || entityId === victim.addr || isLanIpv4(entityId)
 }
 
 /**
@@ -1538,7 +1686,7 @@ function identityEvidencedOnVictimRow(
  * @param handles - victim-row handle values.
  * @returns true when the token is a handle on that row.
  */
-function matchesVictimHandle(token: string, handles: Set<string>): boolean {
+function matchesVictimHandle(token: string, handles: ReadonlySet<string>): boolean {
   for (const kind of HANDLE_KINDS) {
     const normalized = normalizeIdentityValue(kind, token)
     if (normalized !== undefined && handles.has(normalized)) return true
@@ -1551,11 +1699,12 @@ function matchesVictimHandle(token: string, handles: Set<string>): boolean {
  * remaining text (longest match, so a multi-word full_name stays one
  * token), then leftover MAC-shaped tokens (colon or dash), then leftover
  * CIDR tokens (IPv4/prefix, extracted before `/` can shatter them), then
- * leftover words that are not field labels, locator leftovers, sentence
- * wrappers, or wrapping ASCII quotes. A leftover DC/gateway-only MAC and a
- * leftover CIDR that contains the bound victim IP are dropped by the
- * handle-text check, not here. Unmatched leftover tokens fail the
- * victim-row handle check.
+ * leftover words that are not field labels, locator leftovers, LAN /
+ * gateway / DC / AD-domain wrappers, sentence wrappers, or wrapping ASCII
+ * quotes. A leftover DC/gateway-only MAC, a leftover CIDR that contains
+ * the bound victim IP, a leftover LAN infra IPv4, and a leftover domain /
+ * workgroup announcement are dropped by the handle-text check, not here.
+ * Unmatched leftover tokens fail the victim-row handle check.
  * @param text - trimmed who/where string.
  * @param handles - victim-row handle values used for longest-match extract.
  * @returns tokens in encounter order.
