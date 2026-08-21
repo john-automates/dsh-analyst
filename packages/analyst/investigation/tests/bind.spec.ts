@@ -589,6 +589,56 @@ describe('BindRelationship', () => {
     expect(report.where.ip).toBe(LAN)
   })
 
+  it('omits img-s-msn-com.akamaized.net dests and prefers a later non-CDN dotted name', () => {
+    const AKAMAIZED_NAME = 'img-s-msn-com.akamaized.net'
+    const AKAMAIZED_DEST = '203.0.113.87'
+    const live = bind()
+    const akamaizedHost = { ...identityOf('hostname', AKAMAIZED_NAME)!, evidence_id: AKAMAIZED_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', AKAMAIZED_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      { ...identityOf('ip', UNNAMED_WAN)!, evidence_id: LAN },
+      victimHost,
+      akamaizedHost,
+      payloadOnC2,
+    ]
+    expect(resolveBind({
+      relationship: { ...relationship, dst: AKAMAIZED_DEST, evidence_id: 'conv-akamaized' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${AKAMAIZED_DEST}` }],
+    }, [akamaizedHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(C2)
+    expect(acceptedC2Ips(live, identities)).toContain(EXTRA_WAN)
+    expect(acceptedC2Ips(live, identities)).toContain(UNNAMED_WAN)
+    expect(acceptedC2Ips(live, identities)).not.toContain(AKAMAIZED_DEST)
+    expect(acceptedC2Ips(live, [
+      { ...identityOf('ip', AKAMAIZED_DEST)!, evidence_id: LAN },
+    ], `ip.addr: ${AKAMAIZED_DEST}\thttp.host: ${AKAMAIZED_NAME}`)).toEqual([C2])
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, identities)).not.toBe(AKAMAIZED_NAME)
+    expect(acceptedC2Domain(live, [
+      akamaizedHost,
+      payloadOnC2,
+    ])).toBe(PAYLOAD)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN, UNNAMED_WAN])
+    expect(report.c2_ips).toContain(UNNAMED_WAN)
+    expect(report.c2_ips).not.toContain(AKAMAIZED_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(AKAMAIZED_NAME)
+    expect(report.where.hostname).not.toBe(AKAMAIZED_NAME)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+  })
+
   it('omits www.bing.com dests and prefers a later non-CDN dotted name', () => {
     const BING_NAME = 'www.bing.com'
     const BING_DEST = '203.0.113.84'
