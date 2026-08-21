@@ -14,7 +14,7 @@ Status: implemented
 
 当前绑定之后，持久化投影受害端行，而不是模型的部分键。
 
-模型提交的 who/where 仍先走现有的拒绝／强制转换路径。已接受的 who/where 是该投影行的 `completeAcceptedSlot`：`entity_id`、`ip`，以及已捐出的 mac／hostname／user／full_name。模型省略的键从该行补全。MAC 仅在证据落在被绑定 victim IP 上时捐出（[通信 IP 戳记](2026-08-21-stamp-mac-evidence-from-talking-ip.md)）。从未作为受害端 IP 上 `eth.src` 出现的域控或网关 MAC 保持不在。补全 mac 时，其他已捐出的槽位保留。不会编造槽位。
+模型提交的 who/where 仍先走现有的拒绝／强制转换路径。已接受的 who/where 是该投影行的 `completeAcceptedSlot`：`entity_id`、`ip`，以及已捐出的 mac／hostname／user／full_name。模型省略的键从该行补全。MAC 在证据落在被绑定 victim IP 上时捐出（[通信 IP 戳记](2026-08-21-stamp-mac-evidence-from-talking-ip.md)），或从限定在受害端 IP 的仅字段 `eth.src` 转储改戳后捐出（[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)）。从未作为受害端 IP 上 `eth.src` 出现、也不在限定于该 IP 的转储里的域控或网关 MAC 保持不在。补全 mac 时，其他已捐出的槽位保留。不会编造槽位。
 
 [拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md) 和 [绑定强制转换](2026-08-21-bind-relationship-stringified-args.md) 保持不变。[拒绝将线索指定为 victim](2026-08-21-refuse-cue-as-victim.md) 仍被拒绝。没有新槽位。
 

@@ -7,7 +7,7 @@ import {
   roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
-import { identityOf } from '../src/harvest.ts'
+import { harvestIdentities, identityOf } from '../src/harvest.ts'
 import type { Identity, Relationship, RelationshipBind } from '../src/types.ts'
 
 const LAN = '10.0.10.2'
@@ -883,5 +883,95 @@ describe('BindRelationship', () => {
     })
     expect(withoutMac.who.mac).toBeUndefined()
     expect(withoutMac.where.mac).toBeUndefined()
+  })
+
+  it('restamps a field-only victim-IP eth.src dump onto who/where after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const firstHarvest = identityOf('mac', CLIENT_MAC)!
+    expect(firstHarvest.evidence_id).toBeUndefined()
+    const victimScoped = harvestIdentities(`eth.src: ${CLIENT_MAC}`, `eth.src: ${CLIENT_MAC}`, LAN)
+      .find(item => item.kind === 'mac')
+    expect(victimScoped).toEqual({ kind: 'mac', value: CLIENT_MAC, label: 'MAC', evidence_id: LAN })
+    const dcScoped = harvestIdentities(`eth.src: ${DISTRACTOR_MAC}`, `eth.src: ${DISTRACTOR_MAC}`, DISTRACTOR)
+      .find(item => item.kind === 'mac')
+    expect(dcScoped).toEqual({
+      kind: 'mac', value: DISTRACTOR_MAC, label: 'MAC', evidence_id: DISTRACTOR,
+    })
+    const restamped = { ...firstHarvest, evidence_id: LAN }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const victimUser = identityOf('user', USER)!
+    const victimName = identityOf('full_name', FULL_NAME)!
+    const identities = [
+      identityOf('ip', LAN)!,
+      restamped,
+      dcScoped!,
+      victimHost,
+      victimUser,
+      victimName,
+    ]
+    const fieldOnlyDumps = [`eth.src: ${CLIENT_MAC}`, `eth.src: ${DISTRACTOR_MAC}`].join('\n')
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const omittedMac = {
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    expect(identityDonatesToVictim(restamped, live, identities, fieldOnlyDumps)).toBe(true)
+    expect(identityDonatesToVictim(dcScoped!, live, identities, fieldOnlyDumps)).toBe(false)
+    const projected = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    const report = requireCaseReport(live, identities, claims, fieldOnlyDumps, {
+      who: omittedMac,
+      where: omittedMac,
+    })
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(report.where.mac).not.toBe(DISTRACTOR_MAC)
+    const strayA = identityOf('mac', '02:00:00:00:00:0c')!
+    const strayB = identityOf('mac', '02:00:00:00:00:0d')!
+    const threeUnaffiliated = [identityOf('ip', LAN)!, firstHarvest, strayA, strayB]
+    expect(identityDonatesToVictim(firstHarvest, live, threeUnaffiliated, `eth.src: ${CLIENT_MAC}`))
+      .toBe(false)
+    expect(requireCaseReport(live, threeUnaffiliated, claims, `eth.src: ${CLIENT_MAC}`).who.mac)
+      .toBeUndefined()
+    expect(identityDonatesToVictim(
+      restamped,
+      live,
+      [identityOf('ip', LAN)!, restamped, strayA, strayB],
+      fieldOnlyDumps,
+    )).toBe(true)
+    expect(requireCaseReport(
+      live,
+      [identityOf('ip', LAN)!, restamped, strayA, strayB],
+      claims,
+      fieldOnlyDumps,
+    ).who.mac).toBe(CLIENT_MAC)
+    const sameLine = `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`
+    const talking = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }
+    expect(identityDonatesToVictim(
+      talking,
+      live,
+      [identityOf('ip', LAN)!, talking, dcScoped!],
+      sameLine,
+    )).toBe(true)
   })
 })

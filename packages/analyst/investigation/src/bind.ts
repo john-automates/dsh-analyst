@@ -267,14 +267,17 @@ export function resolveBind(request: BindRequest): BindResolution {
  * Entity id an identity may donate for. IPs donate as themselves. An explicit
  * `entity_id` wins. A MAC sourced from the bound victim IP on a tool-result
  * line (`ip.src`, outbound `ip → peer`, or ARP `is at`) affiliates to that
- * victim; a hunt-subject `evidence_id` does not veto that. A user or
- * full_name evidenced on a Kerberos/SAMR conversation whose client is the
- * bound victim affiliates to that victim; hunt-subject `evidence_id` does
- * not veto that. A hostname evidenced on an IPv4 (hunt-subject `evidence_id`,
- * or a name-service line scoped to that IP) affiliates to that IP.
- * Whole-ledger uniqueness does not block a victim-IP-scoped MAC or hostname,
- * or a conversation-client user or full_name. A MAC sourced from the
- * C2-talking LAN IP donates to that IP when it matches the bound victim.
+ * victim; a hunt-subject `evidence_id` does not veto that. A MAC whose
+ * `evidence_id` is the victim IPv4 — including a field-only `eth.src` dump
+ * scoped to that IP — affiliates to that victim even when the first harvest
+ * had no `evidence_id`. A user or full_name evidenced on a Kerberos/SAMR
+ * conversation whose client is the bound victim affiliates to that victim;
+ * hunt-subject `evidence_id` does not veto that. A hostname evidenced on an
+ * IPv4 (hunt-subject `evidence_id`, or a name-service line scoped to that IP)
+ * affiliates to that IP. Whole-ledger uniqueness does not block a
+ * victim-IP-scoped MAC or hostname, or a conversation-client user or
+ * full_name. A MAC sourced from the C2-talking LAN IP donates to that IP
+ * when it matches the bound victim.
  * After a live bind, an unaffiliated identity (no `entity_id`, `evidence_id`
  * does not point at a non-victim) donates to the bound victim when it is the
  * only identity of that kind that is not affiliated with a different entity.
@@ -323,13 +326,15 @@ export function entityIdForIdentity(
  * Whether an identity may donate a who/where slot for the bound victim.
  * Distractors and other non-victim entities cannot donate. An `evidence_id`
  * that names a non-victim entity also blocks donation, except a MAC sourced
- * from the bound victim IP on a tool-result line, or a user or full_name
+ * from the bound victim IP on a tool-result line, a MAC whose `evidence_id`
+ * is that victim (a victim-IP-scoped `eth.src` dump), or a user or full_name
  * whose conversation client is that victim: hunt-subject `evidence_id` does
  * not veto that. A MAC or hostname evidenced on the bound victim IP, or a
  * user or full_name whose conversation client is that victim, donates even
- * when other values of that kind exist on the ledger. After a live bind, a
- * unique unaffiliated identity of a kind donates; two unaffiliated values of
- * that kind donate neither.
+ * when other values of that kind exist on the ledger and even when the first
+ * harvest had no `evidence_id`. After a live bind, a unique unaffiliated
+ * identity of a kind donates; two unaffiliated values of that kind donate
+ * neither.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger.
@@ -384,9 +389,11 @@ export function projectVictimSlot(
 /**
  * Persist the projected victim row after deny/coerce.
  * Keys the model omitted are filled from that row. A donated victim-IP-sourced
- * MAC is copied even when the model omits `mac`. A model-supplied key that the
- * row did not donate (a DC or gateway MAC that never appears as eth.src on the
- * bound victim IP) is not persisted. Slots are not invented.
+ * MAC — including a field-only `eth.src` dump scoped to that IP — is copied
+ * even when the model omits `mac`. A model-supplied key that the row did not
+ * donate (a DC or gateway MAC that never appears as eth.src on the bound
+ * victim IP or in a victim-IP-scoped dump) is not persisted. Slots are not
+ * invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
  * @returns the accepted slot: entity_id, ip, and donated mac/hostname/user/full_name.
@@ -737,18 +744,20 @@ function scopedIpForIdentity(identity: Identity, evidenceText: string): string |
 }
 
 /**
- * Whether tool-result text evidences this identity on `victimAddr`.
- * A MAC is sourced from that IP (`ip.src`, outbound `ip → peer`, or ARP
- * `is at`). A user or full_name is on a Kerberos/SAMR conversation whose
- * client is that IP, or a field-only SAMR/CName line whose evidence text
- * names that client talking to a DC. Hostname uses hunt-subject or
- * name-service scope and is not selected here.
+ * Whether tool-result text or a restamped `evidence_id` evidences this
+ * identity on `victimAddr`. A MAC is sourced from that IP (`ip.src`,
+ * outbound `ip → peer`, or ARP `is at`), or carries `evidence_id` of that
+ * IP from a victim-IP-scoped `eth.src` dump. A user or full_name is on a
+ * Kerberos/SAMR conversation whose client is that IP, or a field-only
+ * SAMR/CName line whose evidence text names that client talking to a DC.
+ * Hostname uses hunt-subject or name-service scope and is not selected here.
  * @param identity - ledger identity.
  * @param victimAddr - bound victim IPv4.
  * @param evidenceText - tool-result text.
  * @returns true when this identity is evidenced on that IP.
  */
 function evidencedOnVictimIp(identity: Identity, victimAddr: string, evidenceText: string): boolean {
+  if (identity.kind === 'mac' && ipv4EvidenceId(identity.evidence_id) === victimAddr) return true
   if (identity.kind !== 'mac' && identity.kind !== 'user' && identity.kind !== 'full_name') {
     return false
   }

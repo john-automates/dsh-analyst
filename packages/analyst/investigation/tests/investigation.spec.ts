@@ -138,6 +138,27 @@ describe('investigation service', () => {
     expect(foldReport(mixed)?.how).toBe('samr')
     expect(foldIdentities([identityEvent, identityEvent])).toHaveLength(1)
     expect(foldHunts([huntEvent, huntEvent])).toHaveLength(1)
+    const emptyStamp = {
+      type: 'investigation/identity' as const,
+      seq: 1,
+      time: 0,
+      data: { kind: 'mac' as const, value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '' },
+    }
+    const filledStamp = {
+      type: 'investigation/identity' as const,
+      seq: 2,
+      time: 0,
+      data: { kind: 'mac' as const, value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    }
+    expect(foldIdentities([emptyStamp, filledStamp])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
+    expect(foldIdentities([filledStamp, {
+      ...emptyStamp,
+      data: { ...emptyStamp.data, evidence_id: '10.0.10.3' },
+    }])).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+    ])
   })
 
   it('harvests identities and auto-issues hunts as post-execute notices', async () => {
@@ -548,11 +569,79 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(ctx.investigation.identities(owner.session)).toEqual(expect.arrayContaining([
-      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
       { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
       { kind: 'mac', value: '02:00:00:00:00:0c', label: 'MAC' },
       { kind: 'hostname', value: 'other-host', label: 'hostname' },
     ]))
+  })
+
+  it('restamps a missing MAC evidence_id from a later victim-IP-scoped eth.src dump', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '',
+    })
+    expect(ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC',
+    })).toBe(false)
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('ip.src == 10.0.10.2') || filter.includes('ip.addr == 10.0.10.2')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a' })
+        }
+        if (filter.includes('ip.src == 10.0.10.3') || filter.includes('ip.addr == 10.0.10.3')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0b' })
+        }
+        return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0c' })
+      },
+    }))
+    const victimDump = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-victim-restamp'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.src == 10.0.10.2',
+        fields: ['eth.src'],
+      },
+      agent: owner,
+    })
+    expect(victimDump.isError).toBe(false)
+    const dcDump = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-eth-dc-restamp'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.addr == 10.0.10.3',
+        fields: ['eth.src'],
+      },
+      agent: owner,
+    })
+    expect(dcDump.isError).toBe(false)
+    expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
+      { kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3' },
+    ])
+    expect(ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.3',
+    })).toBe(false)
+    expect(ctx.investigation.identities(owner.session).find(item => item.value === '02:00:00:00:00:0a'))
+      .toEqual({ kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' })
   })
 
   it('does not auto-run an eth-src whose subject is a non-LAN C2 IP', async () => {
