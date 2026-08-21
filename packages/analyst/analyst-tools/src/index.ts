@@ -47,9 +47,9 @@ export const Config: z<Config> = z.object({
 
 const CASE_IDENTITY_SLOT_SCHEMA = {
   type: 'object' as const,
-  additionalProperties: false,
+  additionalProperties: false as const,
   properties: {
-    entity_id: { type: 'string' as const, required: true },
+    entity_id: { type: 'string' as const, required: true as const },
     ip: { type: 'string' as const },
     mac: { type: 'string' as const },
     hostname: { type: 'string' as const },
@@ -316,10 +316,10 @@ export function apply(ctx: Context, config: Config): void {
         type: 'object',
         additionalProperties: false,
         properties: {
-          who: CASE_IDENTITY_SLOT_SCHEMA,
+          who: { ...CASE_IDENTITY_SLOT_SCHEMA, required: true as const },
           what: { type: 'string', required: true },
           when: { type: 'string', required: true },
-          where: CASE_IDENTITY_SLOT_SCHEMA,
+          where: { ...CASE_IDENTITY_SLOT_SCHEMA, required: true as const },
           why: { type: 'string', required: true },
           how: { type: 'string', required: true },
         },

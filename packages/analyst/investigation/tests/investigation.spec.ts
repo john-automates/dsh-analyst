@@ -398,11 +398,11 @@ describe('investigation service', () => {
         if (filter.includes('eth.src')) {
           return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' })
         }
-        if (filter.includes('llmnr')) return Promise.resolve('name-service dump')
+        if (filter.includes('llmnr')) return Promise.resolve('name-service dump' as unknown as { text: string })
         if (filter.includes('kerberos.CNameString')) {
           return Promise.reject(new Error('tshark missing'))
         }
-        return Promise.resolve({ other: true })
+        return Promise.resolve({ other: true } as unknown as { text: string })
       },
     }))
     const result = await ctx.tools.execute({
@@ -509,7 +509,7 @@ describe('investigation service', () => {
       },
       execute: (args) => {
         calls.push(args)
-        return Promise.resolve(null)
+        return Promise.resolve(null as unknown as { text: string })
       },
     }))
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
@@ -556,7 +556,7 @@ describe('investigation service', () => {
       },
       execute: (args) => {
         calls.push(args)
-        return Promise.resolve({ text: 1 })
+        return Promise.resolve({ text: 1 as unknown as string })
       },
     }))
     ctx.tools.register(defineTool({
@@ -671,7 +671,13 @@ describe('investigation service', () => {
     other.ctx.tools.register(defineTool({
       name: 'set_identity',
       description: 'Who/where stand-in.',
-      parameters: { who: { type: 'object' } },
+      parameters: {
+        who: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { entity_id: { type: 'string' } },
+        },
+      },
       output: {
         schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
         render: () => [{ type: 'text', text: 'set' }],
