@@ -297,17 +297,17 @@ export function apply(ctx: Context, config: Config): void {
       who: {
         type: 'object',
         additionalProperties: false,
-        description: 'Optional victim entity_id. Must match the bound victim. Free-text who is denied.',
+        description: 'Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text who is denied.',
         properties: {
-          entity_id: { type: 'string', description: 'Bound victim entity id.' },
+          entity_id: { type: 'string', description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.' },
         },
       },
       where: {
         type: 'object',
         additionalProperties: false,
-        description: 'Optional victim entity_id. Must match the bound victim. Free-text where is denied.',
+        description: 'Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text where is denied.',
         properties: {
-          entity_id: { type: 'string', description: 'Bound victim entity id.' },
+          entity_id: { type: 'string', description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.' },
         },
       },
     },

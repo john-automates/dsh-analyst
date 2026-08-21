@@ -62,7 +62,7 @@
 
 #### 模型看到什么
 
-`case_report` 返回投影后的受害端槽位以及 what/when/why/how，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。在没有当前绑定之前结案会被拒绝；对调的 `entity_id` 和自由文本 who/where 会被拒绝。设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)。
+`case_report` 返回投影后的受害端槽位以及 what/when/why/how，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。在没有当前绑定之前结案会被拒绝；对调的 `entity_id` 和自由文本 who/where 会被拒绝。who/where 的 `entity_id` 若是受害端行上的用户、主机名、MAC 或全名，会投影到被绑定的 victim 地址。设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md) 与 [case_report 受害端行 entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md)。
 
 #### Token 影响
 

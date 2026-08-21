@@ -62,7 +62,7 @@ Results append after the reusable request prefix.
 
 #### What the model sees
 
-`case_report` returns the projected victim slots plus what/when/why/how, and records `investigation/report` on the session. A non-agent caller is rejected. Close is denied until a live bind exists; inverted `entity_id` and free-text who/where are refused. Design: [BindRelationship before Who/Where](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md).
+`case_report` returns the projected victim slots plus what/when/why/how, and records `investigation/report` on the session. A non-agent caller is rejected. Close is denied until a live bind exists; inverted `entity_id` and free-text who/where are refused. A who/where `entity_id` that is a user, hostname, MAC, or full_name on the victim row projects to the bound victim address. Design: [BindRelationship before Who/Where](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md) and [case_report victim-row entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md).
 
 #### Token effect
 

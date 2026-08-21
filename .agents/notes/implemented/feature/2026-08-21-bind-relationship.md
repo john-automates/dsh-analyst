@@ -18,7 +18,7 @@ A silent rewrite of `who`/`where` onto the C2-talking LAN IP hid inversion inste
 
 The live bind publishes a focus/roles card through `investigation:ledger`. That card is not another inbox splice. Hunt notices name the filter that already ran.
 
-`tools/pre-execute` denies `case_report` and any tool arguments that set `who` or `where` unless a live bind exists with exactly one victim. It also denies when an identity slot’s `evidence_id` points at a non-victim, or when `who`/`where`.`entity_id` is not the bound victim. The deny text is `unbound: assign victim vs c2 on the cited conversation.` Inverted victim/c2 is refused. Tokens are not swapped.
+`tools/pre-execute` denies `case_report` and any tool arguments that set `who` or `where` unless a live bind exists with exactly one victim. It also denies when an identity slot’s `evidence_id` points at a non-victim, or when `who`/`where`.`entity_id` names a non-victim endpoint or another IPv4. A user, hostname, MAC, or full_name is a victim-row handle, not an entity id; the persisted packet uses the bound victim address ([victim-row entity_id](../bug-fix/2026-08-21-case-report-victim-row-entity-id.md)). The deny text is `unbound: assign victim vs c2 on the cited conversation.` Inverted victim/c2 is refused. Tokens are not swapped.
 
 `case_report` `who`/`where` are projections of the victim entity row (IP, MAC, hostname, user). They are not free-text fill. An IP donates as itself. An explicit `entity_id` wins. A unique sourced `eth.src` MAC affiliates to the bound victim through `c2TalkingLanVictim`; that helper does not rewrite `who`/`where`. Hostname and user donate only when `entity_id` is the victim. Distractors stay on the ledger and cannot donate identity slots. Names are not invented.
 
@@ -48,7 +48,7 @@ The live bind publishes a focus/roles card through `investigation:ledger`. That 
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET peer (`198.51.100.80`), and idle distractor. It checks cue-default `c2`, conversation-cited flip, two/zero victims denied, projection from the victim row, distractor non-donation, unique sourced-MAC affiliation, and unbound/inverted/free-text deny. `packages/analyst/investigation/tests/investigation.spec.ts` records `bind_relationship`, denies `case_report` until a live victim exists, and renders the roles card on the ledger. `packages/analyst/analyst-tools/tests/tools.spec.ts` requires the bind before close and projects who/where from the victim. The keyless `examples/analyst` pcap-case snapshot is `pcap_filter` then `bind_relationship` then `case_report`.
+`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET peer (`198.51.100.80`), and idle distractor. It checks cue-default `c2`, conversation-cited flip, two/zero victims denied, projection from the victim row, distractor non-donation, unique sourced-MAC affiliation, unbound/inverted/free-text deny, and a victim-row user handle (`who.entity_id` = username) that closes with the victim address. `packages/analyst/investigation/tests/investigation.spec.ts` records `bind_relationship`, denies `case_report` until a live victim exists, and renders the roles card on the ledger. `packages/analyst/analyst-tools/tests/tools.spec.ts` requires the bind before close and projects who/where from the victim, including a username handle on that row. The keyless `examples/analyst` pcap-case snapshot is `pcap_filter` then `bind_relationship` then `case_report`.
 
 ## Consequences
 

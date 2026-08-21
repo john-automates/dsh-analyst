@@ -18,7 +18,7 @@ Status: implemented
 
 当前绑定通过 `investigation:ledger` 发布焦点／角色卡片。那张卡片不是又一条收件箱拼接。hunt 通知点名已经跑过的过滤器。
 
-`tools/pre-execute` 在没有恰好一个 victim 的当前绑定时报错拒绝 `case_report`，以及任何设置 `who` 或 `where` 的工具参数。身份槽的 `evidence_id` 指向非 victim，或 `who` / `where` 的 `entity_id` 不是被绑定的 victim 时，同样拒绝。拒绝文本是 `unbound: assign victim vs c2 on the cited conversation.` 对调的 victim／c2 会被拒绝。不会对调 token。
+`tools/pre-execute` 在没有恰好一个 victim 的当前绑定时报错拒绝 `case_report`，以及任何设置 `who` 或 `where` 的工具参数。身份槽的 `evidence_id` 指向非 victim，或 `who` / `where` 的 `entity_id` 点名非 victim 端点或另一个 IPv4 时，同样拒绝。用户、主机名、MAC 或全名是受害端行句柄，不是实体 id；持久化结案包使用被绑定的 victim 地址（[受害端行 entity_id](../bug-fix/2026-08-21-case-report-victim-row-entity-id.md)）。拒绝文本是 `unbound: assign victim vs c2 on the cited conversation.` 对调的 victim／c2 会被拒绝。不会对调 token。
 
 `case_report` 的 `who` / `where` 是受害端实体行（IP、MAC、主机名、用户）的投影，不是自由文本填写。IP 以自身作为实体。显式 `entity_id` 优先。唯一的来源 `eth.src` MAC 通过 `c2TalkingLanVictim` 归属到被绑定的 victim；该辅助函数不改写 `who` / `where`。主机名和用户只有在 `entity_id` 是 victim 时才捐出。distractor 留在账本上，不能捐出身份槽。不编造姓名。
 
@@ -48,7 +48,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、引用会话的翻转、两个／零个 victim 被拒绝、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属，以及未绑定／对调／自由文本拒绝。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、引用会话的翻转、两个／零个 victim 被拒绝、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
 
 ## 后果
 
