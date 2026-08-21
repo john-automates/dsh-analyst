@@ -6,7 +6,7 @@
 
 ## 工具
 
-`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 在 `bind_relationship` 之后追加 5W1H 结案包。`who` 和 `where` 从被绑定受害端实体行投影；带 `entity_id` 的 JSON 对象字符串会在自由文本检查之前被强制转换成该对象。自由文本 who/where 和对调的 victim／c2 结案会被拒绝。对案件根目录 `report.md` 的 `write` / `edit` 会被拒绝；结案是 BindRelationship 之后的 `case_report`。不会编造主机名、用户或全名。
+`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 在 `bind_relationship` 之后追加 5W1H 结案包。`who` 和 `where` 从被绑定受害端实体行投影；带 `entity_id` 的 JSON 对象字符串，或当前绑定之后由受害端行句柄组成的字符串，会在自由文本检查之前被强制转换。点名 c2、干扰项、另一个 IPv4 或无法匹配的散文的字符串仍保持未绑定。对调的 victim／c2 结案会被拒绝。对案件根目录 `report.md` 的 `write` / `edit` 会被拒绝；结案是 BindRelationship 之后的 `case_report`。不会编造主机名、用户或全名。
 
 辅助进程用 `execFile` 启动（不经过 shell），`cwd` 为案件目录，并遵守工具的 `signal`。
 
@@ -62,7 +62,7 @@
 
 #### 模型看到什么
 
-`case_report` 返回投影后的受害端槽位以及 what/when/why/how，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。在没有当前绑定之前结案会被拒绝；对调的 `entity_id` 和自由文本 who/where 会被拒绝。带 `entity_id` 的 JSON 对象字符串会在自由文本检查之前被强制转换成该对象。who/where 的 `entity_id` 若是受害端行上的用户、主机名、MAC 或全名，会投影到被绑定的 victim 地址。对案件根目录 `report.md` 的 `write` / `edit` 返回 `close with case_report after BindRelationship.` 设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)、[case_report 受害端行 entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md)、[字符串化的 who/where](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-stringified-who-where.md) 与 [拒绝写入结案文件](../../../.agents/notes/implemented/bug-fix/2026-08-21-deny-close-file-writes.md)。
+`case_report` 返回投影后的受害端槽位以及 what/when/why/how，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。在没有当前绑定之前结案会被拒绝；对调的 `entity_id` 和无法匹配的自由文本 who/where 会被拒绝。带 `entity_id` 的 JSON 对象字符串，或当前绑定之后由受害端行句柄组成的字符串，会在自由文本检查之前被强制转换。who/where 的 `entity_id` 若是受害端行上的用户、主机名、MAC 或全名，会投影到被绑定的 victim 地址。对案件根目录 `report.md` 的 `write` / `edit` 返回 `close with case_report after BindRelationship.` 设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)、[case_report 受害端行 entity_id](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-row-entity-id.md)、[字符串化的 who/where](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-stringified-who-where.md)、[受害端行句柄字符串](../../../.agents/notes/implemented/bug-fix/2026-08-21-case-report-victim-handle-strings.md) 与 [拒绝写入结案文件](../../../.agents/notes/implemented/bug-fix/2026-08-21-deny-close-file-writes.md)。
 
 #### Token 影响
 

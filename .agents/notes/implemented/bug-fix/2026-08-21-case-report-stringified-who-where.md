@@ -12,7 +12,7 @@ Live lumma-r4 (`59ccfdb`) bound the cited conversation correctly (LAN victim / e
 
 ## Decision
 
-`caseReportDenyReason` coerces a `who`/`where` value that is a JSON object string into that object before the free-text check. A live bind can then project `who.entity_id` from a victim-row user handle. The `case_report` schema accepts an object or a string so those arguments reach the deny instead of `INVALID_ARGS`. A string that is not a JSON object stays free text and remains unbound. No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
+`caseReportDenyReason` coerces a `who`/`where` value that is a JSON object string into that object before the free-text check. A live bind can then project `who.entity_id` from a victim-row user handle. The `case_report` schema accepts an object or a string so those arguments reach the deny instead of `INVALID_ARGS`. A string that is not a JSON object is then checked as victim-row handle text ([handle strings](2026-08-21-case-report-victim-handle-strings.md)). Unmatched free text remains unbound. No live bind still denies. Inverted victim/c2 is refused. Tokens are not swapped.
 
 Scout, leftover-report bans, harvest affiliation, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET peer, and a user on that victim row.
 
@@ -28,8 +28,8 @@ Scout, leftover-report bans, harvest affiliation, and new evals stay out of this
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` binds a synthetic LAN client (`10.0.10.2`) to a TEST-NET peer and puts `lan-user` on that victim row. `who`/`where` as `JSON.stringify({ entity_id })` is denied while unbound, denied when `entity_id` is the c2 address, and allowed after the bind. A non-JSON string stays unbound. `packages/analyst/analyst-tools/tests/tools.spec.ts` executes the same JSON-string `case_report` through `bind_relationship` then `case_report` and records `investigation/report` with the victim address and donated user.
+`packages/analyst/investigation/tests/bind.spec.ts` binds a synthetic LAN client (`10.0.10.2`) to a TEST-NET peer and puts `lan-user` on that victim row. `who`/`where` as `JSON.stringify({ entity_id })` is denied while unbound, denied when `entity_id` is the c2 address, and allowed after the bind. A non-JSON string that is not a victim-row handle stays unbound. `packages/analyst/analyst-tools/tests/tools.spec.ts` executes the same JSON-string `case_report` through `bind_relationship` then `case_report` and records `investigation/report` with the victim address and donated user.
 
 ## Consequences
 
-A live bind plus XML-stringified or JSON-string who/where writes the 5W1H packet when `entity_id` is the victim address or a victim-row handle. Free-text who/where still fail unbound. Unbound and inverted closes still fail with the unbound reason.
+A live bind plus XML-stringified or JSON-string who/where writes the 5W1H packet when `entity_id` is the victim address or a victim-row handle. Unmatched free-text who/where still fail unbound. Unbound and inverted closes still fail with the unbound reason.

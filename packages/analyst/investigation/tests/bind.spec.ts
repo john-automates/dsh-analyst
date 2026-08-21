@@ -17,6 +17,8 @@ const DISTRACTOR_MAC = '02:00:00:00:00:0b'
 const HOST = 'lan-host'
 const DISTRACTOR_HOST = 'idle-host'
 const USER = 'lan-user'
+const FULL_NAME = 'Lan User'
+const DISTRACTOR_USER = 'idle-user'
 
 const relationship: Relationship = {
   src: LAN,
@@ -105,7 +107,7 @@ describe('BindRelationship', () => {
     const distractorHost: Identity = { ...identityOf('hostname', DISTRACTOR_HOST)!, entity_id: DISTRACTOR }
     const victimUser: Identity = { ...identityOf('user', USER)!, entity_id: LAN }
     const distractorUser: Identity = {
-      ...identityOf('user', 'idle-user')!,
+      ...identityOf('user', DISTRACTOR_USER)!,
       entity_id: DISTRACTOR,
       evidence_id: DISTRACTOR,
     }
@@ -295,10 +297,42 @@ describe('BindRelationship', () => {
       who: `{"entity_id":"${C2}"}`,
     }, live, identities)).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: '{not-json' }, live, identities)).toBe(UNBOUND_REASON)
-    expect(caseReportDenyReason({ who: USER }, live, identities)).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ where: { entity_id: USER } }, live, identities)).toBeUndefined()
     const report = requireCaseReport(live, identities, claims)
     expect(report.who).toEqual({ entity_id: LAN, ip: LAN, user: USER })
     expect(report.where).toEqual({ entity_id: LAN, ip: LAN, user: USER })
+  })
+
+  it('closes case_report when who/where are victim-row handle strings after a live bind', () => {
+    const live = bind()
+    const identities = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('user', USER)!, entity_id: LAN },
+      { ...identityOf('full_name', FULL_NAME)!, entity_id: LAN },
+      { ...identityOf('hostname', HOST)!, entity_id: LAN },
+      { ...identityOf('user', DISTRACTOR_USER)!, entity_id: DISTRACTOR },
+    ]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const projected = { entity_id: LAN, ip: LAN, hostname: HOST, user: USER }
+    expect(caseReportDenyReason({
+      who: USER,
+      where: LAN,
+    }, undefined, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: USER }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({ who: `${USER} (${FULL_NAME})` }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({ where: LAN }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({ where: `${LAN} (${HOST})` }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: `${USER} (${FULL_NAME})`,
+      where: `${LAN} (${HOST})`,
+    }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({ who: C2 }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: DISTRACTOR_USER }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: 'the workstation on the LAN' }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: DISTRACTOR }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: ' () ' }, live, identities)).toBe(UNBOUND_REASON)
+    const report = requireCaseReport(live, identities, claims)
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
   })
 })
