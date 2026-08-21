@@ -154,13 +154,80 @@ export function huntsForNewIdentities(
  * Display filter for one issued hunt. IP-subject hunts include `ip.addr == subject`,
  * except `eth-src`, which uses `ip.src ==` so a bidirectional dump cannot win.
  * @param filter - kind-specific display filter.
- * @param hunt - the hunt being noticed.
+ * @param hunt - the hunt being noticed or executed.
  * @returns the filter, scoped to the IP subject when present.
  */
-function displayFilterFor(filter: string, hunt: Hunt): string {
+export function displayFilterFor(filter: string, hunt: Hunt): string {
   if (hunt.subjectKind !== 'ip') return filter
   const ipField = hunt.kind === 'eth-src' ? 'ip.src' : 'ip.addr'
   return `(${filter}) and ${ipField} == ${hunt.subject}`
+}
+
+/** Scoped `pcap_filter` arguments for one issued hunt. */
+export interface HuntFilterSpec {
+  /** Display filter, including `ip.src` / `ip.addr` when the subject is an IP. */
+  display_filter: string
+  /** tshark `-e` names. Empty when the hunt reads default Info text. */
+  fields: readonly string[]
+}
+
+/**
+ * Scoped display_filter and fields for one issued hunt.
+ * Matches the filters named in {@link huntNotice}.
+ * @param hunt - the hunt to execute or notice.
+ * @returns filter and fields for `pcap_filter`.
+ */
+export function huntFilterSpec(hunt: Hunt): HuntFilterSpec {
+  switch (hunt.kind) {
+    case 'eth-src':
+      return { display_filter: displayFilterFor('eth.src', hunt), fields: ['eth.src'] }
+    case 'name-service':
+      return { display_filter: displayFilterFor('llmnr or nbns or browser', hunt), fields: [] }
+    case 'kerberos-cname':
+      return { display_filter: displayFilterFor('kerberos.CNameString', hunt), fields: ['kerberos.CNameString'] }
+    case 'samr-userinfo':
+      return {
+        display_filter: displayFilterFor(
+          'samr.samr_UserInfo21.account_name or samr.samr_UserInfo21.full_name',
+          hunt,
+        ),
+        fields: ['samr.samr_UserInfo21.account_name', 'samr.samr_UserInfo21.full_name'],
+      }
+    default:
+      return assertNever(hunt.kind, 'huntFilterSpec')
+  }
+}
+
+/**
+ * Whether an issued hunt may be auto-run against a capture.
+ * Non-LAN / C2 IP subjects never run. When a C2-talking LAN IP is known,
+ * only hunts for that IP run. Otherwise LAN IP, hostname, and user subjects run.
+ * @param hunt - one issued hunt.
+ * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
+ * @returns true when the plugin should execute this hunt.
+ */
+export function shouldAutoRunHunt(hunt: Hunt, evidenceText: string): boolean {
+  if (hunt.subjectKind === 'ip' && isNonLanUnicastIpv4(hunt.subject)) return false
+  const focus = c2TalkingLanIps(evidenceText)
+  if (focus.length > 0) return hunt.subjectKind === 'ip' && focus.includes(hunt.subject)
+  if (hunt.subjectKind === 'ip') return isLanIpv4(hunt.subject)
+  return true
+}
+
+/**
+ * Issued hunts that have not been executed and are eligible to auto-run.
+ * When a C2-talking LAN IP is known, only that subject's hunts are returned.
+ * @param hunts - hunts already on the session log.
+ * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
+ * @param executed - hunt keys already auto-run (or attempted) on this service.
+ * @returns eligible hunts in issue order.
+ */
+export function huntsToAutoRun(
+  hunts: readonly Hunt[],
+  evidenceText: string,
+  executed: ReadonlySet<string>,
+): Hunt[] {
+  return hunts.filter(hunt => !executed.has(huntKey(hunt)) && shouldAutoRunHunt(hunt, evidenceText))
 }
 
 /**
@@ -170,31 +237,39 @@ function displayFilterFor(filter: string, hunt: Hunt): string {
  */
 export function huntNotice(hunt: Hunt): string {
   switch (hunt.kind) {
-    case 'eth-src':
+    case 'eth-src': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: eth-src for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${displayFilterFor('eth.src', hunt)}\` and field \`eth.src\`.`,
+        `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
       ].join(' ')
-    case 'name-service':
+    }
+    case 'name-service': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: name-service for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${displayFilterFor('llmnr or nbns or browser', hunt)}\`.`,
+        `Run pcap_filter with display_filter \`${spec.display_filter}\`.`,
         'Those filters produce DESKTOP-* names, NBNS Registration, and BROWSER Host Announcement lines.',
       ].join(' ')
-    case 'kerberos-cname':
+    }
+    case 'kerberos-cname': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${displayFilterFor('kerberos.CNameString', hunt)}\` and field \`kerberos.CNameString\`.`,
+        `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
         'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
         'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
       ].join(' ')
-    case 'samr-userinfo':
+    }
+    case 'samr-userinfo': {
+      const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: samr-userinfo for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${displayFilterFor('samr.samr_UserInfo21.account_name or samr.samr_UserInfo21.full_name', hunt)}\``,
-        'and fields `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`.',
+        `Run pcap_filter with display_filter \`${spec.display_filter}\``,
+        `and fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`.`,
         'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
       ].join(' ')
+    }
     default:
       return assertNever(hunt.kind, 'huntNotice')
   }

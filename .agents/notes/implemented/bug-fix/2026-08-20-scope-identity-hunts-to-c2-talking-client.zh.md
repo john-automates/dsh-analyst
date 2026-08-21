@@ -20,13 +20,13 @@ Status: implemented
 
 [调查分析预设](../feature/2026-08-20-analyst-investigation-preset.md) 仍拥有收割、SAMR 和其他 hunt 旋钮。`DSH_CASE_DIR`、字符串字段强制转换、XML 恢复、主机名收割以及无效 tshark 字段拒绝保持不变。
 
-scout、家族收割、自动运行 hunt 以及新评测不在本次变更内。
+scout、家族收割以及新评测不在本次变更内。已下发 hunt 的执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 ## 备选方案
 
 **只改方法论提示词。** 否决：r1 已经下发并执行了身份 hunt。失误是对每台 LAN 工作站都下发，而不是缺少一句提示词。
 
-**自动运行已限定范围的 pcap_filter hunt。** 否决：本旋钮是下发与通知文本。执行仍由模型完成。
+**自动运行已限定范围的 pcap_filter hunt。** 对本下发旋钮否决：执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 **把案件黄金身份写进提示词或测试。** 否决：测试使用合成的双客户端 fixture（一个 LAN IP 与外部 TEST-NET 对等体通信；另一个留在 LAN 内）。案件名称、IP、MAC 和用户不是期望答案。
 

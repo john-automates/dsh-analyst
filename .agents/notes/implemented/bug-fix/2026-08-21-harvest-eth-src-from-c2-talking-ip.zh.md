@@ -16,7 +16,7 @@ Status: implemented
 
 `eth-src` 的 `huntNotice` 使用 `display_filter` `(eth.src) and ip.src == <subject>` 以及字段 `eth.src`。其他以 IP 为主体的 hunt 仍使用 `ip.addr ==`（[双客户端融合](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)）。检测使用当前工具结果，加上会话日志中已折叠的 `tool/result` 文本。
 
-[去引号](2026-08-21-pcap-filter-quoted-display-filter.md)、[字符串字段强制转换](2026-08-20-pcap-filter-string-fields.md) 和[主机名收割](2026-08-20-harvest-hostname-from-tshark-summaries.md)保持不变。scout、家族收割、自动运行 hunt、遗留报告禁令和新评测不在本次变更内。
+[去引号](2026-08-21-pcap-filter-quoted-display-filter.md)、[字符串字段强制转换](2026-08-20-pcap-filter-string-fields.md) 和[主机名收割](2026-08-20-harvest-hostname-from-tshark-summaries.md)保持不变。scout、家族收割、遗留报告禁令和新评测不在本次变更内。已下发 hunt 的执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 ## 备选方案
 
@@ -24,7 +24,7 @@ Status: implemented
 
 **记录提到焦点 IP 的那一行上的每一个 MAC。** 否决：那是 `ip.addr` 语义。入站帧会带上对端网卡。
 
-**自动运行已限定范围的 pcap_filter hunt。** 否决：本旋钮是持久化与通知文本。执行仍由模型完成。
+**自动运行已限定范围的 pcap_filter hunt。** 对本持久化旋钮否决：执行见[自动运行已下发的身份 hunt](2026-08-21-auto-run-outstanding-identity-hunts.md)。
 
 **把案件黄金 MAC 写进提示词或测试。** 否决：测试使用合成的双客户端、双 MAC fixture。案件名称、IP 和 MAC 不是期望答案。
 

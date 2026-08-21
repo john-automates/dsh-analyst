@@ -20,13 +20,13 @@ After a LAN IP shares a tool-output line with a non-LAN unicast peer, subsequent
 
 The [analyst investigation preset](../feature/2026-08-20-analyst-investigation-preset.md) still owns harvest, SAMR, and the other hunt knobs. `DSH_CASE_DIR`, string-field coerce, XML recovery, hostname harvest, and invalid tshark field rejection stay as they are.
 
-Scout, family harvest, auto-run hunts, and new evals stay out of this change.
+Scout, family harvest, and new evals stay out of this change. Execution of issued hunts is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 ## Alternatives considered
 
 **Change only the methodology prompt.** Rejected: r1 already issued and ran identity hunts. The miss was issuance for every LAN workstation, not a missing prompt sentence.
 
-**Auto-run the scoped pcap_filter hunts.** Rejected: this knob is issuance and notice text. Execution stays with the model.
+**Auto-run the scoped pcap_filter hunts.** Rejected for this issuance knob: execution is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 **Bake case gold identities into prompts or tests.** Rejected: tests use a synthetic two-client fixture (one LAN IP talks to an external TEST-NET peer; the other stays on-LAN). Case names, IPs, MACs, and users are not expected answers.
 

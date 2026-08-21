@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -333,6 +333,243 @@ describe('investigation service', () => {
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.0.5', label: 'IP' })
     const filled = await ctx.systemPrompt.assemble({ agent: owner })
     expect(filled.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toContain('10.0.0.5')
+  })
+
+  it('auto-runs issued eth-src for a LAN client when the model never called pcap_filter', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    await writeFile(join(caseDir, 'evidence', 'notes.txt'), 'not-a-capture')
+    await mkdir(join(caseDir, 'evidence', 'nested'), { recursive: true })
+    const calls: { path?: unknown; display_filter?: unknown; fields?: unknown }[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args, exec) => {
+        calls.push(args)
+        exec.deferContext(createUserMessage({
+          content: [{ type: 'text', text: 'unused' }],
+          source: { kind: 'plugin', plugin: 'pcap_filter', form: 'notice', summary: 'unused' },
+        }))
+        exec.concludeTurn()
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('eth.src')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' })
+        }
+        if (filter.includes('llmnr')) return Promise.resolve('name-service dump')
+        if (filter.includes('kerberos.CNameString')) {
+          return Promise.reject(new Error('tshark missing'))
+        }
+        return Promise.resolve({ other: true })
+      },
+    }))
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-lan-eth'),
+      name: 'echo',
+      arguments: { text: '10.0.10.2 → 198.51.100.80 TCP' },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(calls).toEqual(expect.arrayContaining([
+      {
+        path: 'evidence/a.pcap',
+        display_filter: '(eth.src) and ip.src == 10.0.10.2',
+        fields: ['eth.src'],
+      },
+    ]))
+    expect(calls.some(call => call.display_filter === '(llmnr or nbns or browser) and ip.addr == 10.0.10.2')).toBe(true)
+    expect(calls.some(call => (
+      typeof call.display_filter === 'string'
+      && call.display_filter.includes('kerberos.CNameString')
+    ))).toBe(true)
+    expect(calls.some(call => (
+      typeof call.display_filter === 'string'
+      && call.display_filter.includes('samr.samr_UserInfo21')
+      && call.fields === undefined
+    ))).toBe(false)
+    expect(calls.some(call => (
+      typeof call.display_filter === 'string'
+      && call.display_filter.includes('samr.samr_UserInfo21')
+      && Array.isArray(call.fields)
+    ))).toBe(true)
+    expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
+    ])
+    expect(result.additionalContexts?.[0]?.content).toEqual([
+      expect.objectContaining({
+        type: 'text',
+        text: expect.stringContaining('New identity: MAC 02:00:00:00:00:0a'),
+      }),
+    ])
+    const again = await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-lan-eth-again'),
+      name: 'echo',
+      arguments: { text: '10.0.10.2 → 198.51.100.80 TCP' },
+      agent: owner,
+    })
+    expect(again.additionalContexts).toBeUndefined()
+    expect(calls.filter(call => call.display_filter === '(eth.src) and ip.src == 10.0.10.2')).toHaveLength(1)
+  })
+
+  it('does not auto-run an eth-src whose subject is a non-LAN C2 IP', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const calls: unknown[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:cc' })
+      },
+    }))
+    await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-c2-only'),
+      name: 'echo',
+      arguments: { text: '198.51.100.80' },
+      agent: owner,
+    })
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'eth-src', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+    expect(calls).toEqual([])
+    expect(ctx.investigation.identities(owner.session).some(item => item.kind === 'mac')).toBe(false)
+  })
+
+  it('auto-runs an already-issued LAN eth-src after a later C2-talking dump', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'capture.pcap'), 'pcap')
+    const calls: { path?: unknown; display_filter?: unknown }[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        return Promise.resolve(null)
+      },
+    }))
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '198.51.100.80', label: 'IP' })
+    ctx.investigation.recordHunt(owner.session, {
+      kind: 'eth-src', subjectKind: 'ip', subject: '10.0.10.3',
+    })
+    ctx.investigation.recordHunt(owner.session, {
+      kind: 'eth-src', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-later-focus'),
+      name: 'echo',
+      arguments: { text: '10.0.10.2 → 198.51.100.80 TCP' },
+      agent: owner,
+    })
+    expect(result.additionalContexts).toBeUndefined()
+    expect(calls).toEqual([
+      {
+        path: 'capture.pcap',
+        display_filter: '(eth.src) and ip.src == 10.0.10.2',
+        fields: ['eth.src'],
+      },
+    ])
+  })
+
+  it('uses the triggering pcap path and skips auto-run without a capture', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'b.pcapng'), 'pcap')
+    const calls: { path?: unknown }[] = []
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        calls.push(args)
+        return Promise.resolve({ text: 1 })
+      },
+    }))
+    ctx.tools.register(defineTool({
+      name: 'pcap_info',
+      description: 'Stub capture info.',
+      parameters: { path: { type: 'string', required: true } },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: () => Promise.resolve({ text: '10.0.10.2 → 198.51.100.80 TCP' }),
+    }))
+    await ctx.tools.execute({
+      signal,
+      callId: CallId('info-path'),
+      name: 'pcap_info',
+      arguments: { path: 'evidence/chosen.pcap' },
+      agent: owner,
+    })
+    expect(calls[0]?.path).toBe('evidence/chosen.pcap')
+    const empty = await setup()
+    const emptyCalls: unknown[] = []
+    empty.ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        emptyCalls.push(args)
+        return Promise.resolve({ text: 'should-not-run' })
+      },
+    }))
+    await empty.ctx.tools.execute({
+      signal,
+      callId: CallId('echo-no-pcap'),
+      name: 'echo',
+      arguments: { text: '10.0.10.2' },
+      agent: empty.owner,
+    })
+    expect(emptyCalls).toEqual([])
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

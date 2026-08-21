@@ -16,7 +16,7 @@ After `c2TalkingLanIps` has a focus IP, `harvestIdentities` records a MAC only w
 
 `huntNotice` for `eth-src` uses `display_filter` `(eth.src) and ip.src == <subject>` and field `eth.src`. Other IP-subject hunts keep `ip.addr ==` ([two-client fusion](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)). Detection uses the current tool result plus folded `tool/result` text already on the session log.
 
-[Quote-strip](2026-08-21-pcap-filter-quoted-display-filter.md), [string-field coerce](2026-08-20-pcap-filter-string-fields.md), and [hostname harvest](2026-08-20-harvest-hostname-from-tshark-summaries.md) stay as they are. Scout, family harvest, auto-run hunts, leftover-report bans, and new evals stay out of this change.
+[Quote-strip](2026-08-21-pcap-filter-quoted-display-filter.md), [string-field coerce](2026-08-20-pcap-filter-string-fields.md), and [hostname harvest](2026-08-20-harvest-hostname-from-tshark-summaries.md) stay as they are. Scout, family harvest, leftover-report bans, and new evals stay out of this change. Execution of issued hunts is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 ## Alternatives considered
 
@@ -24,7 +24,7 @@ After `c2TalkingLanIps` has a focus IP, `harvestIdentities` records a MAC only w
 
 **Record every MAC on a line that mentions the focus IP.** Rejected: that is `ip.addr` semantics. Inbound frames contribute the far-side NIC.
 
-**Auto-run the scoped pcap_filter hunt.** Rejected: this knob is persist and notice text. Execution stays with the model.
+**Auto-run the scoped pcap_filter hunt.** Rejected for this persist knob: execution is [auto-run outstanding issued identity hunts](2026-08-21-auto-run-outstanding-identity-hunts.md).
 
 **Bake case gold MACs into prompts or tests.** Rejected: tests use a synthetic two-client, two-MAC fixture. Case names, IPs, and MACs are not expected answers.
 

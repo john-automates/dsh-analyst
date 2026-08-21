@@ -61,8 +61,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      * One issued hunt. Duplicate kind+subject pairs are not appended; fold in
      * log order. A new IP issues `eth-src`, `name-service`, Kerberos
      * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
-     * peer, those identity hunts issue only for that C2-talking IP. A new
-     * hostname issues Kerberos then SAMR. A new user issues SAMR.
+     * peer, those identity hunts issue only for that C2-talking IP. When
+     * `autoHunt` is true, outstanding issued hunts execute through
+     * `pcap_filter` with the scoped display filter. A new hostname issues
+     * Kerberos then SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**
