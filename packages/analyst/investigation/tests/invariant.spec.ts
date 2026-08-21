@@ -76,6 +76,9 @@ describe('investigation invariants', () => {
     session.append('investigation/hunt', {
       kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
     })
+    session.append('investigation/hunt', {
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
     session.append('investigation/bind', {
       relationship: {
         src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
@@ -91,6 +94,7 @@ describe('investigation invariants', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
       why: 'e', how: 'f',
       c2_domain: 'c2.example.test',
+      c2_ips: ['198.51.100.80', '203.0.113.50'],
     })
     expect(() => { ctx.emit('session/event', {} as Session, { type: 'todo/write', seq: 0, time: 0, data: {} } as SessionEvent) }).not.toThrow()
     expect(session.events.some(event => event.type === 'investigation/identity')).toBe(true)
@@ -119,6 +123,8 @@ describe('investigation invariants', () => {
     [report({ who: { entity_id: '10.0.10.2', mac: ' padded ' } }), /mac must be a non-empty/],
     [report({ who: { entity_id: '' } }), /entity_id must be a non-empty/],
     [report({ c2_domain: '' }), /c2_domain must be a non-empty/],
+    [report({ c2_ips: [] }), /c2_ips must be a non-empty/],
+    [report({ c2_ips: [''] }), /c2_ips\[0\] must be a non-empty/],
   ])('rejects an incoherent investigation event', async (event, message) => {
     const ctx = await setup()
     expect(() => { ctx.emit('session/event', {} as Session, event) }).toThrow(message)

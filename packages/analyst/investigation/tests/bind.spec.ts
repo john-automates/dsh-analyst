@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acceptedC2Domain, BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, c2DomainHuntForBind,
-  completeAcceptedSlot, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON, foldBind,
-  formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
+  acceptedC2Domain, acceptedC2Ips, BOTH_LAN_CONVERSATION_REASON, boundC2Ipv4,
+  caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind, completeAcceptedSlot,
+  cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON, extraWanHuntForBind,
+  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON,
   normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
   requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
@@ -14,6 +15,7 @@ const LAN = '10.0.10.2'
 const LAN_CIDR = '10.0.10.0/24'
 const OTHER_CIDR = '172.16.0.0/12'
 const C2 = '198.51.100.80'
+const EXTRA_WAN = '203.0.113.50'
 const DISTRACTOR = '10.0.10.3'
 const CLIENT_MAC = '02:00:00:00:00:0a'
 const DISTRACTOR_MAC = '02:00:00:00:00:0b'
@@ -124,6 +126,10 @@ describe('BindRelationship', () => {
     expect(c2DomainHuntForBind(live.bind)).toEqual({
       kind: 'c2-domain', subjectKind: 'ip', subject: C2,
     })
+    expect(extraWanHuntForBind(live.bind)).toEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: LAN,
+    })
+    expect(boundC2Ipv4(live.bind)).toBe(C2)
     const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
     expect(caseReportDenyReason({ what: 'x' }, live.bind)).toBeUndefined()
     expect(requireCaseReport(live.bind, [], claims)).toEqual({
@@ -133,6 +139,7 @@ describe('BindRelationship', () => {
       where: { entity_id: LAN, ip: LAN },
       why: 'c',
       how: 'd',
+      c2_ips: [C2],
     })
   })
 
@@ -220,6 +227,7 @@ describe('BindRelationship', () => {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
     expect(report.c2_domain).toBe(DOMAIN)
+    expect(report.c2_ips).toEqual([C2])
     expect(report.who).toEqual(slot)
     expect(report.where).toEqual(slot)
     expect(report.who.hostname).toBe(HOST)
@@ -228,6 +236,56 @@ describe('BindRelationship', () => {
     expect(requireCaseReport(live, [identityOf('ip', LAN)!, victimHost], {
       what: 'a', when: 'b', why: 'c', how: 'd',
     }).c2_domain).toBeUndefined()
+  })
+
+  it('persists extra WAN dests as c2_ips and a domain stamped on an extra C2', () => {
+    const DOMAIN = 'c2.example.test'
+    const live = bind()
+    const victimHost: Identity = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const extraHost: Identity = {
+      ...identityOf('hostname', DOMAIN)!,
+      evidence_id: EXTRA_WAN,
+    }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      identityOf('ip', EXTRA_WAN)!,
+      identityOf('ip', DISTRACTOR)!,
+      identityOf('ip', '10.0.10.1')!,
+      identityOf('ip', '224.0.0.252')!,
+      victimHost,
+      extraHost,
+    ]
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).not.toContain(DISTRACTOR)
+    expect(acceptedC2Ips(live, identities)).not.toContain('10.0.10.1')
+    expect(acceptedC2Ips(live, identities)).not.toContain('224.0.0.252')
+    expect(acceptedC2Domain(live, identities)).toBe(DOMAIN)
+    expect(c2DomainHuntsForBind(live, identities)).toEqual([
+      { kind: 'c2-domain', subjectKind: 'ip', subject: C2 },
+      { kind: 'c2-domain', subjectKind: 'ip', subject: EXTRA_WAN },
+    ])
+    expect(identityDonatesToVictim(extraHost, live, identities)).toBe(false)
+    expect(identityDonatesToVictim(identityOf('ip', EXTRA_WAN)!, live, identities)).toBe(false)
+    const slot = projectVictimSlot(live, identities)
+    expect(slot).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
+    expect(slot?.hostname).not.toBe(DOMAIN)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).toContain(C2)
+    expect(report.c2_ips).toContain(EXTRA_WAN)
+    expect(report.c2_ips).not.toContain(DISTRACTOR)
+    expect(report.c2_ips).not.toContain('10.0.10.1')
+    expect(report.c2_domain).toBe(DOMAIN)
+    expect(report.who).toEqual(slot)
+    expect(report.where).toEqual(slot)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+    expect(live.endpoints.filter(endpoint => endpoint.role === 'c2')).toHaveLength(1)
   })
 
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
@@ -339,7 +397,10 @@ describe('BindRelationship', () => {
       ],
     }
     expect(c2DomainHuntForBind(lanC2)).toBeUndefined()
+    expect(extraWanHuntForBind(lanC2)).toBeUndefined()
+    expect(c2DomainHuntsForBind(lanC2, [])).toEqual([])
     expect(acceptedC2Domain(lanC2, [])).toBeUndefined()
+    expect(acceptedC2Ips(lanC2, [])).toEqual([])
     expect(otherEndHuntForDeniedBind({
       relationship: dcRelationship,
       endpoints: [{ addr: C2, role: 'victim', because: 'the alert named this IP' }],
@@ -467,6 +528,7 @@ describe('BindRelationship', () => {
       where: { entity_id: LAN, ip: LAN },
       why: 'c',
       how: 'd',
+      c2_ips: [C2],
     })
     const mixed = bind({
       endpoints: [

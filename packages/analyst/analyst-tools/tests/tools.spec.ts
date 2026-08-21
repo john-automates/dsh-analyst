@@ -305,6 +305,7 @@ describe('analyst tools', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2', mac: '02:00:00:00:00:0a', hostname: 'lan-host' },
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -413,6 +414,7 @@ describe('analyst tools', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2', user: 'lan-user' },
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 lan-user')
   })
@@ -484,6 +486,7 @@ describe('analyst tools', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2', user: 'lan-user' },
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 lan-user')
   })
@@ -594,6 +597,7 @@ describe('analyst tools', () => {
       },
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 lan-host lan-user Lan User')
   })
@@ -802,6 +806,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -891,6 +896,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('idle-user')
@@ -976,6 +982,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -1072,6 +1079,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -1198,6 +1206,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -1349,6 +1358,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(ctx.investigation.report(owner.session)?.who.ip).not.toBe('203.0.113.1')
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
@@ -1558,6 +1568,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -1764,6 +1775,7 @@ describe('analyst tools', () => {
       where: projected,
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
     })
     expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
     expect(text(result)).not.toContain('02:00:00:00:00:0b')
@@ -1856,6 +1868,9 @@ describe('analyst tools', () => {
     })
     expect(bind.isError).toBe(false)
     expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
       kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
     })
     expect(ctx.investigation.identities(owner.session)).toContainEqual({
@@ -1872,8 +1887,10 @@ describe('analyst tools', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2', hostname: 'lan-host' },
       why: 'c2',
       how: 'https',
+      c2_ips: ['198.51.100.80'],
       c2_domain: 'c2.example.test',
     })
+    expect(text(result)).toContain('C2 IPs: 198.51.100.80')
     expect(text(result)).toContain('C2 domain: c2.example.test')
     expect(text(result)).toContain('Who: 10.0.10.2 lan-host')
     expect(text(result)).not.toContain('Who: 10.0.10.2 lan-host c2.example.test')

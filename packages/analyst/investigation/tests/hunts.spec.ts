@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
-  c2DomainDisplayFilter, c2DomainHunt, huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities,
-  huntsToAutoRun, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
-  shouldAutoRunHunt,
+  c2DomainDisplayFilter, c2DomainHunt, extraWanDisplayFilter, extraWanHunt, huntFilterSpec,
+  huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4, isNonLanUnicastIpv4,
+  otherEndDisplayFilter, otherEndHunt, shouldAutoRunHunt,
 } from '../src/hunts.ts'
 import { formatLedger } from '../src/ledger.ts'
 import type { Hunt, Identity } from '../src/types.ts'
@@ -277,5 +277,30 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt({ kind: 'c2-domain', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
     expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
     expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
+  })
+
+  it('issues extra-wan for a bound victim IP and auto-runs that hunt', () => {
+    const hunt = extraWanHunt(LAN_A)
+    expect(hunt).toEqual({ kind: 'extra-wan', subjectKind: 'ip', subject: LAN_A })
+    expect(extraWanDisplayFilter(LAN_A, C2)).toContain(`ip.src == ${LAN_A}`)
+    expect(extraWanDisplayFilter(LAN_A, C2)).toContain(`not ip.dst == ${C2}`)
+    expect(extraWanDisplayFilter(LAN_A, C2)).toContain('10.0.0.0/8')
+    expect(extraWanDisplayFilter(LAN_A, C2)).toContain('224.0.0.0/3')
+    expect(huntFilterSpec(hunt, C2)).toEqual({
+      display_filter: extraWanDisplayFilter(LAN_A, C2),
+      fields: ['ip.dst'],
+    })
+    const notice = huntNotice(hunt)
+    expect(notice).toContain('extra-wan')
+    expect(notice).toContain(`ip.src == ${LAN_A}`)
+    expect(notice).toContain('ip.dst')
+    expect(notice).not.toContain(C2)
+    expect(shouldAutoRunHunt(hunt, '')).toBe(true)
+    expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
+    expect(shouldAutoRunHunt({ kind: 'extra-wan', subjectKind: 'ip', subject: C2 }, '')).toBe(false)
+    expect(shouldAutoRunHunt({ kind: 'extra-wan', subjectKind: 'ip', subject: LAN_B }, twoClientFixture))
+      .toBe(true)
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsForNewIdentities([lanA], [], twoClientFixture)).not.toContainEqual(hunt)
   })
 })
