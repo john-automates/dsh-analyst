@@ -10,8 +10,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
-  BOTH_LAN_CONVERSATION_REASON, CLOSE_FILE_REASON, Config, foldHunts, foldIdentities, foldReport,
-  METHODOLOGY_SECTION, requireCaseReport, resolveCaseDir, setsWhoWhere,
+  BOTH_LAN_CONVERSATION_REASON, CDN_C2_REASON, CLOSE_FILE_REASON, Config, foldHunts, foldIdentities,
+  foldReport, METHODOLOGY_SECTION, requireCaseReport, resolveCaseDir, setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -439,7 +439,7 @@ describe('investigation service', () => {
     expect(empty.sections.some(section => section.name === 'investigation:policy' && section.text === METHODOLOGY_SECTION)).toBe(true)
     expect(METHODOLOGY_SECTION).toContain('Before Who/Where, bind the conversation.')
     expect(METHODOLOGY_SECTION).toContain(
-      'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address.',
+      'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
     )
     expect(ctx.tools.get('bind_relationship')).toBeDefined()
     expect(setsWhoWhere(null)).toBe(false)
@@ -1714,6 +1714,123 @@ describe('investigation service', () => {
     expect(ctx.investigation.identities(owner.session)).toContainEqual({
       kind: 'ip', value: '203.0.113.50', label: 'IP', evidence_id: '10.0.10.2',
     })
+  })
+
+  it('denies a CDN/update C2 bind and issues neither extra-wan nor c2-domain', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'update.microsoft.com', label: 'hostname', evidence_id: '203.0.113.80',
+    })
+    const denied = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cdn-c2'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '203.0.113.80', dport: 443, t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-cdn',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 203.0.113.80' }],
+      },
+      agent: owner,
+    })
+    expect(denied.isError).toBe(true)
+    expect(denied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      CDN_C2_REASON,
+    )
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(owner.session.events.some(event => event.type === 'investigation/bind')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'other-end')).toBe(false)
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'payload.example.test', label: 'hostname', evidence_id: '198.51.100.80',
+    })
+    const accepted = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-payload-c2'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(accepted.isError).toBe(false)
+    expect(ctx.investigation.bind(owner.session)?.endpoints).toEqual([
+      { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+      { addr: '198.51.100.80', role: 'c2', because: 'cue/observation address' },
+    ])
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
+    })
+  })
+
+  it('drops a CDN extra from c2_ips and persists payload.example.test from another C2 IP', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const PAYLOAD = 'payload.example.test'
+    const CDN_DEST = '203.0.113.80'
+    const EXTRA = '203.0.113.50'
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
+    })
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: (args) => {
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('ip.src == 10.0.10.2') && filter.includes('ip.dst')) {
+          return Promise.resolve({ text: `ip.dst: ${CDN_DEST}\nip.dst: ${EXTRA}` })
+        }
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(CDN_DEST)) {
+          return Promise.resolve({ text: 'tls.handshake.extensions_server_name: update.microsoft.com' })
+        }
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(EXTRA)) {
+          return Promise.resolve({ text: `tls.handshake.extensions_server_name: ${PAYLOAD}` })
+        }
+        if (filter.includes('tls.handshake.extensions_server_name') && filter.includes('198.51.100.80')) {
+          return Promise.resolve({ text: `tls.handshake.extensions_server_name: ${PAYLOAD}` })
+        }
+        return Promise.resolve({ text: '' })
+      },
+    }))
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-cdn-extra'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    const report = requireCaseReport(
+      ctx.investigation.bind(owner.session),
+      ctx.investigation.identities(owner.session),
+      { what: 'beacon', when: 'now', why: 'c2', how: 'https' },
+    )
+    expect(report.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(report.c2_ips).not.toContain(CDN_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe('lan-host')
+    expect(report.where.hostname).toBe('lan-host')
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

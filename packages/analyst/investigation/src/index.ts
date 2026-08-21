@@ -3,7 +3,8 @@
  * tool results, auto-issue hunts after new identities, auto-issue `other-end`
  * when bind_relationship assigns a cue as victim, auto-issue `extra-wan`
  * then `c2-domain` on a successful bind with a unique LAN victim and
- * unique non-LAN C2, auto-run outstanding
+ * unique non-LAN C2 that is not a well-known CDN or update destination,
+ * auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
  * deny write/edit of case-root close files, and persist a 5W1H close packet
@@ -45,8 +46,8 @@ import type { CaseReport, Hunt, Identity, RelationshipBind } from './types.ts'
 export type * from './types.ts'
 export type { HuntFilterSpec } from './hunts.ts'
 export {
-  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, isC2DomainName,
-  normalizeIdentityValue,
+  decodeUtf16LeHex, harvestIdentities, hostnamesEvidencedOnIp, identityKey, identityOf,
+  IDENTITY_LABELS, isC2DomainName, isCdnOrUpdateName, normalizeIdentityValue,
 } from './harvest.ts'
 export {
   c2DomainDisplayFilter, c2DomainHunt, c2TalkingLanIps, displayFilterFor, evidenceTextForHunts,
@@ -61,10 +62,10 @@ export {
   BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, coerceBindRequest, completeAcceptedSlot,
   cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON,
   entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
-  LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
-  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf,
-  VICTIM_COUNT_REASON, acceptedC2Domain, acceptedC2Ips, boundC2Ipv4, c2DomainHuntForBind,
-  c2DomainHuntsForBind, extraWanHuntForBind,
+  CDN_C2_REASON, LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind,
+  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
+  UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON, acceptedC2Domain, acceptedC2Ips, boundC2Ipv4,
+  c2DomainHuntForBind, c2DomainHuntsForBind, extraWanHuntForBind,
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
@@ -83,7 +84,7 @@ export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
-  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address. Cue and observation addresses default to c2 and cannot be victim.',
+  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
   'Work evidence-first and question-driven: every tool call answers a named question.',
   'Label unverified ideas as hunches and verify them in this case.',
@@ -109,8 +110,9 @@ export interface Config {
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
    * those identity hunts issue only for that C2-talking IP. A cue-as-victim
    * bind issues `other-end` for that cue. A successful bind with a unique LAN
-   * victim and unique non-LAN C2 issues `extra-wan` for that victim and
-   * `c2-domain` for each C2 IPv4 (bound plus harvested extras). Outstanding
+   * victim and unique non-LAN C2 that is not a well-known CDN or update
+   * destination issues `extra-wan` for that victim and
+   * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras). Outstanding
    * issued hunts then run through `pcap_filter` with the scoped
    * display_filter and fields; results harvest into the ledger. Non-LAN /
    * C2 IP subjects do not auto-run, except `other-end` and `c2-domain`.
@@ -350,7 +352,7 @@ export class Investigation extends Service {
                   because: {
                     type: 'string',
                     required: true,
-                    description: 'Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address.',
+                    description: 'Why this role. A cue/observation address cannot be victim. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
                   },
                 },
               },
@@ -402,7 +404,9 @@ export class Investigation extends Service {
           },
           endpoints: args.endpoints,
         }
-        const resolved = resolveBind(request)
+        const identities = foldIdentities(exec.agent.session.events)
+        const evidenceText = foldToolResultText(exec.agent.session.events)
+        const resolved = resolveBind(request, identities, evidenceText)
         if (!resolved.ok) {
           const hunt = otherEndHuntForDeniedBind(request)
           if (hunt !== undefined) {
@@ -650,7 +654,11 @@ export class Investigation extends Service {
         if (hunt.kind === 'extra-wan') {
           const bind = foldBind(session.events)
           if (bind !== undefined) {
-            for (const next of c2DomainHuntsForBind(bind, foldIdentities(session.events))) {
+            for (const next of c2DomainHuntsForBind(
+              bind,
+              foldIdentities(session.events),
+              evidence(),
+            )) {
               if (this.recordHunt(session, next)) issued.push(next)
             }
           }
@@ -843,7 +851,7 @@ export default Investigation
 const BIND_RELATIONSHIP_DESCRIPTION = [
   'Bind the cited conversation before Who/Where.',
   'Assign victim vs c2 (or infra, distractor, unknown) on each endpoint.',
-  'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address.',
+  'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
   'Cue and observation addresses default to c2 and cannot be victim.',
   'Exactly one victim.',
 ].join(' ')

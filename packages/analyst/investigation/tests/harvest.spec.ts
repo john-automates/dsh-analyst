@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, ipsEvidencingIdentity,
-  isC2DomainName, normalizeIdentityValue, regexCapture,
+  decodeUtf16LeHex, harvestIdentities, hostnamesEvidencedOnIp, identityKey, identityOf,
+  IDENTITY_LABELS, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName, normalizeIdentityValue,
+  regexCapture,
 } from '../src/harvest.ts'
 
 const BECKA_HEX = '42:00:65:00:63:00:6b:00:61:00:20:00:52:00:6f:00:6c:00:66:00'
@@ -437,6 +438,44 @@ describe('identity harvest', () => {
     expect(isC2DomainName('lan-host')).toBe(false)
     expect(isC2DomainName('dc01')).toBe(false)
     expect(isC2DomainName(C2)).toBe(false)
+    expect(isCdnOrUpdateName('update.microsoft.com')).toBe(true)
+    expect(isCdnOrUpdateName('a1.akamai.net')).toBe(true)
+    expect(isCdnOrUpdateName('microsoft.com')).toBe(true)
+    expect(isCdnOrUpdateName('windows.com')).toBe(true)
+    expect(isCdnOrUpdateName('windowsupdate.com')).toBe(true)
+    expect(isCdnOrUpdateName('office.com')).toBe(true)
+    expect(isCdnOrUpdateName('live.com')).toBe(true)
+    expect(isCdnOrUpdateName('akamaiedge.net')).toBe(true)
+    expect(isCdnOrUpdateName('akamaihd.net')).toBe(true)
+    expect(isCdnOrUpdateName('akadns.net')).toBe(true)
+    expect(isCdnOrUpdateName('edgesuite.net')).toBe(true)
+    expect(isCdnOrUpdateName('edgekey.net')).toBe(true)
+    expect(isCdnOrUpdateName('cdn.cloudflare.com')).toBe(true)
+    expect(isCdnOrUpdateName('d111111abcdef8.cloudfront.net')).toBe(true)
+    expect(isCdnOrUpdateName('a.fastly.net')).toBe(true)
+    expect(isCdnOrUpdateName('update.microsoft.com.')).toBe(true)
+    expect(isCdnOrUpdateName('payload.example.test')).toBe(false)
+    expect(isCdnOrUpdateName('evilmicrosoft.com')).toBe(false)
+    expect(isCdnOrUpdateName('microsoft.com.evil.test')).toBe(false)
+    expect(isCdnOrUpdateName('lan-host')).toBe(false)
+    expect(isCdnOrUpdateName(C2)).toBe(false)
+    expect(isCdnOrUpdateName('')).toBe(false)
+    const cdnDest = '203.0.113.80'
+    const harvested = { ...identityOf('hostname', 'update.microsoft.com')!, evidence_id: cdnDest }
+    expect(hostnamesEvidencedOnIp(cdnDest, [harvested])).toEqual(['update.microsoft.com'])
+    expect(hostnamesEvidencedOnIp(cdnDest, [], `ip.addr: ${cdnDest}\thttp.host: a1.akamai.net`))
+      .toEqual(['a1.akamai.net'])
+    expect(hostnamesEvidencedOnIp(cdnDest, [], `ip.dst: ${cdnDest}\ttls.handshake.extensions_server_name: update.microsoft.com`))
+      .toEqual(['update.microsoft.com'])
+    expect(hostnamesEvidencedOnIp(cdnDest, [identityOf('hostname', 'payload.example.test')!], ''))
+      .toEqual([])
+    expect(hostnamesEvidencedOnIp(
+      cdnDest,
+      [identityOf('hostname', 'update.microsoft.com')!],
+      `ip.addr: ${cdnDest}\thostname: update.microsoft.com`,
+    )).toEqual(['update.microsoft.com'])
+    expect(hostnamesEvidencedOnIp(cdnDest, [], `ip.addr: ${cdnDest}\thostname: ${C2}`))
+      .toEqual([])
     const dump = [
       `tls.handshake.extensions_server_name: ${DOMAIN}`,
       'dns.qry.name: c2.example.test',
