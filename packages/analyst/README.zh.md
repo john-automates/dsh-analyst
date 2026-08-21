@@ -6,7 +6,7 @@
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
-| [`investigation/`](investigation/README.md) | 案件目录、证据策略、身份收割、自动下发的 hunt、5W1H 结案包 | `ctx.investigation` |
-| [`analyst-tools/`](analyst-tools/README.md) | `pcap_info`、`pcap_filter`、`logs` 和 `case_report` |（注册到 `ctx.tools`） |
+| [`investigation/`](investigation/README.md) | 案件目录、证据策略、身份收割、自动下发的 hunt、BindRelationship、5W1H 结案包 | `ctx.investigation` |
+| [`analyst-tools/`](analyst-tools/README.md) | `pcap_info`、`pcap_filter`、`logs` 和 `case_report` |（注册到 `ctx.tools`；`bind_relationship` 由 investigation 注册） |
 
 选择 `analyst` 预设。设计见[调查分析预设](../../.agents/notes/implemented/feature/2026-08-20-analyst-investigation-preset.md)。

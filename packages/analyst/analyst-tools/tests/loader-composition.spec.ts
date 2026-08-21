@@ -75,7 +75,7 @@ describe('analyst-tools real Loader composition through cordis.yml', () => {
     await chmod(tshark, 0o755)
     const ctx = await boot(caseDir, tshark, tshark)
     expect(ctx.tools.schemas().map(schema => schema.name)).toEqual(
-      expect.arrayContaining(['pcap_info', 'pcap_filter', 'logs', 'case_report']),
+      expect.arrayContaining(['pcap_info', 'pcap_filter', 'logs', 'case_report', 'bind_relationship']),
     )
     const session = Session.create(SessionId('loader'))
     const owner = { id: SessionId('loader'), session } as unknown as Agent

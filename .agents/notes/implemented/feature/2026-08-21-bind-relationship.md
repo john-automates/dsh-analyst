@@ -1,0 +1,55 @@
+# Agent Note: BindRelationship before Who/Where
+
+Status: implemented
+
+English | [中文](2026-08-21-bind-relationship.zh.md)
+
+## Problem
+
+Attacks are relationships. The detector’s IP is a hypothesis about the other end until someone assigns victim versus c2 on a cited conversation. The investigation ledger already held that conversation and the C2-talking LAN identity. The model never saw those roles.
+
+`formatLedger` was a flat unlabeled list. Hunt notices still told the model to run `pcap_filter` after outstanding hunts had already executed. `METHODOLOGY_SECTION` stated DINQ and 5W1H with no victim-versus-c2 rule. `case_report` accepted six free-text strings and had no `tools/pre-execute` check. The keyless pcap-case snapshot closed in one hop from `pcap_filter` to `case_report`.
+
+A silent rewrite of `who`/`where` onto the C2-talking LAN IP hid inversion instead of forcing the bind. That rewrite is archived as [bind case_report who/where to the C2-talking LAN identity](../../archived/bug-fix/2026-08-21-case-report-c2-talking-lan-identity.md).
+
+## Decision
+
+`bind_relationship` is the thinking primitive. It records `investigation/bind` with `{src, dst, dport, t, evidence_id}` and endpoints `{addr, role ∈ victim|c2|infra|distractor|unknown, because}`. Exactly one victim. A cue or observation address (non-LAN unicast) defaults to `c2`; every other unassigned address defaults to `unknown`. The model may flip a cue address to victim only when `because` cites the conversation (`evidence_id`, both endpoints, the destination port, or a conversation token such as talking, packet, flow, or peer), not the alert string.
+
+The live bind publishes a focus/roles card through `investigation:ledger`. That card is not another inbox splice. Hunt notices name the filter that already ran.
+
+`tools/pre-execute` denies `case_report` and any tool arguments that set `who` or `where` unless a live bind exists with exactly one victim. It also denies when an identity slot’s `evidence_id` points at a non-victim, or when `who`/`where`.`entity_id` is not the bound victim. The deny text is `unbound: assign victim vs c2 on the cited conversation.` Inverted victim/c2 is refused. Tokens are not swapped.
+
+`case_report` `who`/`where` are projections of the victim entity row (IP, MAC, hostname, user). They are not free-text fill. An IP donates as itself. An explicit `entity_id` wins. A unique sourced `eth.src` MAC affiliates to the bound victim through `c2TalkingLanVictim`; that helper does not rewrite `who`/`where`. Hostname and user donate only when `entity_id` is the victim. Distractors stay on the ledger and cannot donate identity slots. Names are not invented.
+
+[Quote-strip](../bug-fix/2026-08-21-pcap-filter-quoted-display-filter.md), [string-field coerce](../bug-fix/2026-08-20-pcap-filter-string-fields.md), `ip.src` for `eth-src`, [sourced MAC harvest](../bug-fix/2026-08-21-harvest-eth-src-from-c2-talking-ip.md), and [auto-run](../bug-fix/2026-08-21-auto-run-outstanding-identity-hunts.md) stay helpers. BindRelationship is the close check. Scout, leftover-report bans, and new evals stay out of this change.
+
+## Alternatives considered
+
+**Silent rewrite of who/where onto the C2-talking LAN IP.** Rejected: that hid inversion. The model must bind the conversation. The earlier rewrite is archived.
+
+**Merge ledger fields into who/where as the product.** Rejected: BindRelationship is a thinking primitive, not another silent projection.
+
+**Change only the methodology prompt or the tool description.** Rejected: the model can still close unbound.
+
+**Token-swap an inverted victim/c2 pair.** Rejected: that is the silent rewrite under another name. Refuse the close.
+
+**Rewrite an idle LAN IP in who/where onto the focus IP.** Rejected: that is [two-client fusion](../bug-fix/2026-08-20-scope-identity-hunts-to-c2-talking-client.md).
+
+**Insert ledger hostname, user, or full_name without an entity_id on the victim.** Rejected: names are not invented.
+
+**Bake gold IPs, MACs, or names from Easy as 123, First to Last, or Lumma into prompts or tests.** Rejected: tests use a synthetic LAN client and a TEST-NET peer.
+
+**Invent evals or touch scout.** Rejected: this knob is the bind before close.
+
+**Allow two victims or zero victims.** Rejected: the bind requires exactly one victim.
+
+**Let a distractor donate a MAC, hostname, or user.** Rejected: distractors stay labeled and cannot fill who/where.
+
+## Testing
+
+`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET peer (`198.51.100.80`), and idle distractor. It checks cue-default `c2`, conversation-cited flip, two/zero victims denied, projection from the victim row, distractor non-donation, unique sourced-MAC affiliation, and unbound/inverted/free-text deny. `packages/analyst/investigation/tests/investigation.spec.ts` records `bind_relationship`, denies `case_report` until a live victim exists, and renders the roles card on the ledger. `packages/analyst/analyst-tools/tests/tools.spec.ts` requires the bind before close and projects who/where from the victim. The keyless `examples/analyst` pcap-case snapshot is `pcap_filter` then `bind_relationship` then `case_report`.
+
+## Consequences
+
+Close requires `bind_relationship` first. An inverted or unbound `case_report` fails with the unbound reason. The model sees victim versus c2 on the ledger card. Auto-run, quote-strip, and field coerce remain helpers and do not assign roles. Hostname, user, and full_name still come only from harvest or an explicit victim `entity_id`, not from a rewrite.

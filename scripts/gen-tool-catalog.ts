@@ -613,7 +613,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'analyst-tools',
     source: 'packages/analyst/analyst-tools/src/index.ts',
     requires: ['ctx.tools', 'ctx.investigation'],
-    writes: ['tool/call', 'tool/result', 'investigation/report via case_report'],
+    writes: ['tool/call', 'tool/result', 'investigation/bind via bind_relationship', 'investigation/report via case_report'],
     async mount(ctx) {
       await ctx.plugin(Investigation, { caseDir: resolve(root, '.tmp/tool-catalog/case') })
       await ctx.plugin(AnalystTools)

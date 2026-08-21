@@ -53,7 +53,7 @@ describe('analyst pcap-case snapshot', () => {
         await writeFile(join(cwd, 'evidence', 'a.pcap'), 'pcap')
         await writeFile(join(cwd, 'tshark'), [
           '#!/bin/sh',
-          'printf "hostname: WORKSTATION1\\n10.0.0.5\\nkerberos.CNameString: brolf\\n"',
+          'printf "10.0.10.2 → 198.51.100.80 TCP\\nhostname: workstation-a\\n10.0.10.2\\nkerberos.CNameString: user-a\\n"',
           '',
         ].join('\n'))
         await writeFile(join(cwd, 'capinfos'), '#!/bin/sh\necho capinfos-ok\n')
@@ -67,11 +67,14 @@ describe('analyst pcap-case snapshot', () => {
         const records = parseJsonl(await readFile(join(cwd, '.sessions', files[0]!), 'utf8'))
         const calls = records.filter(record => record.type === 'tool/call')
           .map(record => (record.data as JsonObject | undefined)?.name)
-        expect(calls).toEqual(['pcap_filter', 'case_report'])
+        expect(calls).toEqual(['pcap_filter', 'bind_relationship', 'case_report'])
         expect(records.some(record => record.type === 'investigation/identity')).toBe(true)
         expect(records.some(record => record.type === 'investigation/hunt')).toBe(true)
+        expect(records.some(record => record.type === 'investigation/bind')).toBe(true)
         const report = records.find(record => record.type === 'investigation/report')
-        expect((report?.data as JsonObject | undefined)?.who).toBe('brolf')
+        const who = (report?.data as JsonObject | undefined)?.who as JsonObject | undefined
+        expect(who?.entity_id).toBe('10.0.10.2')
+        expect(who?.ip).toBe('10.0.10.2')
         expect((report?.data as JsonObject | undefined)?.how).toContain('SAMR')
         const identities = records.filter(record => record.type === 'investigation/identity')
           .map(record => (record.data as JsonObject).kind)

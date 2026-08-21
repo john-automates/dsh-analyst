@@ -2,9 +2,9 @@
  * Case-scoped investigation ledger: harvest unique labeled identities from
  * tool results, auto-issue hunts after new identities, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
- * outside the case directory, and persist a 5W1H close packet. When a
- * C2-talking LAN identity is known, case_report who/where that name a non-LAN
- * IP or a remote MAC are rewritten to that LAN IP and its sourced eth.src MAC.
+ * outside the case directory, require BindRelationship before case_report,
+ * and persist a 5W1H close packet whose who/where project from the bound
+ * victim entity row.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -17,19 +17,25 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
-import type {
-  PostToolDecision, PreToolDecision, ToolExecution, ToolExecutionResult, ToolRunContext,
+import {
+  defineTool,
+  type PostToolDecision, type PreToolDecision, type ToolExecution, type ToolExecutionResult,
+  type ToolRunContext,
 } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
+import {
+  caseReportDenyReason, ENDPOINT_ROLES, foldBind, formatRolesCard, resolveBind,
+} from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
-  evidenceTextForHunts, formatLedger, huntFilterSpec, huntNotice, huntsForNewIdentities,
+  evidenceTextForHunts, huntFilterSpec, huntNotice, huntsForNewIdentities,
   huntsToAutoRun, huntKey,
 } from './hunts.ts'
+import { formatLedger } from './ledger.ts'
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
-import type { CaseReport, Hunt, Identity } from './types.ts'
+import type { CaseReport, Hunt, Identity, RelationshipBind } from './types.ts'
 
 export type * from './types.ts'
 export type { HuntFilterSpec } from './hunts.ts'
@@ -37,12 +43,20 @@ export {
   decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
 } from './harvest.ts'
 export {
-  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText, formatLedger,
+  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
   huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
   isNonLanUnicastIpv4, shouldAutoRunHunt,
 } from './hunts.ts'
-export { bindCaseReportToC2TalkingLan, c2TalkingLanVictim } from './report.ts'
+export { formatLedger } from './ledger.ts'
+export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
+export {
+  caseReportDenyReason, citesConversation, defaultRoleForAddr, ENDPOINT_ROLES, entityIdForIdentity,
+  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
+  projectCaseReport, projectVictimSlot, resolveBind, roleForIdentity, UNBOUND_REASON,
+  victimOf, VICTIM_COUNT_REASON,
+} from './bind.ts'
+export type { BindEndpointInput, BindRequest, BindResolution, CaseReportClaims } from './bind.ts'
 export {
   denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
@@ -54,17 +68,19 @@ export {
 export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
-  'State who, what, when, where, why, and how (5W1H) as claims you can support with packets or logs.',
+  'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
+  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. Cue and observation addresses default to c2.',
+  'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
   'Work evidence-first and question-driven: every tool call answers a named question.',
   'Label unverified ideas as hunches and verify them in this case.',
   'Evidence under evidence/ and capture files (*.pcap, *.pcapng, *.cap, *.log) is read-only.',
   'Do not execute malware, run captured binaries, or operate on paths outside the case directory.',
-  'Use pcap_info, pcap_filter, and logs.',
+  'Use pcap_info, pcap_filter, logs, and bind_relationship.',
   'Valid tshark 4.4.16 fields include kerberos.CNameString, samr.samr_UserInfo21.account_name, and samr.samr_UserInfo21.full_name.',
   'Do not use ldap.sAMAccountName, ldap.displayName, kerberos.username, or samr.full_name — those fields are invalid.',
   'After a hostname or IP appears, hunt Kerberos CNameString, then SAMR QueryUserInfo for the display name.',
   'SAMR full_name is UTF-16 (for example Becka Rolf), not an LDAP displayName.',
-  'Close with case_report using the 5W1H fields once the Investigation Question is answered.',
+  'Close with case_report only after bind_relationship has assigned the victim.',
 ].join(' ')
 
 /** Plugin config: one case directory and the two enforcement switches. */
@@ -183,7 +199,7 @@ function withNotice(decision: PostToolDecision, notice: UserMessage): PostToolDe
 
 /**
  * `ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence
- * policy, methodology prompt, and 5W1H report persistence.
+ * policy, BindRelationship, methodology prompt, and 5W1H report persistence.
  */
 export class Investigation extends Service {
   static inject = ['tools', 'systemPrompt']
@@ -212,8 +228,102 @@ export class Investigation extends Service {
     ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
       const reason = denyReason(exec, this.caseDir, this.evidenceReadOnly)
       if (reason !== undefined) return Promise.resolve({ kind: 'deny', reason })
+      if (exec.name === 'case_report' || setsWhoWhere(exec.arguments)) {
+        const session = exec.agent?.session
+        const close = caseReportDenyReason(
+          exec.arguments,
+          session === undefined ? undefined : foldBind(session.events),
+          session === undefined ? [] : foldIdentities(session.events),
+        )
+        if (close !== undefined) return Promise.resolve({ kind: 'deny', reason: close })
+      }
       return next()
     })
+
+    ctx.tools.register(defineTool({
+      name: 'bind_relationship',
+      description: BIND_RELATIONSHIP_DESCRIPTION,
+      parameters: {
+        src: { type: 'string', required: true, description: 'Conversation source address.' },
+        dst: { type: 'string', required: true, description: 'Conversation destination address.' },
+        dport: { type: 'integer', required: true, description: 'Destination port.' },
+        t: { type: 'string', required: true, description: 'Conversation time.' },
+        evidence_id: { type: 'string', required: true, description: 'Id of the cited conversation evidence.' },
+        endpoints: {
+          type: 'array',
+          required: true,
+          description: 'Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              addr: { type: 'string', required: true, description: 'Endpoint address.' },
+              role: {
+                type: 'string',
+                enum: [...ENDPOINT_ROLES],
+                description: 'victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.',
+              },
+              because: {
+                type: 'string',
+                required: true,
+                description: 'Why this role. Flipping a cue address to victim must cite the conversation, not the alert.',
+              },
+            },
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            src: { type: 'string', required: true },
+            dst: { type: 'string', required: true },
+            dport: { type: 'integer', required: true },
+            t: { type: 'string', required: true },
+            evidence_id: { type: 'string', required: true },
+            endpoints: {
+              type: 'array',
+              required: true,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  addr: { type: 'string', required: true },
+                  role: { type: 'string', required: true, enum: [...ENDPOINT_ROLES] },
+                  because: { type: 'string', required: true },
+                },
+              },
+            },
+          },
+        },
+        render: (_args, value) => [{
+          type: 'text',
+          text: formatRolesCard({
+            relationship: {
+              src: value.src, dst: value.dst, dport: value.dport, t: value.t, evidence_id: value.evidence_id,
+            },
+            endpoints: value.endpoints,
+          }),
+        }],
+      },
+      execute: (args, exec) => {
+        if (exec.agent === undefined) throw new Error('bind_relationship requires an owning agent session')
+        const resolved = resolveBind({
+          relationship: {
+            src: args.src, dst: args.dst, dport: args.dport, t: args.t, evidence_id: args.evidence_id,
+          },
+          endpoints: args.endpoints,
+        })
+        if (!resolved.ok) throw new Error(resolved.reason)
+        this.recordBind(exec.agent.session, resolved.bind)
+        return Promise.resolve({
+          ...resolved.bind.relationship,
+          endpoints: resolved.bind.endpoints,
+        })
+      },
+      presentCall: args => ({ card: 'generic', title: 'Bind conversation', kind: 'other', rawInput: args }),
+    }))
 
     ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
       const notices = await this.observe(exec, result)
@@ -237,6 +347,7 @@ export class Investigation extends Service {
           foldIdentities(context.agent.session.events),
           foldHunts(context.agent.session.events),
           foldReport(context.agent.session.events),
+          foldBind(context.agent.session.events),
         )
       },
     })
@@ -267,6 +378,15 @@ export class Investigation extends Service {
    */
   report(session: Session): CaseReport | undefined {
     return foldReport(session.events)
+  }
+
+  /**
+   * Latest live conversation bind on a session log.
+   * @param session - session whose log is folded.
+   * @returns the last bind, or undefined.
+   */
+  bind(session: Session): RelationshipBind | undefined {
+    return foldBind(session.events)
   }
 
   /**
@@ -302,6 +422,15 @@ export class Investigation extends Service {
    */
   recordReport(session: Session, report: CaseReport): void {
     session.append('investigation/report', report)
+  }
+
+  /**
+   * Append a whole-value conversation bind. The last bind is the live bind.
+   * @param session - session to append to.
+   * @param bind - resolved relationship and endpoints.
+   */
+  recordBind(session: Session, bind: RelationshipBind): void {
+    session.append('investigation/bind', bind)
   }
 
   /**
@@ -521,3 +650,22 @@ async function firstCaptureIn(abs: string, relDir: string): Promise<string | und
 }
 
 export default Investigation
+
+/** Model-facing bind_relationship description. */
+const BIND_RELATIONSHIP_DESCRIPTION = [
+  'Bind the cited conversation before Who/Where.',
+  'Assign victim vs c2 (or infra, distractor, unknown) on each endpoint.',
+  'Cue and observation addresses default to c2.',
+  'Exactly one victim.',
+  'Flipping a cue or observation address to victim requires a because that cites the conversation, not the alert string.',
+].join(' ')
+
+/**
+ * Whether tool arguments attempt to set who/where identity slots.
+ * @param args - parsed tool arguments.
+ * @returns true when who or where is present.
+ */
+function setsWhoWhere(args: unknown): boolean {
+  if (typeof args !== 'object' || args === null) return false
+  return 'who' in args || 'where' in args
+}

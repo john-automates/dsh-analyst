@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
-  bindCaseReportToC2TalkingLan, foldToolResultText,
+  caseReportDenyReason, foldToolResultText, projectCaseReport, UNBOUND_REASON,
 } from '@deepseek-ai/dsh-investigation'
 import { coercePcapFilterFields, rejectInvalidTsharkFields, unwrapPcapDisplayFilter } from './fields.ts'
 
@@ -44,6 +44,36 @@ export const Config: z<Config> = z.object({
   tsharkBin: z.string().default('tshark'),
   capinfosBin: z.string().default('capinfos'),
 })
+
+const CASE_IDENTITY_SLOT_SCHEMA = {
+  type: 'object' as const,
+  additionalProperties: false,
+  properties: {
+    entity_id: { type: 'string' as const, required: true },
+    ip: { type: 'string' as const },
+    mac: { type: 'string' as const },
+    hostname: { type: 'string' as const },
+    user: { type: 'string' as const },
+  },
+}
+
+/**
+ * Render a projected who/where slot as one line.
+ * @param slot - victim entity row.
+ * @returns space-joined identity values, or the entity id when the row is empty.
+ */
+function renderIdentitySlot(slot: {
+  entity_id: string
+  ip?: string
+  mac?: string
+  hostname?: string
+  user?: string
+}): string {
+  const parts = [slot.ip, slot.mac, slot.hostname, slot.user].filter(
+    (part): part is string => part !== undefined && part !== '',
+  )
+  return parts.length === 0 ? slot.entity_id : parts.join(' ')
+}
 
 const PCAP_FILTER_DESCRIPTION = [
   'Filter a pcap/pcapng in the case directory with tshark.',
@@ -142,6 +172,7 @@ export async function runHelper(
 
 /**
  * Register pcap_info, pcap_filter, logs, and case_report on `ctx.tools`.
+ * bind_relationship is registered by the investigation service.
  * @param ctx - registrant context carrying tools and investigation.
  * @param config - binaries, output cap, and command deadline.
  */
@@ -253,24 +284,42 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'case_report',
-    description: 'Close the investigation with a 5W1H packet. Send evidenced claims only. This replaces any previous case_report on the session log.',
+    description: [
+      'Close the investigation with a 5W1H packet after bind_relationship.',
+      'who and where are projections of the bound victim entity row; do not fill them as free text.',
+      'Send evidenced what, when, why, and how. This replaces any previous case_report on the session log.',
+    ].join(' '),
     parameters: {
-      who: { type: 'string', required: true, description: 'Who was involved.' },
       what: { type: 'string', required: true, description: 'What happened.' },
       when: { type: 'string', required: true, description: 'When it happened.' },
-      where: { type: 'string', required: true, description: 'Where it happened.' },
       why: { type: 'string', required: true, description: 'Why it happened, as evidenced.' },
       how: { type: 'string', required: true, description: 'How it happened, as evidenced.' },
+      who: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'Optional victim entity_id. Must match the bound victim. Free-text who is denied.',
+        properties: {
+          entity_id: { type: 'string', description: 'Bound victim entity id.' },
+        },
+      },
+      where: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'Optional victim entity_id. Must match the bound victim. Free-text where is denied.',
+        properties: {
+          entity_id: { type: 'string', description: 'Bound victim entity id.' },
+        },
+      },
     },
     output: {
       schema: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          who: { type: 'string', required: true },
+          who: CASE_IDENTITY_SLOT_SCHEMA,
           what: { type: 'string', required: true },
           when: { type: 'string', required: true },
-          where: { type: 'string', required: true },
+          where: CASE_IDENTITY_SLOT_SCHEMA,
           why: { type: 'string', required: true },
           how: { type: 'string', required: true },
         },
@@ -279,10 +328,10 @@ export function apply(ctx: Context, config: Config): void {
         type: 'text',
         text: [
           'Case report recorded.',
-          `Who: ${value.who}`,
+          `Who: ${renderIdentitySlot(value.who)}`,
           `What: ${value.what}`,
           `When: ${value.when}`,
-          `Where: ${value.where}`,
+          `Where: ${renderIdentitySlot(value.where)}`,
           `Why: ${value.why}`,
           `How: ${value.how}`,
         ].join('\n'),
@@ -290,24 +339,25 @@ export function apply(ctx: Context, config: Config): void {
     },
     execute: (args, exec) => {
       if (exec.agent === undefined) throw new Error('case_report requires an owning agent session')
-      const report = {
-        who: args.who.trim(),
+      const claims = {
         what: args.what.trim(),
         when: args.when.trim(),
-        where: args.where.trim(),
         why: args.why.trim(),
         how: args.how.trim(),
       }
-      for (const [field, value] of Object.entries(report)) {
+      for (const [field, value] of Object.entries(claims)) {
         if (value === '') throw new Error(`case_report ${field} must be a non-empty string`)
       }
-      const bound = bindCaseReportToC2TalkingLan(
-        report,
-        ctx.investigation.identities(exec.agent.session),
-        foldToolResultText(exec.agent.session.events),
-      )
-      ctx.investigation.recordReport(exec.agent.session, bound)
-      return Promise.resolve(bound)
+      const session = exec.agent.session
+      const bind = ctx.investigation.bind(session)
+      const identities = ctx.investigation.identities(session)
+      const denied = caseReportDenyReason(args, bind, identities)
+      if (denied !== undefined) throw new Error(denied)
+      if (bind === undefined) throw new Error(UNBOUND_REASON)
+      const report = projectCaseReport(bind, identities, claims, foldToolResultText(session.events))
+      if (report === undefined) throw new Error(UNBOUND_REASON)
+      ctx.investigation.recordReport(session, report)
+      return Promise.resolve(report)
     },
     presentCall: args => ({ card: 'generic', title: 'Case report', kind: 'other', rawInput: args }),
   }))

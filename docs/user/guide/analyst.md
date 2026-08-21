@@ -28,4 +28,4 @@ Install `tshark` and `capinfos` (Wireshark CLI) on the host, or set `tsharkBin` 
 
 After a hostname or IP appears, the ledger issues a Kerberos `CNameString` hunt, then a SAMR `QueryUserInfo` hunt for the display name. Valid tshark 4.4.16 fields include `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, and `samr.samr_UserInfo21.full_name`. `ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, and `samr.full_name` are rejected. SAMR `full_name` is UTF-16 (Becka Rolf), not an LDAP displayName.
 
-Close with `case_report` (who / what / when / where / why / how).
+Close with `case_report` only after `bind_relationship` assigns victim versus c2 on the cited conversation. `who` and `where` project from the bound victim; they are not free-text fill.

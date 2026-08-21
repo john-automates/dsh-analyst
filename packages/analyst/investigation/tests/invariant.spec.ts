@@ -36,7 +36,28 @@ function report(over: Record<string, unknown> = {}): SessionEvent {
     seq: 0,
     time: 0,
     data: {
-      who: 'a', what: 'b', when: 'c', where: 'd', why: 'e', how: 'f', ...over,
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+      what: 'b', when: 'c',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+      why: 'e', how: 'f', ...over,
+    },
+  } as SessionEvent
+}
+
+function bind(over: Record<string, unknown> = {}): SessionEvent {
+  return {
+    type: 'investigation/bind',
+    seq: 0,
+    time: 0,
+    data: {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: 'conversation' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+      ...over,
     },
   } as SessionEvent
 }
@@ -46,6 +67,15 @@ describe('investigation invariants', () => {
     const ctx = await setup()
     const session = ctx.sessions.create()
     session.append('investigation/identity', { kind: 'user', value: 'brolf', label: 'user' })
+    session.append('investigation/bind', {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: 'conversation' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })
     expect(() => { ctx.emit('session/event', {} as Session, { type: 'todo/write', seq: 0, time: 0, data: {} } as SessionEvent) }).not.toThrow()
     expect(session.events.some(event => event.type === 'investigation/identity')).toBe(true)
   })
@@ -57,7 +87,18 @@ describe('investigation invariants', () => {
     [hunt({ kind: 'dns' }), /unknown kind/],
     [hunt({ subjectKind: 'mac' }), /unknown subjectKind/],
     [hunt({ subject: '' }), /subject must be a non-empty/],
-    [report({ who: '' }), /who must be a non-empty/],
+    [report({ who: '' }), /who must be a projected identity slot/],
+    [report({ what: '' }), /what must be a non-empty/],
+    [bind({ endpoints: [] }), /endpoints must be a non-empty/],
+    [bind({ relationship: undefined }), /relationship is required/],
+    [bind({ relationship: { src: '', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'e' } }), /src must be a non-empty/],
+    [bind({ relationship: { src: '10.0.10.2', dst: '198.51.100.80', dport: 1.5, t: 't', evidence_id: 'e' } }), /dport must be an integer/],
+    [bind({ endpoints: ['x'] }), /endpoint must be an object/],
+    [bind({
+      endpoints: [{ addr: '10.0.10.2', role: 'evil', because: 'conversation' }],
+    }), /endpoint.role "evil" is not valid/],
+    [report({ who: 1 }), /who must be a projected identity slot/],
+    [identity({ entity_id: '' }), /entity_id must be a non-empty/],
   ])('rejects an incoherent investigation event', async (event, message) => {
     const ctx = await setup()
     expect(() => { ctx.emit('session/event', {} as Session, event) }).toThrow(message)
