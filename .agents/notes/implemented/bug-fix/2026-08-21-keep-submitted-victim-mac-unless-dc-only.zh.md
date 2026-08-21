@@ -16,7 +16,7 @@ Status: implemented
 
 把 who/where 投影或重映射到被绑定受害端实体时，若模型提供了 `mac`、投影行没有已捐出的值、且该 MAC 不是仅域控／网关，则保留该提交值。在已接受的 who/where 上持久化该 mac。不编造模型从未提交的 MAC。
 
-仅域控／网关指该 MAC 从未作为被绑定 victim IP 上的 `eth.src` 出现，也不出现在限定于该 IP 的 `eth.src` 转储里。由通信 IP ／ `ipsEvidencingMac` ／ `evidencedOnVictimIp` ／受害端 IP 范围转储辅助函数判定。当受害端 IP 帧也来源于该 MAC，或模型在受害端结案上提交了它且这些辅助函数表明它不是仅域控时，粘滞的域控 `evidence_id` 不是仅域控。
+仅域控／网关是排他的非 victim 通信 IP：[仅域控 MAC 须为排他的非 victim 通信 IP](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md) 拥有该测试。没有通信 IP 证据不是仅域控。账本 `evidence_id`、`entity_id` 和第一次捐出不是所有权测试。
 
 模型提供的 IP 不会替换被绑定的 victim ip。提交的 user／hostname／`full_name` 仍按[保留提交的受害端行身份](2026-08-21-keep-submitted-victim-row-identities.md) 持久化。行上已有的已捐出 ip／hostname／user／`full_name` 保留。
 
@@ -42,8 +42,8 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC` 和 `DISTRACTOR_MAC`。当前绑定之后，提交 `CLIENT_MAC` 的 who/where（账本先把它捐给域控；受害端 IP 帧也来源于它）会持久化 `CLIENT_MAC`。提交的仅域控 `DISTRACTOR_MAC` 保持不在。提交的 user／hostname／`full_name` 仍持久化。省略的 mac 不会被编造。模型提供的其他 IP 不会替换被绑定的 victim ip。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一提交 mac 的结案走 `bind_relationship` 再走 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC` 和 `DISTRACTOR_MAC`。当前绑定之后，提交 `CLIENT_MAC` 的 who/where（账本先把它捐给域控）会持久化 `CLIENT_MAC`，不论受害端 IP 帧是否也来源于它。提交的仅域控 `DISTRACTOR_MAC` 保持不在。提交的 user／hostname／`full_name` 仍持久化。若干同样未被证明的 MAC 时，省略的 mac 不会被编造。模型提供的其他 IP 不会替换被绑定的 victim ip。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一提交 mac 的结案走 `bind_relationship` 再走 `case_report`。
 
 ## 后果
 
-当前绑定加上提交的受害端 MAC 会写出该 mac，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。没有受害端 IP 证据时，省略的 mac 仍不会被编造。被绑定的 victim ip 保持不变。提交的 user／hostname／`full_name` 和已捐出的槽位保留。
+当前绑定加上提交的受害端 MAC 会写出该 mac，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。若干同样未被证明的 MAC 时，省略的 mac 仍不会被编造。被绑定的 victim ip 保持不变。提交的 user／hostname／`full_name` 和已捐出的槽位保留。

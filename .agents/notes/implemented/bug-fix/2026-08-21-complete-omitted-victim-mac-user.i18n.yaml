@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-complete-omitted-victim-mac-user.md
-2026-08-21-complete-omitted-victim-mac-user.md: a12997c9180e27e19d9bf87a25718cfce845ce25
-2026-08-21-complete-omitted-victim-mac-user.zh.md: f4fdda270783bd8317d443eec8e0cf260eb58916
+2026-08-21-complete-omitted-victim-mac-user.md: f72b518d287bd739d920d26ec177996f44911baa
+2026-08-21-complete-omitted-victim-mac-user.zh.md: 3fdd7bb05f9f4cc0862d056b21e492998ae31060

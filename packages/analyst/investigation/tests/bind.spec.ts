@@ -1412,6 +1412,77 @@ describe('BindRelationship', () => {
     )).toEqual({ entity_id: LAN, ip: LAN, mac: CLIENT_MAC })
   })
 
+  it('persists a DC-stamped MAC unless talking-IP frames prove it DC-only', () => {
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const dcDonated = {
+      ...identityOf('mac', CLIENT_MAC)!,
+      evidence_id: DISTRACTOR,
+      entity_id: DISTRACTOR,
+    }
+    const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
+    const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const victimUser = identityOf('user', USER)!
+    const victimName = identityOf('full_name', FULL_NAME)!
+    const identities = [identityOf('ip', LAN)!, dcDonated, dcMac, victimHost, victimUser, victimName]
+    const dcTalking = `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`
+    const conversations = `${LAN} → ${DISTRACTOR}  kerberos.CNameString: ${USER}`
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const omitted = {
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    }
+    const projected = { ...omitted, mac: CLIENT_MAC }
+    expect(projectVictimSlot(live, identities, dcTalking)).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+    expect(identityDonatesToVictim(dcDonated, live, identities, dcTalking)).toBe(false)
+    const submitted = requireCaseReport(live, identities, claims, dcTalking, {
+      who: omitted,
+      where: { ...omitted, mac: CLIENT_MAC },
+    })
+    expect(submitted.who).toEqual(projected)
+    expect(submitted.where).toEqual(projected)
+    expect(submitted.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(submitted.where.mac).not.toBe(DISTRACTOR_MAC)
+    const dcSubmitted = requireCaseReport(live, identities, claims, dcTalking, {
+      who: { ...omitted, mac: DISTRACTOR_MAC },
+      where: { ...omitted, mac: DISTRACTOR_MAC },
+    })
+    expect(dcSubmitted.who).toEqual(omitted)
+    expect(dcSubmitted.where).toEqual(omitted)
+    expect(dcSubmitted.who.mac).toBeUndefined()
+    expect(dcSubmitted.where.mac).toBeUndefined()
+    const filled = requireCaseReport(live, identities, claims, dcTalking, {
+      who: omitted,
+      where: omitted,
+    })
+    expect(filled.who).toEqual(projected)
+    expect(filled.where).toEqual(projected)
+    for (const evidence of [conversations, '']) {
+      const withoutVictimLine = requireCaseReport(live, identities, claims, evidence, {
+        who: omitted,
+        where: { ...omitted, mac: CLIENT_MAC },
+      })
+      expect(withoutVictimLine.where).toEqual(projected)
+      expect(withoutVictimLine.who).toEqual(omitted)
+      expect(withoutVictimLine.who.mac).toBeUndefined()
+      expect(withoutVictimLine.where.mac).toBe(CLIENT_MAC)
+    }
+  })
+
   it('persists omitted mac and user from victim-IP evidence after a live bind', () => {
     expect(resolveBind({
       relationship,

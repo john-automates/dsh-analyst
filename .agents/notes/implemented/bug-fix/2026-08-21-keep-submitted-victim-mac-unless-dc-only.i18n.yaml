@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-keep-submitted-victim-mac-unless-dc-only.md
-2026-08-21-keep-submitted-victim-mac-unless-dc-only.md: 9ddcf7875edb6f779a6618426f97f01e89e331dd
-2026-08-21-keep-submitted-victim-mac-unless-dc-only.zh.md: f616f66acd45094753b9e0c4bf6b3f3dcc50bbb1
+2026-08-21-keep-submitted-victim-mac-unless-dc-only.md: b50d3f033d1a48f1995cc8e55169ee034d4849d3
+2026-08-21-keep-submitted-victim-mac-unless-dc-only.zh.md: d0d5003e4623499781e6dc21e22d8ce521daefb3
