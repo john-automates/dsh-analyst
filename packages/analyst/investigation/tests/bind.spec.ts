@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON,
-  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
-  otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind,
-  roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
+  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr,
+  ENDPOINTS_ARRAY_REASON, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
+  LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
+  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
+  VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { identityOf } from '../src/harvest.ts'
@@ -252,6 +253,88 @@ describe('BindRelationship', () => {
       relationship: { ...relationship, dport: '443.5' },
       endpoints,
     }).ok).toBe(false)
+  })
+
+  it('denies a both-LAN conversation and a LAN c2 without inventing a C2 hunt', () => {
+    const dcRelationship: Relationship = {
+      src: LAN,
+      dst: DISTRACTOR,
+      dport: 88,
+      t: relationship.t,
+      evidence_id: 'conv-dc',
+    }
+    const dcBecause = `${LAN} talking to ${DISTRACTOR} in evidence conv-dc`
+    const dcEndpoints = [
+      { addr: LAN, role: 'victim' as const, because: dcBecause },
+      { addr: DISTRACTOR, role: 'c2' as const, because: dcBecause },
+    ]
+    expect(resolveBind({
+      relationship: dcRelationship,
+      endpoints: dcEndpoints,
+    })).toEqual({ ok: false, reason: BOTH_LAN_CONVERSATION_REASON })
+    expect(BOTH_LAN_CONVERSATION_REASON).toBe(
+      'unbound: cite the LAN host talking to the cue/observation address, not a LAN DC/AD service.',
+    )
+    expect(BOTH_LAN_CONVERSATION_REASON).not.toContain(C2)
+    expect(otherEndHuntForDeniedBind({
+      relationship: dcRelationship,
+      endpoints: dcEndpoints,
+    })).toBeUndefined()
+    expect(otherEndHuntForDeniedBind({
+      relationship: dcRelationship,
+      endpoints: [{ addr: C2, role: 'victim', because: 'the alert named this IP' }],
+    })).toBeUndefined()
+    expect(resolveBind({
+      relationship: { ...dcRelationship, dport: '88' },
+      endpoints: JSON.stringify(dcEndpoints),
+    })).toEqual({ ok: false, reason: BOTH_LAN_CONVERSATION_REASON })
+    expect(otherEndHuntForDeniedBind({
+      relationship: { ...dcRelationship, dport: '88' },
+      endpoints: JSON.stringify(dcEndpoints),
+    })).toBeUndefined()
+    expect(resolveBind({
+      relationship,
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: DISTRACTOR, role: 'c2', because: 'LAN DC' },
+      ],
+    })).toEqual({ ok: false, reason: LAN_C2_REASON })
+    expect(otherEndHuntForDeniedBind({
+      relationship,
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: DISTRACTOR, role: 'c2', because: 'LAN DC' },
+      ],
+    })).toBeUndefined()
+    const live = resolveBind({
+      relationship,
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+      ],
+    })
+    expect(live).toEqual({
+      ok: true,
+      bind: {
+        relationship,
+        endpoints: [
+          { addr: LAN, role: 'victim', because: conversationBecause },
+          { addr: C2, role: 'c2', because: 'cue/observation address' },
+        ],
+      },
+    })
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '443' },
+      endpoints: JSON.stringify([{ addr: LAN, role: 'victim', because: conversationBecause }]),
+    })).toEqual(live)
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    expect(otherEndHuntForDeniedBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ kind: 'other-end', subjectKind: 'ip', subject: C2 })
   })
 
   it('rejects incomplete relationship fields and a duplicated endpoint', () => {

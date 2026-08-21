@@ -130,7 +130,8 @@ declare module '@deepseek-ai/dsh-session/types' {
      * CNameString, and SAMR QueryUserInfo. After a LAN IP talks to a non-LAN
      * peer, those identity hunts issue only for that C2-talking IP. Assigning
      * victim to a cue/observation address issues `other-end` for that cue IP
-     * (`ip.dst ==` the cue, field `ip.src`). When `autoHunt` is true,
+     * (`ip.dst ==` the cue, field `ip.src`). A both-LAN conversation deny
+     * does not issue `other-end` and does not invent a C2. When `autoHunt` is true,
      * outstanding issued hunts execute through `pcap_filter` with the scoped
      * display filter; `other-end` auto-runs even though its subject is the
      * cue. A new hostname issues Kerberos then SAMR. A new user issues SAMR.

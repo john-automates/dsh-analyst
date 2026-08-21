@@ -14,7 +14,7 @@ Status: implemented
 
 当 `bind_relationship` 因为被指定的 victim 是线索／观测地址（`isCueObservationAddr`／非 LAN 单播）而被拒绝时，插件下发主体为该线索 IP 的 `other-end` hunt。过滤器是 `ip.dst == <cue>`，字段是 `ip.src`。不会对调 token。不会编造 LAN 对端。
 
-拒绝文本点名该 hunt 和过滤器：`unbound: hunt LAN ip.src talking to <cue> (ip.dst == <cue>).` 之后仍把该线索或任何线索指定为 victim 的绑定保持拒绝，并重复 hunt 名称。把线索指定为 victim 永远不会成为当前绑定。
+拒绝文本点名该 hunt 和过滤器：`unbound: hunt LAN ip.src talking to <cue> (ip.dst == <cue>).` 之后仍把该线索或任何线索指定为 victim 的绑定保持拒绝，并重复 hunt 名称。把线索指定为 victim 永远不会成为当前绑定。两端都在 LAN 的会话拒绝不下发 `other-end`，也不编造 C2（[拒绝两端都在 LAN 的绑定](2026-08-21-refuse-both-lan-bind.md)）。
 
 当 `autoHunt` 为 true 时，`other-end` 像其他已下发 hunt 一样通过 `pcap_filter` 自动运行，即使其主体是线索。[身份 hunt 自动运行](2026-08-21-auto-run-outstanding-identity-hunts.md) 仍对 `eth-src`、`name-service`、Kerberos 和 SAMR 跳过非 LAN 主体。
 
