@@ -420,4 +420,83 @@ describe('BindRelationship', () => {
       user: USER,
     })
   })
+
+  it('donates mac and hostname evidenced on the bound victim IP after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle LAN workstation' },
+      ],
+    })
+    const victimMac = identityOf('mac', CLIENT_MAC)!
+    const victimHost = identityOf('hostname', HOST)!
+    const idleMac = { ...identityOf('mac', DISTRACTOR_MAC)!, entity_id: DISTRACTOR }
+    const idleHost = { ...identityOf('hostname', DISTRACTOR_HOST)!, entity_id: DISTRACTOR }
+    const scopedDump = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `hostname: ${HOST}\tip.addr: ${LAN}`,
+    ].join('\n')
+    const identities = [identityOf('ip', LAN)!, victimMac, victimHost, idleMac, idleHost]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const projected = {
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+    }
+    expect(identityDonatesToVictim(victimMac, live, identities, scopedDump)).toBe(true)
+    expect(identityDonatesToVictim(victimHost, live, identities, scopedDump)).toBe(true)
+    expect(identityDonatesToVictim(idleMac, live, identities, scopedDump)).toBe(false)
+    expect(identityDonatesToVictim(idleHost, live, identities, scopedDump)).toBe(false)
+    const report = requireCaseReport(live, identities, claims, scopedDump)
+    expect(report.who).toEqual(projected)
+    expect(report.where).toEqual(projected)
+    expect(report.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(report.who.hostname).not.toBe(DISTRACTOR_HOST)
+    const ledger = formatLedger(
+      identities,
+      [{ kind: 'eth-src', subjectKind: 'ip', subject: LAN }],
+      undefined,
+      live,
+      scopedDump,
+    )
+    expect(ledger).toContain(`[victim] MAC ${CLIENT_MAC}`)
+    expect(ledger).toContain(`[victim] hostname ${HOST}`)
+    expect(ledger).toContain(`[distractor] MAC ${DISTRACTOR_MAC}`)
+    expect(ledger).toContain(`[distractor] hostname ${DISTRACTOR_HOST}`)
+    const byEvidence = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('mac', CLIENT_MAC)!, evidence_id: LAN },
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+      idleMac,
+      idleHost,
+    ]
+    expect(requireCaseReport(live, byEvidence, claims).who).toEqual(projected)
+    const twoMacs = [identityOf('ip', LAN)!, identityOf('mac', CLIENT_MAC)!, identityOf('mac', DISTRACTOR_MAC)!]
+    const ambiguous = requireCaseReport(live, twoMacs, claims)
+    expect(ambiguous.who).toEqual({ entity_id: LAN, ip: LAN })
+    expect(ambiguous.who.mac).toBeUndefined()
+    const idleLine = identityOf('mac', DISTRACTOR_MAC)!
+    const bothLines = [
+      `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
+      `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
+    ].join('\n')
+    expect(identityDonatesToVictim(victimMac, live, [identityOf('ip', LAN)!, victimMac, idleLine], bothLines)).toBe(true)
+    expect(identityDonatesToVictim(idleLine, live, [identityOf('ip', LAN)!, victimMac, idleLine], bothLines)).toBe(false)
+    expect(roleForIdentity(idleLine, live, [identityOf('ip', LAN)!, victimMac, idleLine], bothLines)).toBe('distractor')
+    const conversationOnly = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: 'conv-1' }
+    expect(identityDonatesToVictim(conversationOnly, live, [identityOf('ip', LAN)!, conversationOnly, identityOf('mac', DISTRACTOR_MAC)!])).toBe(false)
+    const scopedHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const extraHost = identityOf('hostname', 'other-host')!
+    expect(requireCaseReport(live, [identityOf('ip', LAN)!, scopedHost, extraHost], claims).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      hostname: HOST,
+    })
+  })
 })

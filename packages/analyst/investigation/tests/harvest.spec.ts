@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, normalizeIdentityValue,
-  regexCapture,
+  decodeUtf16LeHex, harvestIdentities, identityKey, identityOf, IDENTITY_LABELS, ipsEvidencingIdentity,
+  normalizeIdentityValue, regexCapture,
 } from '../src/harvest.ts'
 
 const BECKA_HEX = '42:00:65:00:63:00:6b:00:61:00:20:00:52:00:6f:00:6c:00:66:00'
@@ -207,5 +207,46 @@ describe('identity harvest', () => {
 
     const emptyFieldDump = harvestIdentities('no addresses here', evidence)
     expect(emptyFieldDump.filter(item => item.kind === 'mac')).toEqual([])
+  })
+
+  it('stamps hunt-subject evidence_id on mac and hostname and reads victim-IP-scoped lines', () => {
+    const LAN_A = '10.0.10.2'
+    const LAN_B = '10.0.10.3'
+    const MAC_A = '02:00:00:00:00:0a'
+    const HOST_A = 'lan-host'
+    const stamped = harvestIdentities(
+      `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,
+      `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,
+      LAN_A,
+    )
+    expect(stamped.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
+    ])
+    expect(stamped.filter(item => item.kind === 'hostname')).toEqual([
+      { kind: 'hostname', value: HOST_A, label: 'hostname', evidence_id: LAN_A },
+    ])
+    expect(stamped.find(item => item.kind === 'ip')?.evidence_id).toBeUndefined()
+    expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, '  ').find(item => item.kind === 'mac'))
+      .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC' })
+    const mac = identityOf('mac', MAC_A)!
+    const host = identityOf('hostname', HOST_A)!
+    expect(ipsEvidencingIdentity(mac, `eth.src: ${MAC_A}\tip.src: ${LAN_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(host, `hostname: ${HOST_A}\tip.addr: ${LAN_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(host, `NBNS Registration NB LAN-HOST<00>\tip.src: ${LAN_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(host, `(llmnr or nbns) and ip.addr == ${LAN_A}\thostname: ${HOST_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(mac, `eth.src: ${MAC_A}\tip.src: ${LAN_A}\neth.src: ${MAC_A}\tip.src: ${LAN_B}`))
+      .toEqual([LAN_A, LAN_B])
+    expect(ipsEvidencingIdentity(identityOf('user', 'lan-user')!, `user: lan-user\tip.addr: ${LAN_A}`)).toEqual([])
+    expect(ipsEvidencingIdentity(host, `hostname: other-host\tip.addr: ${LAN_A}`)).toEqual([])
+    expect(ipsEvidencingIdentity(mac, `eth.src: 02:00:00:00:00:0b\tip.src: ${LAN_A}`)).toEqual([])
+    expect(ipsEvidencingIdentity(mac, `${LAN_A} → 198.51.100.80  ${MAC_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(mac, `ARP ${LAN_A} is at ${MAC_A}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(mac, `eth.src: ${MAC_A}\tip.src: 0.0.0.0`)).toEqual([])
+    expect(ipsEvidencingIdentity(host, `hostname: ${HOST_A}`)).toEqual([])
+    expect(ipsEvidencingIdentity(
+      host,
+      `hostname: ${HOST_A}\tip.addr: ${LAN_A}\nhostname: ${HOST_A}\tip.src: ${LAN_A}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(host, `NBNS Registration NB otherhost<00>\tip.src: ${LAN_A}`)).toEqual([])
   })
 })

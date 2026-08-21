@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-bind-relationship.md
-2026-08-21-bind-relationship.md: 86ff0873b84440a31b790fdaafa3e34ee9f099f5
-2026-08-21-bind-relationship.zh.md: 61a016bcedf47caff145393c26916f44c1e32991
+2026-08-21-bind-relationship.md: f227fc44a327c610bdbe2081fd2acdfb3385eb52
+2026-08-21-bind-relationship.zh.md: ee53b24280d8b2b37479c58701869bce9aed5d06
