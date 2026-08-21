@@ -12,7 +12,7 @@ Shrinking persist to the bound C2 first would drop the dest that evidences the a
 
 ## Decision
 
-`acceptedC2Domain` still chooses the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested extra: the bound C2 plus victim-stamped WAN dests that are not a published Cloudflare dest and have no well-known CDN or update hostname. extra-wan and `c2-domain` still hunt that attested set.
+`acceptedC2Domain` still chooses the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested extra: the bound C2 plus victim-stamped WAN dests that are not a published Cloudflare or Fastly dest and have no well-known CDN or update hostname. extra-wan and `c2-domain` still hunt that attested set.
 
 Persist of dests that evidence that accepted domain stays. Persist of unnamed extra-wan dests that survive CDN/CF omit is owned by [persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md). Who/where stay the victim row. A second bind is not invented.
 

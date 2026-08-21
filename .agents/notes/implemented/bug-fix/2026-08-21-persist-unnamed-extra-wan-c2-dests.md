@@ -12,7 +12,7 @@ Shrinking persist to the bound C2 first would still drop those dests. Retuning `
 
 ## Decision
 
-`acceptedC2Ips` is the attested extra-wan set: the bound C2 when it is not CDN/CF, plus victim-stamped extra-wan dests that survive `ipIsCdnOrUpdate` (evidenced CDN/update hostname or published Cloudflare IPv4). An unnamed dest that survives those omits persists. A dest that `isCdnOrUpdateName` or `isCloudflareIpv4` would omit still drops.
+`acceptedC2Ips` is the attested extra-wan set: the bound C2 when it is not CDN/CF, plus victim-stamped extra-wan dests that survive `ipIsCdnOrUpdate` (evidenced CDN/update hostname or published Cloudflare or Fastly IPv4). An unnamed dest that survives those omits persists. A dest that `isCdnOrUpdateName`, `isCloudflareIpv4`, or `isFastlyIpv4` would omit still drops.
 
 `acceptedC2Domain` still chooses the first dotted `isC2DomainName` that is not CDN/update, evidenced on that attested set. Who/where stay the victim row. A second bind is not invented.
 
@@ -40,4 +40,4 @@ Shrinking persist to the bound C2 first would still drop those dests. Retuning `
 
 ## Consequences
 
-Unnamed non-CDN extra-wan dests land on `c2_ips`. A dest with a CDN/update hostname, or a Cloudflare IPv4, still drops. Domain selection is unchanged. Who/where stay the victim row.
+Unnamed non-CDN extra-wan dests land on `c2_ips`. A dest with a CDN/update hostname, or a Cloudflare or Fastly IPv4, still drops. Domain selection is unchanged. Who/where stay the victim row.

@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`acceptedC2Ips` 就是已证明 extra-wan 集合：已绑定 C2（当它不是 CDN／CF 时），加上躲过 `ipIsCdnOrUpdate`（证据主机名为 CDN／更新，或已公布 Cloudflare IPv4）的、盖上受害端戳的 extra-wan 目的地址。躲过那些省略的未点名目的地址会持久化。`isCdnOrUpdateName` 或 `isCloudflareIpv4` 会省略的目的地址仍丢掉。
+`acceptedC2Ips` 就是已证明 extra-wan 集合：已绑定 C2（当它不是 CDN／CF 时），加上躲过 `ipIsCdnOrUpdate`（证据主机名为 CDN／更新，或已公布 Cloudflare 或 Fastly IPv4）的、盖上受害端戳的 extra-wan 目的地址。躲过那些省略的未点名目的地址会持久化。`isCdnOrUpdateName`、`isCloudflareIpv4` 或 `isFastlyIpv4` 会省略的目的地址仍丢掉。
 
 `acceptedC2Domain` 仍选择证据落在该已证明集合上、且不是 CDN／更新的第一个带点 `isC2DomainName`。who/where 仍是受害端行。不会发明第二次绑定。
 
@@ -40,4 +40,4 @@ Status: implemented
 
 ## 后果
 
-未点名的非 CDN extra-wan 目的地址会进入 `c2_ips`。证据主机名为 CDN／更新的目的地址，或 Cloudflare IPv4，仍丢掉。域名选择不变。who/where 仍是受害端行。
+未点名的非 CDN extra-wan 目的地址会进入 `c2_ips`。证据主机名为 CDN／更新的目的地址，或 Cloudflare 或 Fastly IPv4，仍丢掉。域名选择不变。who/where 仍是受害端行。

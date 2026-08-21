@@ -12,7 +12,7 @@ Adding another one-off hostname suffix does not fix the next customer name on th
 
 ## Decision
 
-`isCloudflareIpv4` matches the published Cloudflare IPv4 anycast prefixes ([Cloudflare IP ranges](https://www.cloudflare.com/ips/)), including `104.16.0.0/13`. A dest in those ranges is CDN even when the evidenced hostname is a customer domain. Generic VPS / hosting ranges are not this check. Live-case gold IPs are not listed. `isCdnOrUpdateName` stays suffix-only; `evilcloudflare.com` stays false.
+`isCloudflareIpv4` matches the published Cloudflare IPv4 anycast prefixes ([Cloudflare IP ranges](https://www.cloudflare.com/ips/)), including `104.16.0.0/13`. A dest in those ranges is CDN even when the evidenced hostname is a customer domain. Generic VPS / hosting ranges are not this check. Live-case gold IPs are not listed. `isCdnOrUpdateName` stays suffix-only; `evilcloudflare.com` stays false. Published Fastly prefixes are a sibling omit ([omit Fastly IPv4 C2 dests](2026-08-21-omit-fastly-ipv4-c2-dests.md)).
 
 `acceptedC2Ips` omits a published Cloudflare dest — bound C2 included — the same way it omits a dest whose evidenced hostname is CDN/update. Persist is the attested extra-wan set, including unnamed dests that survive those omits ([persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)). `acceptedC2Domain` / `projectCaseReport` persist the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested dest. A hostname evidenced only on a dropped Cloudflare dest does not win. Who/where stay the victim row.
 
@@ -26,7 +26,7 @@ Adding another one-off hostname suffix does not fix the next customer name on th
 
 **Treat every VPS / generic-hosting dest as CDN.** Rejected: a non-Cloudflare extra WAN dest must still persist its dotted name.
 
-**Key every CDN omit off IPv4 ranges.** Rejected for Microsoft, Akamai, and software-update dests: those anycast ranges move and the hostname suffix is the evidence. Published Cloudflare prefixes are the exception because a customer hostname on those dests is not `cloudflare.com`.
+**Key every CDN omit off IPv4 ranges.** Rejected for Microsoft, Akamai, and software-update dests: those anycast ranges move and the hostname suffix is the evidence. Published Cloudflare prefixes are the exception because a customer hostname on those dests is not `cloudflare.com`. Published Fastly prefixes are the same exception ([omit Fastly IPv4 C2 dests](2026-08-21-omit-fastly-ipv4-c2-dests.md)).
 
 **Bake live-case gold IPs or hostnames into harness code or tests.** Rejected: tests use TEST-NET, `104.16.1.1`, `cdn-customer.example.test`, and `payload.example.test`.
 

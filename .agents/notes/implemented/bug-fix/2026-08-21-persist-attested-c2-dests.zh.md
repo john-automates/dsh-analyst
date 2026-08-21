@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`acceptedC2Domain` 仍选择证据落在已证明附加项上、且不是 CDN／更新的第一个带点 `isC2DomainName`。已证明附加项是已绑定 C2，加上盖上受害端戳、不是已公布 Cloudflare 目的地址、也没有知名 CDN 或更新主机名的 WAN 目的地址。extra-wan 和 `c2-domain` 仍在该已证明集合上 hunt。
+`acceptedC2Domain` 仍选择证据落在已证明附加项上、且不是 CDN／更新的第一个带点 `isC2DomainName`。已证明附加项是已绑定 C2，加上盖上受害端戳、不是已公布 Cloudflare 或 Fastly 目的地址、也没有知名 CDN 或更新主机名的 WAN 目的地址。extra-wan 和 `c2-domain` 仍在该已证明集合上 hunt。
 
 证据落在该已接受域名上的目的地址仍持久化。躲过 CDN／CF 省略的未点名 extra-wan 目的地址的持久化由[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)拥有。who/where 仍是受害端行。不会发明第二次绑定。
 

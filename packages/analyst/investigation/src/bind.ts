@@ -6,7 +6,7 @@
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, attested extras (bound C2 plus victim-stamped WAN
- * dests that are not a published Cloudflare anycast dest and have no
+ * dests that are not a published Cloudflare or Fastly anycast dest and have no
  * well-known CDN or update hostname) persist as `c2_ips` and choose
  * `c2_domain`. Unnamed extra-wan dests that survive those omits persist.
  * A dotted name evidenced on an attested dest persists as `c2_domain`
@@ -31,7 +31,7 @@
 
 import {
   hostnamesEvidencedOnIp, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName,
-  isCloudflareIpv4, normalizeIdentityValue,
+  isCloudflareIpv4, isFastlyIpv4, normalizeIdentityValue,
 } from './harvest.ts'
 import {
   c2DomainHunt, extraWanHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
@@ -110,9 +110,9 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
 
 /**
  * C2-domain hunts for attested extras: the bound C2 plus victim-stamped
- * extra WAN IPv4s. IPs whose dest is a published Cloudflare anycast
- * prefix, or whose evidenced hostname is a well-known CDN or update
- * name, are omitted. Persist `c2_ips` uses this same attested set.
+ * extra WAN IPv4s. IPs whose dest is a published Cloudflare or Fastly
+ * anycast prefix, or whose evidenced hostname is a well-known CDN or
+ * update name, are omitted. Persist `c2_ips` uses this same attested set.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -144,9 +144,9 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 }
 
 /**
- * Bound C2 IPv4 plus victim-stamped extra-wan dests that are not CDN/CF.
- * The bound C2 is omitted when it is a published Cloudflare anycast dest
- * or has a well-known CDN or update hostname. An unnamed extra-wan dest
+ * Bound C2 IPv4 plus victim-stamped extra-wan dests that are not CDN/CF/Fastly.
+ * The bound C2 is omitted when it is a published Cloudflare or Fastly
+ * anycast dest or has a well-known CDN or update hostname. An unnamed extra-wan dest
  * that survives those omits persists. Domain choice uses this same
  * attested set, so a domain dest stays available. LAN / DC / gateway /
  * multicast / unbound WAN stay off. Who/where are not updated. A
@@ -167,7 +167,7 @@ export function acceptedC2Ips(
 /**
  * Harvested TLS SNI or DNS name evidenced on an attested extra dest.
  * Attested extras are the bound C2 plus victim-stamped WAN dests that
- * are not CDN/CF. Well-known CDN / update names never win. LAN / DC /
+ * are not CDN/CF/Fastly. Well-known CDN / update names never win. LAN / DC /
  * gateway / victim hostnames stay off. The name is not invented and
  * does not donate who/where.
  * @param bind - live bind.
@@ -411,7 +411,7 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
  * cue/observation address; a both-LAN conversation is unbound and does not
  * issue a hunt. Role `c2` cannot be a LAN address; tokens are not swapped.
  * Role `c2` cannot be a well-known CDN or update destination: a published
- * Cloudflare anycast IPv4, or a harvested hostname or cited-conversation
+ * Cloudflare or Fastly anycast IPv4, or a harvested hostname or cited-conversation
  * SNI / HTTP host / DNS name on that bound C2 IPv4; a replacement C2 is
  * not invented. Assigning `victim`
  * to a cue/observation address is always unbound and names the other-end
@@ -692,7 +692,7 @@ export function completeAcceptedSlot(
  * not persisted as user. A submitted mac is kept unless talking-IP
  * frames source that MAC only from a non-victim. Bound C2 plus
  * victim-stamped extra-wan dests persist as `c2_ips`, omitting an IP
- * in a published Cloudflare anycast prefix or whose evidenced
+ * in a published Cloudflare or Fastly anycast prefix or whose evidenced
  * hostname is a well-known CDN or update name. An unnamed extra-wan
  * dest that survives those omits persists. A harvested C2 DNS/SNI
  * name evidenced on an attested dest persists as `c2_domain` when it
@@ -947,7 +947,7 @@ function resolveEndpoint(
 
 /**
  * Whether the bound non-LAN C2 is a well-known CDN or update dest.
- * A published Cloudflare anycast IPv4 qualifies even when the
+ * A published Cloudflare or Fastly anycast IPv4 qualifies even when the
  * evidenced hostname is a customer domain. A replacement C2 is not
  * invented.
  * @param bind - resolved conversation bind before persist.
@@ -966,7 +966,7 @@ function uniqueC2IsCdnOrUpdate(
 }
 
 /**
- * Whether an IPv4 is a published Cloudflare anycast dest, or has a
+ * Whether an IPv4 is a published Cloudflare or Fastly anycast dest, or has a
  * harvested or cited-conversation hostname whose suffix is a
  * well-known CDN or update domain.
  * @param ip - candidate C2 IPv4.
@@ -979,12 +979,12 @@ function ipIsCdnOrUpdate(
   identities: readonly Identity[],
   evidenceText: string,
 ): boolean {
-  if (isCloudflareIpv4(ip)) return true
+  if (isCloudflareIpv4(ip) || isFastlyIpv4(ip)) return true
   return hostnamesEvidencedOnIp(ip, identities, evidenceText).some(isCdnOrUpdateName)
 }
 
 /**
- * Bound C2 plus victim-stamped extra WAN dests that are not CDN/CF.
+ * Bound C2 plus victim-stamped extra WAN dests that are not CDN/CF/Fastly.
  * Persist `c2_ips`, domain choice, and c2-domain hunts use this set.
  * @param bind - live bind.
  * @param identities - folded ledger identities.

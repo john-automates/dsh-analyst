@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`isCloudflareIpv4` 匹配已公布的 Cloudflare IPv4 任播前缀（[Cloudflare IP 段](https://www.cloudflare.com/ips/)），包括 `104.16.0.0/13`。落在这些段上的目的地址即使证据主机名是客户域也按 CDN 处理。通用 VPS／托管段不在此检查内。不列出线上案件的黄金 IP。`isCdnOrUpdateName` 仍只做后缀检查；`evilcloudflare.com` 仍为假。
+`isCloudflareIpv4` 匹配已公布的 Cloudflare IPv4 任播前缀（[Cloudflare IP 段](https://www.cloudflare.com/ips/)），包括 `104.16.0.0/13`。落在这些段上的目的地址即使证据主机名是客户域也按 CDN 处理。通用 VPS／托管段不在此检查内。不列出线上案件的黄金 IP。`isCdnOrUpdateName` 仍只做后缀检查；`evilcloudflare.com` 仍为假。已公布的 Fastly 前缀是并列省略（[省略 Fastly IPv4 C2 目的地址](2026-08-21-omit-fastly-ipv4-c2-dests.md)）。
 
 `acceptedC2Ips` 省略已公布的 Cloudflare 目的地址（包括已绑定 C2），方式与省略证据主机名为 CDN／更新的目的地址相同。持久化是已证明 extra-wan 集合，包括躲过那些省略的未点名目的地址（[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)）。`acceptedC2Domain`／`projectCaseReport` 把证据落在已证明目的地址上、且不是 CDN／更新的第一个带点 `isC2DomainName` 持久化。只在被丢掉的 Cloudflare 目的地址上有证据的主机名不会赢。who/where 仍是受害端行。
 
@@ -26,7 +26,7 @@ Status: implemented
 
 **把每个 VPS／通用托管目的地址都当作 CDN。** 否决：非 Cloudflare 的额外 WAN 目的地址仍须持久化其带点名。
 
-**按 IPv4 段做所有 CDN 省略。** 否决用于 Microsoft、Akamai 和软件更新目的地址：那些任播段会变，主机名后缀才是证据。已公布的 Cloudflare 前缀是例外，因为那些目的地址上的客户主机名不是 `cloudflare.com`。
+**按 IPv4 段做所有 CDN 省略。** 否决用于 Microsoft、Akamai 和软件更新目的地址：那些任播段会变，主机名后缀才是证据。已公布的 Cloudflare 前缀是例外，因为那些目的地址上的客户主机名不是 `cloudflare.com`。已公布的 Fastly 前缀是同一类例外（[省略 Fastly IPv4 C2 目的地址](2026-08-21-omit-fastly-ipv4-c2-dests.md)）。
 
 **把线上案件的黄金 IP 或主机名写进 harness 代码或测试。** 否决：测试使用 TEST-NET、`104.16.1.1`、`cdn-customer.example.test` 和 `payload.example.test`。
 
