@@ -5,11 +5,14 @@
  * or a well-known CDN or update destination.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
- * After a live bind, extra WAN destinations whose `evidence_id` is the
- * victim persist as `c2_ips` unless that IP is a published Cloudflare
- * anycast dest or an evidenced hostname on it is a well-known CDN or
- * update name. A dotted name evidenced on any remaining C2 IP persists
- * as `c2_domain` when it is not CDN/update.
+ * After a live bind, attested extras (bound C2 plus victim-stamped WAN
+ * dests that are not a published Cloudflare anycast dest and have no
+ * well-known CDN or update hostname) choose `c2_domain`. Persist
+ * `c2_ips` is that bound C2 when it is not CDN/CF plus dests that
+ * evidence the accepted non-CDN domain. A leftover victim-stamped WAN
+ * dest with no such attestation does not persist. A dotted name
+ * evidenced on an attested dest persists as `c2_domain` when it is not
+ * CDN/update.
  * A who/where string whose leftover
  * identity tokens are victim-row handles is coerced to
  * `{ entity_id: victim }` even when labels or a sentence wrap those
@@ -106,20 +109,21 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
 }
 
 /**
- * C2-domain hunts for the bound C2 plus extra WAN IPv4s stamped on the victim.
- * IPs whose dest is a published Cloudflare anycast prefix, or whose
- * evidenced hostname is a well-known CDN or update name, are omitted.
+ * C2-domain hunts for attested extras: the bound C2 plus victim-stamped
+ * extra WAN IPv4s. IPs whose dest is a published Cloudflare anycast
+ * prefix, or whose evidenced hostname is a well-known CDN or update
+ * name, are omitted. Persist `c2_ips` is narrower than this hunt set.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
- * @returns one hunt per remaining C2 IPv4, bound first.
+ * @returns one hunt per attested C2 IPv4, bound first.
  */
 export function c2DomainHuntsForBind(
   bind: RelationshipBind,
   identities: readonly Identity[] = [],
   evidenceText = '',
 ): Hunt[] {
-  return acceptedC2Ips(bind, identities, evidenceText).map(c2DomainHunt)
+  return attestedC2Ips(bind, identities, evidenceText).map(c2DomainHunt)
 }
 
 /**
@@ -135,12 +139,14 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 }
 
 /**
- * Bound C2 IPv4 plus extra non-LAN unicast IPs whose `evidence_id` is
- * the bound victim. An IP in a published Cloudflare anycast prefix, or
- * whose evidenced hostname is a well-known CDN or update name, is
- * omitted, including the bound C2. LAN / DC / gateway / multicast /
- * unbound WAN stay off. Who/where are not updated. A second bind is
- * not invented.
+ * Bound C2 IPv4 plus dests that evidence the accepted non-CDN
+ * `c2_domain`. The bound C2 is omitted when it is a published
+ * Cloudflare anycast dest or has a well-known CDN or update hostname.
+ * A leftover victim-stamped WAN dest that does not evidence that
+ * domain is omitted. Domain choice uses attested extras, not this
+ * persist set, so a domain dest stays available. LAN / DC / gateway /
+ * multicast / unbound WAN stay off. Who/where are not updated. A
+ * second bind is not invented.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -153,31 +159,21 @@ export function acceptedC2Ips(
 ): string[] {
   const bound = boundC2Ipv4(bind)
   if (bound === undefined) return []
-  const victim = victimOf(bind)
-  const seen = new Set<string>()
-  const out: string[] = []
-  const consider = (ip: string): void => {
-    if (seen.has(ip)) return
-    seen.add(ip)
-    if (ipIsCdnOrUpdate(ip, identities, evidenceText)) return
-    out.push(ip)
-  }
-  consider(bound)
-  if (victim === undefined) return out
-  for (const identity of identities) {
-    if (identity.kind !== 'ip') continue
-    if (!isNonLanUnicastIpv4(identity.value)) continue
-    if (identity.evidence_id !== victim.addr) continue
-    consider(identity.value)
-  }
-  return out
+  const attested = attestedC2Ips(bind, identities, evidenceText)
+  const domain = acceptedC2DomainOn(attested, identities)
+  return attested.filter(ip => (
+    ip === bound
+    || (domain !== undefined
+      && hostnamesEvidencedOnIp(ip, identities, evidenceText).includes(domain))
+  ))
 }
 
 /**
- * Harvested TLS SNI or DNS name evidenced on any remaining C2 IPv4.
- * Well-known CDN / update names never win. LAN / DC / gateway / victim
- * hostnames stay off. The name is not invented and does not donate
- * who/where.
+ * Harvested TLS SNI or DNS name evidenced on an attested extra dest.
+ * Attested extras are the bound C2 plus victim-stamped WAN dests that
+ * are not CDN/CF. Well-known CDN / update names never win. LAN / DC /
+ * gateway / victim hostnames stay off. The name is not invented and
+ * does not donate who/where.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -188,15 +184,7 @@ export function acceptedC2Domain(
   identities: readonly Identity[],
   evidenceText = '',
 ): string | undefined {
-  const c2s = new Set(acceptedC2Ips(bind, identities, evidenceText))
-  if (c2s.size === 0) return undefined
-  for (const identity of identities) {
-    if (identity.kind !== 'hostname' || identity.evidence_id === undefined) continue
-    if (!c2s.has(identity.evidence_id)) continue
-    if (!isC2DomainName(identity.value) || isCdnOrUpdateName(identity.value)) continue
-    return identity.value
-  }
-  return undefined
+  return acceptedC2DomainOn(attestedC2Ips(bind, identities, evidenceText), identities)
 }
 
 /** Deny text when bind_relationship does not have exactly one victim. */
@@ -706,13 +694,13 @@ export function completeAcceptedSlot(
  * arguments into that submitted slot. A submitted human user is kept
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP
- * frames source that MAC only from a non-victim. Bound C2 plus extra
- * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`,
- * omitting an IP in a published Cloudflare anycast prefix or whose
- * evidenced hostname is a well-known CDN or update name. A harvested
- * C2 DNS/SNI name evidenced on any remaining C2 IP persists as
- * `c2_domain` when it is not CDN/update and does not fill who/where
- * hostname.
+ * frames source that MAC only from a non-victim. Bound C2 plus dests
+ * that evidence the accepted non-CDN `c2_domain` persist as `c2_ips`,
+ * omitting an IP in a published Cloudflare anycast prefix, whose
+ * evidenced hostname is a well-known CDN or update name, or a leftover
+ * victim-stamped WAN dest with no such attestation. A harvested C2
+ * DNS/SNI name evidenced on an attested dest persists as `c2_domain`
+ * when it is not CDN/update and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -997,6 +985,63 @@ function ipIsCdnOrUpdate(
 ): boolean {
   if (isCloudflareIpv4(ip)) return true
   return hostnamesEvidencedOnIp(ip, identities, evidenceText).some(isCdnOrUpdateName)
+}
+
+/**
+ * Bound C2 plus victim-stamped extra WAN dests that are not CDN/CF.
+ * Domain choice and c2-domain hunts use this set. Persist `c2_ips`
+ * is narrower.
+ * @param bind - live bind.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 remains.
+ */
+function attestedC2Ips(
+  bind: RelationshipBind,
+  identities: readonly Identity[],
+  evidenceText: string,
+): string[] {
+  const bound = boundC2Ipv4(bind)
+  if (bound === undefined) return []
+  const victim = victimOf(bind)
+  const seen = new Set<string>()
+  const out: string[] = []
+  const consider = (ip: string): void => {
+    if (seen.has(ip)) return
+    seen.add(ip)
+    if (ipIsCdnOrUpdate(ip, identities, evidenceText)) return
+    out.push(ip)
+  }
+  consider(bound)
+  if (victim === undefined) return out
+  for (const identity of identities) {
+    if (identity.kind !== 'ip') continue
+    if (!isNonLanUnicastIpv4(identity.value)) continue
+    if (identity.evidence_id !== victim.addr) continue
+    consider(identity.value)
+  }
+  return out
+}
+
+/**
+ * First non-CDN dotted name evidenced on an attested dest.
+ * @param attested - dests from {@link attestedC2Ips}.
+ * @param identities - folded ledger identities.
+ * @returns that name, or undefined when none exists.
+ */
+function acceptedC2DomainOn(
+  attested: readonly string[],
+  identities: readonly Identity[],
+): string | undefined {
+  const c2s = new Set(attested)
+  if (c2s.size === 0) return undefined
+  for (const identity of identities) {
+    if (identity.kind !== 'hostname' || identity.evidence_id === undefined) continue
+    if (!c2s.has(identity.evidence_id)) continue
+    if (!isC2DomainName(identity.value) || isCdnOrUpdateName(identity.value)) continue
+    return identity.value
+  }
+  return undefined
 }
 
 /**

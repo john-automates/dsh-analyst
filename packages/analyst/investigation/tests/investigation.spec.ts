@@ -1879,6 +1879,7 @@ describe('investigation service', () => {
     const PAYLOAD = 'payload.example.test'
     const CDN_DEST = '203.0.113.80'
     const EXTRA = '203.0.113.50'
+    const UNNAMED = '203.0.113.60'
     ctx.investigation.recordIdentity(owner.session, {
       kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
     })
@@ -1897,7 +1898,7 @@ describe('investigation service', () => {
       execute: (args) => {
         const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
         if (filter.includes('ip.src == 10.0.10.2') && filter.includes('ip.dst')) {
-          return Promise.resolve({ text: `ip.dst: ${CDN_DEST}\nip.dst: ${EXTRA}` })
+          return Promise.resolve({ text: `ip.dst: ${CDN_DEST}\nip.dst: ${EXTRA}\nip.dst: ${UNNAMED}` })
         }
         if (filter.includes('tls.handshake.extensions_server_name') && filter.includes(CDN_DEST)) {
           return Promise.resolve({ text: 'tls.handshake.extensions_server_name: update.microsoft.com' })
@@ -1940,6 +1941,7 @@ describe('investigation service', () => {
     const extras = foldExtras(owner.session.events)
     expect(extras?.c2_ips).toEqual(['198.51.100.80', EXTRA])
     expect(extras?.c2_ips).not.toContain(CDN_DEST)
+    expect(extras?.c2_ips).not.toContain(UNNAMED)
     expect(extras?.c2_domain).toBe(PAYLOAD)
     expect(ctx.investigation.extras(owner.session)).toEqual(extras)
     expect(foldReport(owner.session.events)).toBeUndefined()

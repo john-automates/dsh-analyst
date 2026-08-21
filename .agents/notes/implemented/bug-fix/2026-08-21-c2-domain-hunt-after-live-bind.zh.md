@@ -16,7 +16,7 @@ Status: implemented
 
 当 `autoHunt` 为 true 时，`c2-domain` 像 `other-end` 一样通过 `pcap_filter` 自动运行，即使其主体是 C2。[身份 hunt 自动运行](2026-08-21-auto-run-outstanding-identity-hunts.md) 仍对 `eth-src`、`name-service`、Kerberos 和 SAMR 跳过非 LAN 主体。
 
-收割把 SNI 或 DNS 名记为主机名，`evidence_id` 为该 C2 IP。工作组和 NBNS token 仍按今天的规则拒绝。在非 LAN C2 的 `scopeIp` 下，单标签的 LAN／域控／NetBIOS 名不会被记录。该主机名不捐出 who/where（[BindRelationship](../feature/2026-08-21-bind-relationship.md)）。已接受的 `case_report` 把证据落在那些剩余 C2 IPv4（已绑定加上额外地址）上、且不是知名 CDN 或更新名的第一个带点 DNS 名复制到可选的 `c2_domain`（[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)）。没有收割到时省略该字段。不会编造域名。
+收割把 SNI 或 DNS 名记为主机名，`evidence_id` 为该 C2 IP。工作组和 NBNS token 仍按今天的规则拒绝。在非 LAN C2 的 `scopeIp` 下，单标签的 LAN／域控／NetBIOS 名不会被记录。该主机名不捐出 who/where（[BindRelationship](../feature/2026-08-21-bind-relationship.md)）。已接受的 `case_report` 把证据落在已证明目的地址上、且不是知名 CDN 或更新名的第一个带点 DNS 名复制到可选的 `c2_domain`（[拒绝 CDN／更新 C2](2026-08-21-refuse-cdn-update-c2.md)，[只持久化已证明 C2 目的地址](2026-08-21-persist-attested-c2-dests.md)）。没有收割到时省略该字段。不会编造域名。
 
 scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲／域控 LAN 对等体和 `c2.example.test`。
 

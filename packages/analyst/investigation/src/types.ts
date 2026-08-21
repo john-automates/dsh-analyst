@@ -132,13 +132,13 @@ export interface InvestigationAction {
  */
 export interface CaseReportExtras {
   /**
-   * Bound C2 IPv4 plus extra WAN dests whose `evidence_id` is the victim,
-   * omitting CDN/update names and published Cloudflare anycast dests.
-   * Omitted when none remain.
+   * Bound C2 IPv4 plus dests that evidence the accepted non-CDN
+   * `c2_domain`, omitting CDN/update names, published Cloudflare
+   * anycast dests, and leftover unnamed extras. Omitted when none remain.
    */
   c2_ips?: string[]
   /**
-   * First non-CDN dotted name evidenced on any remaining C2 IP.
+   * First non-CDN dotted name evidenced on an attested dest.
    * Omitted when none was harvested.
    */
   c2_domain?: string
@@ -235,17 +235,18 @@ export interface CaseReport {
   /** How it happened, as evidenced. */
   how: string
   /**
-   * Bound C2 IPv4 plus extra WAN destination IPs whose `evidence_id` is
-   * that victim, omitting an IP in a published Cloudflare anycast prefix
-   * or whose evidenced hostname is a well-known CDN or update name.
-   * Omitted when none remain. Not a who/where slot and not a second bind.
+   * Bound C2 IPv4 plus dests that evidence the accepted non-CDN
+   * `c2_domain`, omitting an IP in a published Cloudflare anycast
+   * prefix, whose evidenced hostname is a well-known CDN or update
+   * name, or a leftover unnamed extra. Omitted when none remain. Not a
+   * who/where slot and not a second bind.
    */
   c2_ips?: string[]
   /**
-   * TLS SNI or DNS name evidenced on any remaining C2 IPv4s (bound plus
-   * extras) that is not a well-known CDN or update name. Omitted when
-   * none was harvested. Not a who/where hostname and not a victim-row
-   * donate.
+   * TLS SNI or DNS name evidenced on an attested dest (bound C2 or a
+   * dest that evidences that name) that is not a well-known CDN or
+   * update name. Omitted when none was harvested. Not a who/where
+   * hostname and not a victim-row donate.
    */
   c2_domain?: string
 }
@@ -297,11 +298,12 @@ declare module '@deepseek-ai/dsh-session/types' {
      * without a conversation-client stamp. A machine SAM ending in `$` is
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
-     * plus extra WAN destinations whose `evidence_id` is that victim, omitting
-     * an IP in a published Cloudflare anycast prefix or whose evidenced
-     * hostname is a well-known CDN or update name, when any remain.
-     * `c2_domain` is the harvested TLS SNI or DNS name evidenced on any
-     * remaining C2 IPv4s that is not CDN/update, when one exists.
+     * plus dests that evidence the accepted non-CDN `c2_domain`, omitting
+     * an IP in a published Cloudflare anycast prefix, whose evidenced
+     * hostname is a well-known CDN or update name, or a leftover unnamed
+     * extra, when any remain. `c2_domain` is the harvested TLS SNI or DNS
+     * name evidenced on an attested dest that is not CDN/update, when one
+     * exists.
      */
     'investigation/report': CaseReport
     /**
