@@ -9,6 +9,7 @@ const PACKAGE_NAME = '@deepseek-ai/dsh-investigation'
 const IDENTITY_KINDS = new Set(['ip', 'mac', 'hostname', 'user', 'full_name'])
 const HUNT_KINDS = new Set([
   'kerberos-cname', 'samr-userinfo', 'eth-src', 'name-service', 'other-end', 'c2-domain',
+  'extra-wan',
 ])
 const HUNT_SUBJECTS = new Set(['ip', 'hostname', 'user'])
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
@@ -114,6 +115,15 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
   validateSlot(data.who, 'investigation/report who', fail)
   validateSlot(data.where, 'investigation/report where', fail)
   if (data.c2_domain !== undefined) requireText(data.c2_domain, 'investigation/report c2_domain', fail)
+  if (data.c2_ips !== undefined) {
+    if (!Array.isArray(data.c2_ips) || data.c2_ips.length === 0) {
+      fail('investigation/report c2_ips must be a non-empty array')
+    } else {
+      for (const [index, ip] of data.c2_ips.entries()) {
+        requireText(ip, `investigation/report c2_ips[${index}]`, fail)
+      }
+    }
+  }
 }
 
 function validateSlot(value: unknown, label: string, fail: InvariantFailure): void {
