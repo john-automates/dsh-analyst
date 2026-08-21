@@ -1201,13 +1201,10 @@ function dcOrGatewayOnlyMacToken(token: string, victimAddr: string, evidenceText
 function leftoverCidrContainsVictim(token: string, victimAddr: string): boolean {
   const match = token.match(CIDR_EXACT)
   if (match === null) return false
-  const network = match[1] as string
   const prefix = Number(match[2])
-  if (!isIpv4(victimAddr) || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false
-  const ipInt = ipv4ToInt(victimAddr)
-  const netInt = ipv4ToInt(network)
+  // `<< 32` wraps to `<< 0` in JavaScript, so prefix 0 cannot use that shift.
   const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
-  return (ipInt & mask) === (netInt & mask)
+  return (ipv4ToInt(victimAddr) & mask) === (ipv4ToInt(match[1] as string) & mask)
 }
 
 /**

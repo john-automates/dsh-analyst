@@ -739,6 +739,8 @@ describe('BindRelationship', () => {
     expect(caseReportDenyReason({ who: LAN_CIDR }, live, identities, evidence)).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: `${locatorWho} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
       .toBeUndefined()
+    expect(caseReportDenyReason({ where: `The client was located at ${LAN} on 0.0.0.0/0` }, live, identities, evidence))
+      .toBeUndefined()
     const report = requireCaseReport(live, identities, claims, evidence, {
       who: locatorWho,
       where: locatorWhere,
