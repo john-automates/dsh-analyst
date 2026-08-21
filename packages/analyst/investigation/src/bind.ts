@@ -4,8 +4,11 @@
  * Cue/observation addresses default to c2. Role c2 cannot be a LAN address.
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
- * Omitted mac and user also persist from victim-IP evidence when a sticky
- * DC donate or uniqueness left the projected row empty. A submitted user,
+ * After a live bind, a who/where string whose identity tokens are victim-row
+ * handles is coerced to `{ entity_id: victim }` even when labels or a
+ * sentence wrap those handles. Omitted mac and user also persist from
+ * victim-IP evidence when a sticky DC donate or uniqueness left the
+ * projected row empty. A submitted user,
  * hostname, or full_name is kept when the row has no donated value and that
  * identity does not donate to a different entity. A submitted mac is kept
  * unless that MAC only appears on DC/gateway frames.
@@ -111,6 +114,15 @@ const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 const SLOT_KEYS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
 const INTEGER_STRING = /^-?\d+$/
+const MAC_HANDLE = /^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$/i
+/**
+ * Field labels and sentence wrappers that are not identity tokens.
+ * A leftover word outside this set still denies when it is not a handle.
+ */
+const HANDLE_WRAPPER_WORDS = new Set([
+  'user', 'account', 'full', 'name', 'mac', 'address', 'hostname', 'host',
+  'the', 'infected', 'was', 'identified', 'as',
+])
 
 /** Model-supplied who/where after deny/coerce, before the row fills omitted keys. */
 export interface SubmittedIdentitySlots {
@@ -574,12 +586,14 @@ export function requireCaseReport(
  * and identity slots whose evidence_id points at a non-victim all return
  * {@link UNBOUND_REASON}. A JSON object string with `entity_id` is coerced to
  * that object before the free-text check. After a live bind, a who/where
- * string whose identity-like tokens are all victim-row handles (bound victim
- * IP, or a ledger user / full_name / hostname / MAC that donates to that
- * victim) is coerced to `{ entity_id: victim.addr }`. A user, hostname, MAC,
- * or full_name is a victim-row handle, not an entity id; the persisted packet
- * still uses the victim address. A string that names the c2, a distractor,
- * another IPv4, or unmatched prose stays unbound.
+ * string whose identity tokens are all victim-row handles (bound victim IP,
+ * or a ledger user / full_name / hostname / MAC that donates to that victim
+ * or is evidenced on that victim the same way omitted mac/user persist) is
+ * coerced to `{ entity_id: victim.addr }`. Label words and sentence wrappers
+ * are not identity tokens. A multi-word full_name is one handle. A user,
+ * hostname, MAC, or full_name is a victim-row handle, not an entity id; the
+ * persisted packet still uses the victim address. A string that names the
+ * c2, a distractor, another IPv4, or unmatched identity tokens stays unbound.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -1037,9 +1051,10 @@ function submittedSlotRecord(submitted: unknown): Record<string, unknown> | unde
  * Coerce a JSON object string into that object, or a victim-row handle string
  * into `{ entity_id: victim.addr }`. Hermes XML recovery stores object
  * parameters as trimmed JSON text, so who/where can arrive as strings. After a
- * live bind, a string whose identity-like tokens are all victim-row handles
- * projects through the existing victim-row path. A string that is not a JSON
- * object and not a victim-row handle stays a string for the free-text deny.
+ * live bind, a string whose identity tokens are all victim-row handles
+ * projects through the existing victim-row path, including labeled or
+ * sentence-wrapped handles. A string that is not a JSON object and not a
+ * victim-row handle stays a string for the free-text deny.
  * @param value - raw who/where argument.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1069,9 +1084,10 @@ function coerceIdentitySlotArg(
 }
 
 /**
- * Whether every identity-like token in `text` is a victim-row handle.
+ * Whether every identity token in `text` is a victim-row handle.
  * The whole trimmed string may itself be one handle (user, full_name,
- * hostname, MAC, or bound victim IP).
+ * hostname, MAC, or bound victim IP). Label words and sentence wrappers
+ * are ignored. A multi-word full_name is one handle.
  * @param text - trimmed who/where string.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1088,13 +1104,16 @@ function isVictimHandleText(
 ): boolean {
   const handles = victimRowHandles(bind, identities, victim, evidenceText)
   if (matchesVictimHandle(text, handles)) return true
-  const tokens = identityLikeTokens(text)
+  const tokens = identityLikeTokens(text, handles)
   return tokens.length > 0 && tokens.every(token => matchesVictimHandle(token, handles))
 }
 
 /**
- * Bound victim address plus donated ledger user / full_name / hostname / MAC
- * (and donated IP) values on that row.
+ * Bound victim address plus ledger user / full_name / hostname / MAC
+ * (and IP) values that donate to that row or are evidenced on that
+ * victim the same way omitted mac/user persist (victim-IP frames /
+ * conversation-client stamp). A sticky DC donate does not drop a
+ * victim-IP-sourced MAC or conversation-client user from this set.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param victim - unique victim endpoint on that bind.
@@ -1109,9 +1128,41 @@ function victimRowHandles(
 ): Set<string> {
   const handles = new Set<string>([victim.addr])
   for (const identity of identities) {
-    if (identityDonatesToVictim(identity, bind, identities, evidenceText)) handles.add(identity.value)
+    if (identityDonatesToVictim(identity, bind, identities, evidenceText)) {
+      handles.add(identity.value)
+      continue
+    }
+    if (identityEvidencedOnVictimRow(identity, victim.addr, evidenceText)) handles.add(identity.value)
   }
   return handles
+}
+
+/**
+ * Whether a ledger identity is evidenced on the bound victim the same
+ * way omitted mac/user persist. A sticky DC `entity_id` does not veto
+ * victim-IP frames or a conversation-client stamp.
+ * @param identity - ledger identity.
+ * @param victimAddr - bound victim IPv4.
+ * @param evidenceText - tool-result text.
+ * @returns true when this value may be used as a victim-row handle.
+ */
+function identityEvidencedOnVictimRow(
+  identity: Identity,
+  victimAddr: string,
+  evidenceText: string,
+): boolean {
+  if (identity.kind === 'mac' || identity.kind === 'full_name') {
+    return evidencedOnVictimIp(identity, victimAddr, evidenceText)
+  }
+  if (identity.kind === 'user') {
+    return evidencedOnVictimIp(identity, victimAddr, evidenceText)
+      || ipv4EvidenceId(identity.evidence_id) === victimAddr
+  }
+  if (identity.kind === 'hostname') {
+    return ipv4EvidenceId(identity.evidence_id) === victimAddr
+      || ipsEvidencingIdentity(identity, evidenceText).includes(victimAddr)
+  }
+  return false
 }
 
 /**
@@ -1129,13 +1180,15 @@ function matchesVictimHandle(token: string, handles: Set<string>): boolean {
 }
 
 /**
- * Identity-like tokens: parenthesized groups (full_name or hostname) and the
- * remaining words (user, IP, MAC, hostname). Unmatched prose becomes tokens
- * that fail the victim-row handle check.
+ * Identity tokens: parenthesized groups, then victim-row handles in the
+ * remaining text (longest match, so a multi-word full_name stays one
+ * token), then leftover words that are not field labels or sentence
+ * wrappers. Unmatched identity tokens fail the victim-row handle check.
  * @param text - trimmed who/where string.
+ * @param handles - victim-row handle values used for longest-match extract.
  * @returns tokens in encounter order.
  */
-function identityLikeTokens(text: string): string[] {
+function identityLikeTokens(text: string, handles: ReadonlySet<string> = new Set()): string[] {
   const tokens: string[] = []
   const mask = [...text]
   for (const match of text.matchAll(/\(([^)]*)\)/g)) {
@@ -1144,8 +1197,39 @@ function identityLikeTokens(text: string): string[] {
     const start = match.index as number
     mask.fill(' ', start, start + match[0].length)
   }
+  const sorted = [...handles].sort((left, right) => right.length - left.length)
+  for (const handle of sorted) {
+    for (const variant of handleSearchVariants(handle)) {
+      const remainder = mask.join('')
+      for (const match of remainder.matchAll(handleBoundaryPattern(variant))) {
+        const start = match.index as number
+        const end = start + match[0].length
+        tokens.push(handle)
+        mask.fill(' ', start, end)
+      }
+    }
+  }
   for (const match of mask.join('').matchAll(/[^\s,;:|/]+/g)) {
-    tokens.push(match[0])
+    if (!HANDLE_WRAPPER_WORDS.has(match[0].toLowerCase())) tokens.push(match[0])
   }
   return tokens
+}
+
+/**
+ * Search spellings for one victim-row handle. A colon MAC also matches dashes.
+ * @param handle - normalized handle value.
+ * @returns spellings to look for in who/where text.
+ */
+function handleSearchVariants(handle: string): string[] {
+  return MAC_HANDLE.test(handle) ? [handle, handle.replace(/:/g, '-')] : [handle]
+}
+
+/**
+ * Case-insensitive handle match bounded by start/end or a who/where delimiter.
+ * @param handle - one search spelling.
+ * @returns the global match pattern.
+ */
+function handleBoundaryPattern(handle: string): RegExp {
+  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<![^\\s,;:|/])${escaped}(?![^\\s,;:|/])`, 'gi')
 }
