@@ -1706,7 +1706,7 @@ describe('investigation service', () => {
       .toHaveLength(1)
   })
 
-  it('issues neither extra-wan nor c2-domain when the live bind has two C2s', async () => {
+  it('issues extra-wan when the live bind has a second C2 besides the conversation dest', async () => {
     const { ctx, owner } = await setup()
     const bound = await ctx.tools.execute({
       signal,
@@ -1723,13 +1723,17 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(bound.isError).toBe(false)
-    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
-    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    expect(ctx.investigation.hunts(owner.session)).toContainEqual({
+      kind: 'c2-domain', subjectKind: 'ip', subject: '198.51.100.80',
+    })
     expect(requireCaseReport(
       ctx.investigation.bind(owner.session),
       ctx.investigation.identities(owner.session),
       { what: 'a', when: 'b', why: 'c', how: 'd' },
-    ).c2_ips).toBeUndefined()
+    ).c2_ips).toEqual(['198.51.100.80'])
   })
 
   it('does not issue c2-domain from extra-wan when no bind is live', async () => {

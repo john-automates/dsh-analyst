@@ -5,7 +5,7 @@
  * auto-issue hunts after new identities, auto-issue `other-end`
  * when bind_relationship assigns a cue as victim, auto-issue `extra-wan`
  * then `c2-domain` on a successful bind with a unique LAN victim and
- * unique non-LAN C2 that is not a well-known CDN or update destination
+ * a bound non-LAN C2 that is not a well-known CDN or update destination
  * after Plan is ready, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
  * outside the case directory, require BindRelationship before case_report,
@@ -142,7 +142,7 @@ export interface Config {
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
    * those identity hunts issue only for that C2-talking IP. A cue-as-victim
    * bind issues `other-end` for that cue. A successful bind with a unique LAN
-   * victim and unique non-LAN C2 that is not a well-known CDN or update
+   * victim and a bound non-LAN C2 that is not a well-known CDN or update
    * destination issues `extra-wan` for that victim and
    * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras)
    * after a live bind whose Plan named a C2 hypothesis and a CDN/DC/update

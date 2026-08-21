@@ -81,11 +81,11 @@ export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefine
 }
 
 /**
- * C2-domain hunt for a live bind whose unique `c2` endpoint is a non-LAN
- * IPv4. A both-LAN or CDN/update C2 deny never reaches a live bind, so
+ * C2-domain hunt for a live bind whose bound `c2` IPv4 is a non-LAN
+ * address. A both-LAN or CDN/update C2 deny never reaches a live bind, so
  * this hunt is not issued for those denies.
  * @param bind - accepted conversation bind.
- * @returns the hunt for that C2 IPv4, or undefined when none is unique.
+ * @returns the hunt for that C2 IPv4, or undefined when none is bound.
  */
 export function c2DomainHuntForBind(bind: RelationshipBind): Hunt | undefined {
   const c2 = boundC2Ipv4(bind)
@@ -93,11 +93,13 @@ export function c2DomainHuntForBind(bind: RelationshipBind): Hunt | undefined {
 }
 
 /**
- * Extra-WAN hunt for a live bind with a unique LAN victim and unique
- * non-LAN C2. A both-LAN or CDN/update C2 deny never reaches a live
- * bind, so this hunt is not issued.
+ * Extra-WAN hunt for a live bind with a unique LAN victim and a bound
+ * non-LAN C2. A second `c2` role does not block this hunt when the
+ * conversation dest is `c2`. A both-LAN or CDN/update C2 deny never
+ * reaches a live bind, so this hunt is not issued.
  * @param bind - accepted conversation bind.
- * @returns the hunt for that victim IPv4, or undefined when the pair is not unique.
+ * @returns the hunt for that victim IPv4, or undefined when the victim
+ * is missing or no C2 is bound.
  */
 export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
   const victim = victimOf(bind)
@@ -125,11 +127,16 @@ export function c2DomainHuntsForBind(
 }
 
 /**
- * Unique non-LAN IPv4 bound as role `c2`.
+ * Non-LAN IPv4 bound as role `c2`. The conversation dest wins when that
+ * endpoint is `c2`, even if another endpoint is also `c2`. Otherwise the
+ * unique `c2` IPv4 wins. Two `c2` roles with dest not `c2` invent nothing.
  * @param bind - live bind.
- * @returns that address, or undefined when it is missing or not unique.
+ * @returns that address, or undefined when no C2 is bound.
  */
 export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
+  const dest = bind.relationship.dst
+  const destEndpoint = bind.endpoints.find(endpoint => endpoint.addr === dest)
+  if (destEndpoint?.role === 'c2' && isNonLanUnicastIpv4(dest)) return dest
   const c2s = bind.endpoints.filter(endpoint => (
     endpoint.role === 'c2' && isNonLanUnicastIpv4(endpoint.addr)
   ))
@@ -147,7 +154,7 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
- * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 remains.
+ * @returns those IPv4s, bound first, or empty when no bound non-LAN C2 remains.
  */
 export function acceptedC2Ips(
   bind: RelationshipBind,
@@ -193,7 +200,7 @@ export const BOTH_LAN_CONVERSATION_REASON =
 export const LAN_C2_REASON = 'unbound: role c2 cannot be a LAN address.'
 
 /**
- * Deny text when the unique C2 is a well-known CDN or update destination.
+ * Deny text when the bound C2 is a well-known CDN or update destination.
  * Does not invent a replacement C2. Tokens are not swapped.
  */
 export const CDN_C2_REASON =
@@ -405,7 +412,7 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
  * issue a hunt. Role `c2` cannot be a LAN address; tokens are not swapped.
  * Role `c2` cannot be a well-known CDN or update destination: a published
  * Cloudflare anycast IPv4, or a harvested hostname or cited-conversation
- * SNI / HTTP host / DNS name on that unique C2 IPv4; a replacement C2 is
+ * SNI / HTTP host / DNS name on that bound C2 IPv4; a replacement C2 is
  * not invented. Assigning `victim`
  * to a cue/observation address is always unbound and names the other-end
  * hunt for that cue. Zero or two victims fail. A JSON array string of
@@ -939,14 +946,14 @@ function resolveEndpoint(
 }
 
 /**
- * Whether the unique non-LAN C2 is a well-known CDN or update dest.
+ * Whether the bound non-LAN C2 is a well-known CDN or update dest.
  * A published Cloudflare anycast IPv4 qualifies even when the
  * evidenced hostname is a customer domain. A replacement C2 is not
  * invented.
  * @param bind - resolved conversation bind before persist.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
- * @returns true when that unique C2 must stay unbound.
+ * @returns true when that bound C2 must stay unbound.
  */
 function uniqueC2IsCdnOrUpdate(
   bind: RelationshipBind,
@@ -982,7 +989,7 @@ function ipIsCdnOrUpdate(
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
- * @returns those IPv4s, bound first, or empty when no unique non-LAN C2 remains.
+ * @returns those IPv4s, bound first, or empty when no bound non-LAN C2 remains.
  */
 function attestedC2Ips(
   bind: RelationshipBind,

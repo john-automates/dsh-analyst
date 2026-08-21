@@ -266,7 +266,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      * peer, those identity hunts issue only for that C2-talking IP. Assigning
      * victim to a cue/observation address issues `other-end` for that cue IP
      * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
-     * LAN victim and unique non-LAN C2 that is not a well-known CDN or
+     * LAN victim and a bound non-LAN C2 that is not a well-known CDN or
      * update destination issues `extra-wan` for that victim
      * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each
      * remaining C2 IPv4 (bound plus harvested extras; TLS SNI / DNS). A
