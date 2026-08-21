@@ -13,8 +13,8 @@ import Investigation, {
   BOTH_LAN_CONVERSATION_REASON, CDN_C2_REASON, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
   CLOSE_FILE_REASON, Config, foldActions, foldExtras,
   foldHunts, foldIdentities, foldMission, foldPlan, foldReport, METHODOLOGY_SECTION,
-  MISSION_PURPOSE_REASON, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
-  PLAN_INVENTORY_REASON, requireCaseReport, resolveCaseDir,
+  CUE_PENDING_REASON, MISSION_PURPOSE_REASON, PLAN_ALTERNATIVE_REASON,
+  PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON, requireCaseReport, resolveCaseDir,
   setsWhoWhere,
 } from '../src/index.ts'
 import { stampReadyMindset } from './mindset-fixture.ts'
@@ -454,6 +454,7 @@ describe('investigation service', () => {
     expect(METHODOLOGY_SECTION).toContain(
       'The chassis stamps Mission as a victim-identity + C2 investigation.',
     )
+    expect(METHODOLOGY_SECTION).toContain('Auto-hunts run after Plan is ready')
     expect(METHODOLOGY_SECTION).toContain(
       'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
     )
@@ -2299,38 +2300,53 @@ describe('investigation service', () => {
     expect(foldExtras(owner.session.events)?.killed).toContain('h-c2')
   })
 
-  it('chassis-stamps Mission so identity hunts run and bind still needs a C2 hypothesis', async () => {
-    root = await mkdtemp(join(tmpdir(), 'dsh-investigation-chassis-'))
-    const ctx = new Context()
-    await ctx.plugin(SessionStore)
-    await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime)
-    await ctx.plugin(Investigation, { caseDir: root, evidenceReadOnly: true, autoHunt: true })
-    const session = ctx.sessions.create()
-    expect(foldMission(session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
-    expect(foldMission(session.events)?.closedMeans).toEqual([...CHASSIS_CLOSED_MEANS])
-    expect(ctx.investigation.ensureChassisMission(session)).toBe(false)
+  it('does not auto-run identity hunts after Mission stamp alone', async () => {
+    const { ctx, caseDir, owner } = await setup({}, { mindset: false })
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    const calls: { display_filter?: unknown }[] = []
     ctx.tools.register(defineTool({
-      name: 'echo',
-      description: 'Echo text for harvest tests.',
-      parameters: { text: { type: 'string', required: true } },
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
       output: {
         schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
         render: (_args, value) => [{ type: 'text', text: value.text }],
       },
-      execute: args => Promise.resolve({ text: args.text }),
+      execute: (args) => {
+        calls.push(args)
+        const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
+        if (filter.includes('eth.src')) {
+          return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' })
+        }
+        if (filter.includes('kerberos.CNameString')) {
+          return Promise.resolve({ text: 'kerberos.CNameString: user-a' })
+        }
+        return Promise.resolve({ text: '10.0.10.2' })
+      },
     }))
-    const owner = { id: session.id, session } as unknown as Agent
-    const echoed = await ctx.tools.execute({
-      signal, callId: CallId('echo-chassis-ip'), name: 'echo',
-      arguments: { text: '10.0.10.2' }, agent: owner,
+    const harvested = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-mission-only'),
+      name: 'pcap_filter',
+      arguments: { path: 'evidence/a.pcap', display_filter: 'ip.addr' },
+      agent: owner,
     })
-    expect(echoed.isError).toBe(false)
-    expect(ctx.investigation.hunts(session).some(hunt => hunt.kind === 'eth-src')).toBe(true)
-    expect(ctx.investigation.hunts(session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
+    expect(harvested.isError).toBe(false)
+    expect(foldMission(owner.session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(owner.session.events)?.cue.addr).toBe('cue-pending')
+    expect(calls).toHaveLength(1)
+    expect(calls.some(call => String(call.display_filter ?? '').includes('eth.src'))).toBe(false)
+    expect(calls.some(call => String(call.display_filter ?? '').includes('kerberos.CNameString')))
+      .toBe(false)
+    expect(foldActions(owner.session.events)).toEqual([])
     const denied = await ctx.tools.execute({
       signal,
-      callId: CallId('bind-chassis-only'),
+      callId: CallId('bind-mission-stamp-only'),
       name: 'bind_relationship',
       arguments: {
         src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
@@ -2340,8 +2356,66 @@ describe('investigation service', () => {
     })
     expect(denied.isError).toBe(true)
     expect(denied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      CUE_PENDING_REASON,
+    )
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    const cue = await ctx.tools.execute({
+      signal,
+      callId: CallId('mission-name-cue'),
+      name: 'investigation_mission',
+      arguments: {
+        purpose: CHASSIS_MISSION_PURPOSE,
+        cue_addr: '198.51.100.80',
+        cue_evidence_id: 'conv-1',
+        cue_validation: 'open',
+      },
+      agent: owner,
+    })
+    expect(cue.isError).toBe(false)
+    const stillDenied = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-named-cue-no-plan'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+      agent: owner,
+    })
+    expect(stillDenied.isError).toBe(true)
+    expect(stillDenied.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
       PLAN_C2_HYPOTHESIS_REASON,
     )
+    const plan = await ctx.tools.execute({
+      signal,
+      callId: CallId('plan-unlock-hunts'),
+      name: 'investigation_plan',
+      arguments: {
+        inventory: ['evidence/a.pcap'],
+        gaps: ['C2 domain unknown'],
+        hypotheses: [{
+          id: 'h-c2',
+          claim: 'I believe 198.51.100.80 is C2 because 10.0.10.2 talks to that non-LAN cue',
+          disconfirm: 'SNI is a CDN or update name',
+          label: 'c2',
+        }, {
+          id: 'h-cdn',
+          claim: 'I believe 203.0.113.80 is CDN because update.microsoft.com is evidenced there',
+          disconfirm: 'a non-CDN dotted name is evidenced on that IP',
+          label: 'cdn',
+        }],
+      },
+      agent: owner,
+    })
+    expect(plan.isError).toBe(false)
+    expect(calls.some(call => String(call.display_filter ?? '').includes('eth.src'))).toBe(true)
+    expect(calls.some(call => String(call.display_filter ?? '').includes('kerberos.CNameString')))
+      .toBe(true)
+    const actions = foldActions(owner.session.events)
+    expect(actions.length).toBeGreaterThan(0)
+    expect(actions.every(action => action.hypothesis_id === 'h-c2')).toBe(true)
+    expect(actions.some(action => action.huntKind === 'eth-src')).toBe(true)
+    expect(actions.some(action => action.huntKind === 'kerberos-cname')).toBe(true)
   })
 
   it('denies a resolved bind with the matching Plan reason', async () => {
@@ -2388,6 +2462,13 @@ describe('investigation service', () => {
     expect(ready.isError).toBe(false)
 
     const { ctx: ctx2, owner: owner2 } = await setup({}, { mindset: false })
+    ctx2.investigation.recordMission(owner2.session, {
+      purpose: CHASSIS_MISSION_PURPOSE,
+      slots: { '0a': { value: 'valid' } },
+      closedMeans: [...CHASSIS_CLOSED_MEANS],
+      cue: { addr: '198.51.100.80', evidence_id: 'conv-1' },
+      cueValidation: 'valid',
+    })
     ctx2.investigation.recordPlan(owner2.session, {
       hypotheses: [{
         id: 'h-c2',
@@ -2409,6 +2490,20 @@ describe('investigation service', () => {
     expect(noInventory.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
       PLAN_INVENTORY_REASON,
     )
+  })
+
+  it('stamps chassis Mission on session/created without unlocking hunts', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-investigation-chassis-'))
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(Investigation, { caseDir: root, evidenceReadOnly: true, autoHunt: true })
+    const session = ctx.sessions.create()
+    expect(foldMission(session.events)?.purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(foldMission(session.events)?.cue.addr).toBe('cue-pending')
+    expect(foldMission(session.events)?.cueValidation).toBe('open')
+    expect(ctx.investigation.ensureChassisMission(session)).toBe(false)
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

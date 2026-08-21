@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-extra-wan-c2-hunt-after-live-bind.md
-2026-08-21-extra-wan-c2-hunt-after-live-bind.md: 4f9068bca7a80d2acb30fbda7e5ac0aaca06d4ed
-2026-08-21-extra-wan-c2-hunt-after-live-bind.zh.md: 58f419b5ad529c15b90743098c709918ace940c8
+2026-08-21-extra-wan-c2-hunt-after-live-bind.md: f8dc9e27be2c743f12308fe7be61714bcf1433d3
+2026-08-21-extra-wan-c2-hunt-after-live-bind.zh.md: d29c989a49974b3404722782c4fc74e2dbc3ede1

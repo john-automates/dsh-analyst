@@ -2,8 +2,8 @@
  * Analyst Mindset chassis: Mission / Plan / Action / Report wrap DINQ
  * (Observation → Question → Hypothesis → Answer → Bind → Who/Where).
  * Thesis-revise is a scenario object, not a fourth IR phase.
- * The plugin stamps Mission at session start. Identity hunts may run
- * after that Mission. Bind is the gate that needs a named C2 hypothesis.
+ * The plugin stamps Mission at session start to scope the case.
+ * Auto-hunts run only when Plan is ready. Bind needs a named C2 hypothesis.
  *
  * @module @deepseek-ai/dsh-investigation/mindset
  */
@@ -44,6 +44,10 @@ export const PLAN_INVENTORY_REASON =
 /** Deny text when slot 0a marked the cue invalid. */
 export const CUE_INVALID_REASON =
   'unbound: slot 0a cueValidation is invalid; validate the cue before bind_relationship.'
+
+/** Deny text when slot 0a is still the chassis pending cue. */
+export const CUE_PENDING_REASON =
+  'unbound: slot 0a must name a real cue (valid or explicitly open) before bind_relationship.'
 
 /** Deny text when the model tries to overwrite the chassis Mission purpose. */
 export const MISSION_PURPOSE_REASON =
@@ -188,8 +192,9 @@ export function sameHuntExtras(
 }
 
 /**
- * Chassis Mission stamped at session start. Identity hunts may run after
- * this exists. Bind still needs a named C2 hypothesis on the Plan.
+ * Chassis Mission stamped at session start. Scopes the case only.
+ * cueValidation `open` here is pending until investigation_mission names
+ * a real cue. That pending cue does not unlock auto-hunts or bind.
  * @returns the chassis Mission (cue pending, slot 0a open).
  */
 export function chassisMission(): InvestigationMission {
@@ -203,14 +208,14 @@ export function chassisMission(): InvestigationMission {
 }
 
 /**
- * Whether Plan is ready for extra-wan / c2-domain auto-run and for a
- * successful bind. Requires at least one C2 hypothesis, at least one
- * CDN/DC/update alternative, and an inventory of what can attest.
- * Cue `invalid` blocks. Mission alone is never enough. A missing Mission
- * does not block when Plan is ready (chassis stamps Mission before hunts).
+ * Whether Plan is ready for any auto-run and for a successful bind.
+ * Requires a named cue (`valid` or explicitly `open`, not cue-pending),
+ * at least one C2 hypothesis, at least one CDN/DC/update alternative,
+ * and an inventory of what can attest. Cue `invalid` blocks. Mission
+ * alone is never enough. Chassis cue-pending is not a validated observation.
  * @param mission - last Mission, or undefined.
  * @param plan - folded Plan.
- * @returns true when leftover hunts and bind success may proceed.
+ * @returns true when auto-hunts and bind success may proceed.
  */
 export function planReady(
   mission: InvestigationMission | undefined,
@@ -220,21 +225,41 @@ export function planReady(
 }
 
 /**
- * Deny reason when a resolved bind may not be recorded.
+ * Deny reason when a resolved bind may not be recorded and auto-hunts
+ * must stay off.
  * @param mission - last Mission, or undefined.
  * @param plan - folded Plan.
- * @returns a bind deny reason, or undefined when bind may proceed.
+ * @returns a bind deny reason, or undefined when bind and auto-run may proceed.
  */
 export function planReadyDenyReason(
   mission: InvestigationMission | undefined,
   plan: InvestigationPlan,
 ): string | undefined {
-  if (mission?.cueValidation === 'invalid') return CUE_INVALID_REASON
+  const cueDeny = cueSlotDenyReason(mission)
+  if (cueDeny !== undefined) return cueDeny
   if (!plan.hypotheses.some(item => item.label === 'c2')) return PLAN_C2_HYPOTHESIS_REASON
   if (!plan.hypotheses.some(item => ALTERNATIVE_LABELS.has(item.label))) {
     return PLAN_ALTERNATIVE_REASON
   }
   if (plan.inventory.length === 0) return PLAN_INVENTORY_REASON
+  return undefined
+}
+
+/**
+ * Deny reason when slot 0a is not a named, valid-or-open cue.
+ * @param mission - last Mission, or undefined.
+ * @returns a cue deny reason, or undefined when the cue slot is ready.
+ */
+function cueSlotDenyReason(mission: InvestigationMission | undefined): string | undefined {
+  if (mission?.cueValidation === 'invalid') return CUE_INVALID_REASON
+  if (
+    mission === undefined
+    || (mission.cueValidation !== 'valid' && mission.cueValidation !== 'open')
+    || mission.cue.addr === CHASSIS_CUE_PENDING.addr
+    || mission.cue.addr.trim() === ''
+  ) {
+    return CUE_PENDING_REASON
+  }
   return undefined
 }
 
@@ -248,15 +273,36 @@ export function c2HypothesisId(plan: InvestigationPlan): string | undefined {
 }
 
 /**
- * C2 hypothesis id required on a leftover Action row.
+ * C2 hypothesis id required on an Action row that tests C2.
  * @param plan - folded Plan.
  * @returns that id.
  * @throws when Plan has no C2 hypothesis.
  */
 export function requireC2HypothesisId(plan: InvestigationPlan): string {
   const id = c2HypothesisId(plan)
-  if (id === undefined) throw new Error('leftover Action requires a named C2 hypothesis')
+  if (id === undefined) throw new Error('Action requires a named C2 hypothesis')
   return id
+}
+
+/**
+ * Hypothesis id an Action row cites for one auto-run hunt.
+ * Identity hunts cite the first victim hypothesis when one exists,
+ * otherwise the first C2 hypothesis. leftover and other-end cite C2.
+ * @param hunt - hunt that ran.
+ * @param plan - folded Plan (must be ready).
+ * @returns that id.
+ */
+export function hypothesisIdForHunt(hunt: Hunt, plan: InvestigationPlan): string {
+  if (
+    hunt.kind === 'eth-src'
+    || hunt.kind === 'name-service'
+    || hunt.kind === 'kerberos-cname'
+    || hunt.kind === 'samr-userinfo'
+  ) {
+    const victim = plan.hypotheses.find(item => item.label === 'victim')?.id
+    if (victim !== undefined) return victim
+  }
+  return requireC2HypothesisId(plan)
 }
 
 /**
@@ -317,10 +363,12 @@ export function actionForHunt(
 }
 
 /**
- * Thesis-revise outcome for one extra-wan or c2-domain dump.
+ * Thesis-revise outcome for one auto-run hunt dump.
+ * Leftover extra-wan / c2-domain use leftover confirm/kill wording.
+ * Identity and other-end hunts confirm on a harvested value.
  * @param huntKind - hunt that ran.
- * @param confirm - whether a non-CDN leftover was harvested.
- * @param killed - whether the dump evidenced only CDN/update.
+ * @param confirm - whether the dump harvested a proving value.
+ * @param killed - whether a leftover dump evidenced only CDN/update.
  * @returns the scenario object.
  */
 export function thesisForHuntDump(
@@ -328,25 +376,41 @@ export function thesisForHuntDump(
   confirm: boolean,
   killed: boolean,
 ): ThesisRevise {
+  if (huntKind === 'extra-wan' || huntKind === 'c2-domain') {
+    if (confirm) {
+      return {
+        name: huntKind,
+        claim: `I believe ${huntKind} produced a leftover C2 because the dump harvested a non-CDN dest or name`,
+        rule: 'non-CDN leftover on a remaining C2 IP',
+        result: 'confirm',
+      }
+    }
+    if (killed) {
+      return {
+        name: huntKind,
+        claim: `I believe ${huntKind} produced only CDN/update because the dump named a well-known update or CDN dest`,
+        rule: 'CDN/update dests stay off leftovers',
+        result: 'kill',
+      }
+    }
+    return {
+      name: huntKind,
+      claim: `I believe ${huntKind} is still open because the dump harvested no leftover`,
+      rule: 'empty dump is a gap',
+      result: 'gap',
+    }
+  }
   if (confirm) {
     return {
       name: huntKind,
-      claim: `I believe ${huntKind} produced a leftover C2 because the dump harvested a non-CDN dest or name`,
-      rule: 'non-CDN leftover on a remaining C2 IP',
+      claim: `I believe ${huntKind} produced an identity because the dump harvested a value`,
+      rule: 'harvested identity on this hunt',
       result: 'confirm',
-    }
-  }
-  if (killed) {
-    return {
-      name: huntKind,
-      claim: `I believe ${huntKind} produced only CDN/update because the dump named a well-known update or CDN dest`,
-      rule: 'CDN/update dests stay off leftovers',
-      result: 'kill',
     }
   }
   return {
     name: huntKind,
-    claim: `I believe ${huntKind} is still open because the dump harvested no leftover`,
+    claim: `I believe ${huntKind} is still open because the dump harvested no identity`,
     rule: 'empty dump is a gap',
     result: 'gap',
   }

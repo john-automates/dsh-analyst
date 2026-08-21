@@ -13,7 +13,7 @@ const CDN_DEST = '203.0.113.80'
 /**
  * Stamp a chassis Mission (cue validated) and append-only Plan.
  * Inventory names the case pcap. Hypotheses are one C2 and one CDN
- * alternative. Bind still needs this Plan. Identity hunts do not.
+ * alternative. Bind and auto-hunts need this Plan.
  * @param investigation - live investigation service.
  * @param session - session to append to.
  */

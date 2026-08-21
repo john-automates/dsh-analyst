@@ -12,8 +12,8 @@
  * deny write/edit of case-root close files, persist leftover extras from
  * the Report hook even when prose case_report stays unbound, and persist a
  * 5W1H close packet whose who/where project from the bound victim entity row.
- * The plugin stamps Mission at session start so identity hunts are not
- * blocked on a model essay. Bind still needs a named C2 hypothesis.
+ * The plugin stamps Mission at session start to scope the case. Auto-hunts
+ * run only when Plan is ready. Bind still needs a named C2 hypothesis.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -46,8 +46,8 @@ import {
 import { formatLedger } from './ledger.ts'
 import {
   actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
-  foldActions, foldExtras, foldMission, foldPlan, killedHypothesisIds, MISSION_PURPOSE_REASON,
-  planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras, requireC2HypothesisId,
+  foldActions, foldExtras, foldMission, foldPlan, hypothesisIdForHunt, killedHypothesisIds,
+  MISSION_PURPOSE_REASON, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
   sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
@@ -76,8 +76,9 @@ export {
   CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
   isBelieveBecauseClaim, killedHypothesisIds, MISSION_PURPOSE_REASON, planEntryDenyReason,
   planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
-  PLAN_INVENTORY_REASON, CUE_INVALID_REASON, PLAN_NOT_READY_REASON, projectHuntExtras,
-  requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+  PLAN_INVENTORY_REASON, CUE_INVALID_REASON, CUE_PENDING_REASON, PLAN_NOT_READY_REASON,
+  projectHuntExtras, hypothesisIdForHunt, requireC2HypothesisId, sameHuntExtras,
+  thesisForHuntDump,
 } from './mindset.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
@@ -107,7 +108,7 @@ export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
-  'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Identity hunts run after that Mission. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
+  'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Mission scopes the case. Auto-hunts run after Plan is ready, including a named cue that is valid or explicitly open. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
   'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
   'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
@@ -141,12 +142,14 @@ export interface Config {
    * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras)
    * after a live bind whose Plan named a C2 hypothesis and a CDN/DC/update
    * alternative and inventoried what can attest. Outstanding issued hunts
-   * then run through `pcap_filter` with the scoped display_filter and
-   * fields; results harvest into the ledger. Non-LAN / C2 IP subjects do
-   * not auto-run, except `other-end` and `c2-domain`. `extra-wan` auto-runs
-   * for the LAN victim even when a C2-talking focus IP exists. The chassis
-   * stamps Mission at start so identity hunts are not blocked on a model
-   * essay. Bind is the leftover-hunt gate. Defaults to true.
+   * then run through `pcap_filter` only when Plan is ready (named cue
+   * valid or explicitly open, C2 hypothesis, CDN/DC/update alternative,
+   * inventory), with the scoped display_filter and fields; results harvest
+   * into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
+   * `other-end` and `c2-domain`. `extra-wan` auto-runs for the LAN victim
+   * even when a C2-talking focus IP exists. The chassis stamps Mission at
+   * start to scope the case. Mission alone does not auto-run hunts. Bind
+   * still needs a named C2 hypothesis. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -775,9 +778,9 @@ export class Investigation extends Service {
   }
 
   /**
-   * Stamp the chassis Mission when the session has none. Identity hunts
-   * may then run. Does not stamp Plan. Bind still needs a named C2
-   * hypothesis on the Plan.
+   * Stamp the chassis Mission when the session has none. Scopes the case
+   * only. Does not stamp Plan and does not unlock auto-hunts. Bind still
+   * needs a named C2 hypothesis on the Plan.
    * @param session - session to stamp.
    * @returns true when a Mission event was appended.
    */
@@ -919,9 +922,7 @@ export class Investigation extends Service {
       await this.autoRunOutstanding(exec, session, current, (text, hunt) => {
         const before = added.length
         harvestFrom(text, `${evidence()}\n${text}`, scopeIpFromHunt(hunt))
-        if (hunt.kind === 'extra-wan' || hunt.kind === 'c2-domain') {
-          this.recordHuntAction(session, hunt, added.slice(before))
-        }
+        this.recordHuntAction(session, hunt, added.slice(before))
         if (hunt.kind === 'extra-wan') {
           const bind = foldBind(session.events)
           if (bind !== undefined) {
@@ -967,22 +968,23 @@ export class Investigation extends Service {
   }
 
   /**
-   * Record one Action row for an extra-wan or c2-domain dump.
+   * Record one Action row for an auto-run hunt dump.
    * @param session - session to append to.
    * @param hunt - hunt that just ran.
    * @param harvested - identities harvested from that dump.
    */
   private recordHuntAction(session: Session, hunt: Hunt, harvested: readonly Identity[]): void {
-    const hypothesisId = requireC2HypothesisId(foldPlan(session.events))
+    const hypothesisId = hypothesisIdForHunt(hunt, foldPlan(session.events))
     let confirm = false
     let killed = false
     for (const identity of harvested) {
       if (hunt.kind === 'extra-wan' && identity.kind === 'ip' && isNonLanUnicastIpv4(identity.value)) {
         confirm = true
-      }
-      if (hunt.kind === 'c2-domain' && identity.kind === 'hostname') {
+      } else if (hunt.kind === 'c2-domain' && identity.kind === 'hostname') {
         if (isCdnOrUpdateName(identity.value)) killed = true
         else confirm = true
+      } else if (hunt.kind !== 'extra-wan' && hunt.kind !== 'c2-domain') {
+        confirm = true
       }
     }
     if (confirm) killed = false
@@ -1014,12 +1016,12 @@ export class Investigation extends Service {
     const executed = executedSet(this.executedHuntKeys, session)
     const runContext = autoRunContext(exec)
     for (;;) {
-      const extrasReady = planReady(foldMission(session.events), foldPlan(session.events))
+      const ready = planReady(foldMission(session.events), foldPlan(session.events))
       const hunt = huntsToAutoRun(
         foldHunts(session.events),
         evidenceTextForHunts(session.events, current),
         executed,
-        extrasReady,
+        ready,
       )[0]
       if (hunt === undefined) break
       executed.add(huntKey(hunt))
@@ -1034,8 +1036,7 @@ export class Investigation extends Service {
         // pcap_filter / tshark failed; the triggering result must still succeed.
         continue
       }
-      const text = huntResultText(value)
-      if (text !== '') onText(text, hunt)
+      onText(huntResultText(value), hunt)
     }
   }
 }

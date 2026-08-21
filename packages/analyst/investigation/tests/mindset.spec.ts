@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_MISSION_PURPOSE,
-  CUE_INVALID_REASON, foldActions, foldExtras, foldMission, foldPlan,
-  isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason,
-  PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON,
-  projectHuntExtras, requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+  CUE_INVALID_REASON, CUE_PENDING_REASON, foldActions, foldExtras, foldMission, foldPlan,
+  hypothesisIdForHunt, isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason,
+  planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
+  PLAN_INVENTORY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras,
+  thesisForHuntDump,
 } from '../src/mindset.ts'
 import type {
   CaseReport, Hunt, Identity, InvestigationAction, InvestigationMission, InvestigationPlanEntry,
@@ -159,7 +160,10 @@ describe('analyst mindset chassis', () => {
 
   it('requires a ready Plan and does not treat Mission as enough', () => {
     expect(chassisMission().purpose).toBe(CHASSIS_MISSION_PURPOSE)
-    expect(planReady(undefined, readyPlan)).toBe(true)
+    expect(planReady(undefined, readyPlan)).toBe(false)
+    expect(planReadyDenyReason(undefined, readyPlan)).toBe(CUE_PENDING_REASON)
+    expect(planReady(chassisMission(), readyPlan)).toBe(false)
+    expect(planReadyDenyReason(chassisMission(), readyPlan)).toBe(CUE_PENDING_REASON)
     expect(planReady(mission({ cueValidation: 'invalid' }), readyPlan)).toBe(false)
     expect(planReadyDenyReason(mission({ cueValidation: 'invalid' }), readyPlan)).toBe(CUE_INVALID_REASON)
     expect(planReady(mission(), { inventory: [], gaps: [], hypotheses: readyPlan.hypotheses }))
@@ -180,13 +184,28 @@ describe('analyst mindset chassis', () => {
     expect(planReady(mission({ cueValidation: 'open' }), readyPlan)).toBe(true)
     expect(planReady(mission(), readyPlan)).toBe(true)
     expect(planReadyDenyReason(undefined, { inventory: [], gaps: [], hypotheses: [] }))
-      .toBe(PLAN_C2_HYPOTHESIS_REASON)
+      .toBe(CUE_PENDING_REASON)
     expect(planReadyDenyReason(mission(), readyPlan)).toBeUndefined()
     expect(c2HypothesisId({ inventory: [], gaps: [], hypotheses: [] })).toBeUndefined()
     expect(c2HypothesisId(readyPlan)).toBe('h-c2')
     expect(requireC2HypothesisId(readyPlan)).toBe('h-c2')
     expect(() => requireC2HypothesisId({ inventory: [], gaps: [], hypotheses: [] }))
-      .toThrow('leftover Action requires a named C2 hypothesis')
+      .toThrow('Action requires a named C2 hypothesis')
+    const eth: Hunt = { kind: 'eth-src', subjectKind: 'ip', subject: LAN }
+    expect(hypothesisIdForHunt(eth, readyPlan)).toBe('h-c2')
+    expect(hypothesisIdForHunt(eth, {
+      ...readyPlan,
+      hypotheses: [{
+        id: 'h-victim',
+        claim: 'I believe 10.0.10.2 is victim because it talks from that LAN IP',
+        disconfirm: 'the MAC is a DC',
+        label: 'victim',
+      }, ...readyPlan.hypotheses],
+    })).toBe('h-victim')
+    expect(hypothesisIdForHunt(
+      { kind: 'extra-wan', subjectKind: 'ip', subject: LAN },
+      readyPlan,
+    )).toBe('h-c2')
   })
 
   it('validates Plan claims and builds Action thesis rows', () => {
@@ -214,6 +233,8 @@ describe('analyst mindset chassis', () => {
       .toBe(LAN)
     expect(thesisForHuntDump('c2-domain', false, true).result).toBe('kill')
     expect(thesisForHuntDump('c2-domain', true, true).result).toBe('confirm')
+    expect(thesisForHuntDump('eth-src', true, false).result).toBe('confirm')
+    expect(thesisForHuntDump('eth-src', false, false).result).toBe('gap')
     expect(killedHypothesisIds([
       actionForHunt(hunt, 'h-c2', thesisForHuntDump('extra-wan', false, true)),
       actionForHunt(hunt, 'h-c2', thesisForHuntDump('extra-wan', false, true)),

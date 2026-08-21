@@ -243,9 +243,10 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hostHunt, twoClientFixture)).toBe(false)
     expect(shouldAutoRunHunt(userHunt, twoClientFixture)).toBe(false)
     const issued = [c2Mac, idleMac, lanMac, hostHunt]
-    expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([lanMac])
-    expect(huntsToAutoRun(issued, '', new Set())).toEqual([idleMac, lanMac, hostHunt])
-    expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]))).toEqual([])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set(), true)).toEqual([lanMac])
+    expect(huntsToAutoRun(issued, '', new Set(), true)).toEqual([idleMac, lanMac, hostHunt])
+    expect(huntsToAutoRun(issued, twoClientFixture, new Set([huntKey(lanMac)]), true)).toEqual([])
   })
 
   it('issues other-end for a cue IP and auto-runs that hunt', () => {
@@ -264,7 +265,8 @@ describe('auto-issued hunts', () => {
     expect(shouldAutoRunHunt(hunt, '')).toBe(true)
     expect(shouldAutoRunHunt(hunt, twoClientFixture)).toBe(true)
     expect(shouldAutoRunHunt({ kind: 'other-end', subjectKind: 'ip', subject: LAN_A }, '')).toBe(false)
-    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([hunt])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set())).toEqual([])
+    expect(huntsToAutoRun([hunt], twoClientFixture, new Set(), true)).toEqual([hunt])
     expect(huntsForNewIdentities([c2Peer], [])).not.toContainEqual(hunt)
   })
 

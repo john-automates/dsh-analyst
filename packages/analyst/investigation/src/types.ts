@@ -62,8 +62,8 @@ export interface InvestigationMission {
   purpose: string
   /**
    * Scored or named slots, including `0a` for validate-the-cue.
-   * The plugin stamps Mission at session start. Identity hunts may run
-   * after that Mission. The model cannot overwrite purpose.
+   * The plugin stamps Mission at session start to scope the case.
+   * Auto-hunts run after Plan is ready. The model cannot overwrite purpose.
    */
   slots: Record<string, { score?: number; value?: string }>
   /** Closed investigative means for this case. */
@@ -269,12 +269,12 @@ declare module '@deepseek-ai/dsh-session/types' {
      * remaining C2 IPv4 (bound plus harvested extras; TLS SNI / DNS). A
      * both-LAN or CDN/update C2 deny does not issue `other-end`,
      * `extra-wan`, or `c2-domain` and does not invent a C2. When `autoHunt`
-     * is true,
-     * outstanding issued hunts execute through `pcap_filter` with the scoped
-     * display filter; `other-end` and `c2-domain` auto-run even though the
-     * subject is the cue or C2, and `extra-wan` auto-runs for the LAN victim
-     * even when a C2-talking focus IP exists. A new hostname issues Kerberos
-     * then SAMR. A new user issues SAMR.
+     * is true and Plan is ready, outstanding issued hunts execute through
+     * `pcap_filter` with the scoped display filter; `other-end` and
+     * `c2-domain` auto-run even though the subject is the cue or C2, and
+     * `extra-wan` auto-runs for the LAN victim even when a C2-talking
+     * focus IP exists. Mission alone does not auto-run. A new hostname
+     * issues Kerberos then SAMR. A new user issues SAMR.
      */
     'investigation/hunt': Hunt
     /**
@@ -305,8 +305,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     /**
      * Mission persist. The last `investigation/mission` wins. The plugin
      * stamps Mission at session start as a victim-identity + C2
-     * investigation. Identity hunts may run after that Mission. Bind
-     * still needs a named C2 hypothesis on the Plan.
+     * investigation. Mission scopes the case. Auto-hunts run after Plan
+     * is ready. Bind still needs a named C2 hypothesis on the Plan.
      */
     'investigation/mission': InvestigationMission
     /**
@@ -315,8 +315,9 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'investigation/plan': InvestigationPlanEntry
     /**
-     * One Action hunt outcome. Auto-run extra-wan / c2-domain rows carry
-     * `hypothesis_id`. BindRelationship is not a substitute for naming the C2 H.
+     * One Action hunt outcome. Every auto-run hunt row carries
+     * `hypothesis_id`, including identity hunts. BindRelationship is not
+     * a substitute for naming the C2 H.
      */
     'investigation/action': InvestigationAction
     /**
