@@ -540,13 +540,14 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * who/where are the projected victim entity row; omitted model keys are
  * filled from that row after deny/coerce. A submitted user, hostname, or
  * full_name is kept when the row has no donated value and that identity
- * does not donate to a different entity. `c2_domain` is the harvested
+ * does not donate to a different entity. A submitted mac is kept unless
+ * that MAC only appears on DC/gateway frames. `c2_domain` is the harvested
  * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:169`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:170`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 
