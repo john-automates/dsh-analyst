@@ -255,6 +255,8 @@ export interface HuntFilterSpec {
  * @param hunt - the hunt to execute or notice.
  * @param boundC2 - unique bound non-LAN C2 IPv4, used to exclude that dest
  * from `extra-wan`.
+ * extra-wan `ip.dst` dumps unique-collapse in first-seen order before the
+ * `pcap_filter` output clip.
  * @returns filter and fields for `pcap_filter`.
  */
 export function huntFilterSpec(hunt: Hunt, boundC2?: string): HuntFilterSpec {

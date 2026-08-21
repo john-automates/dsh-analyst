@@ -140,6 +140,50 @@ export function clipOutput(text: string, maxOutputChars: number): string {
 }
 
 /**
+ * Keep first-seen unique non-empty lines.
+ * extra-wan `ip.dst` dumps unique-collapse before {@link clipOutput} so a
+ * later first-seen dest survives a per-packet dump that would exceed
+ * `maxOutputChars`.
+ * @param text - raw helper stdout or combined streams.
+ * @returns unique lines in first-seen order, joined with `\n`.
+ */
+export function uniqueCollapseLines(text: string): string {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    if (line === '' || seen.has(line)) continue
+    seen.add(line)
+    out.push(line)
+  }
+  return out.join('\n')
+}
+
+/**
+ * Whether `pcap_filter` unique-collapses this field set before the output clip.
+ * extra-wan is the only hunt whose fields are exactly `ip.dst`.
+ * @param fields - coerced `-e` names.
+ * @returns true for a sole `ip.dst` field.
+ */
+export function uniqueCollapsePcapFields(fields: readonly string[]): boolean {
+  return fields.length === 1 && fields[0] === 'ip.dst'
+}
+
+/**
+ * Clip helper output, unique-collapsing first when requested.
+ * @param text - combined stdout/stderr.
+ * @param maxOutputChars - inclusive character cap.
+ * @param uniqueCollapse - extra-wan `ip.dst` first-seen unique-collapse.
+ * @returns clipped text, unique-collapsed first when `uniqueCollapse` is true.
+ */
+function finishHelperOutput(
+  text: string,
+  maxOutputChars: number,
+  uniqueCollapse: boolean,
+): string {
+  return clipOutput(uniqueCollapse ? uniqueCollapseLines(text) : text, maxOutputChars)
+}
+
+/**
  * Format tshark `-T fields` rows so harvest can read labeled values.
  * @param fields - `-e` field names, in column order.
  * @param stdout - raw tshark stdout.
@@ -167,7 +211,8 @@ interface ExecFileError extends Error {
  * Run one helper without a shell, honoring the tool signal and case cwd.
  * @param bin - executable path or PATH name.
  * @param args - argv after the executable.
- * @param options - case directory, deadline, output cap, and cancellation.
+ * @param options - case directory, deadline, output cap, cancellation, and
+ *   optional extra-wan unique-collapse before clip.
  * @returns clipped stdout, with stderr appended when present.
  */
 export async function runHelper(
@@ -178,8 +223,10 @@ export async function runHelper(
     timeoutMs: number
     maxOutputChars: number
     signal: AbortSignal
+    uniqueCollapse?: boolean
   },
 ): Promise<string> {
+  const uniqueCollapse = options.uniqueCollapse === true
   try {
     const { stdout, stderr } = await execFileAsync(bin, [...args], {
       cwd: options.cwd,
@@ -189,7 +236,7 @@ export async function runHelper(
       windowsHide: true,
     })
     const combined = stderr === '' ? stdout : `${stdout}\n${stderr}`
-    return clipOutput(combined, options.maxOutputChars)
+    return finishHelperOutput(combined, options.maxOutputChars, uniqueCollapse)
   } catch (error) {
     if (options.signal.aborted) throw new Error(`${bin} was cancelled`)
     const failure = error as ExecFileError
@@ -198,7 +245,7 @@ export async function runHelper(
       throw new Error(`${bin} exceeded commandTimeoutMs (${options.timeoutMs})`)
     }
     const combined = helperFailureText(failure)
-    if (combined !== '') return clipOutput(combined, options.maxOutputChars)
+    if (combined !== '') return finishHelperOutput(combined, options.maxOutputChars, uniqueCollapse)
     throw new Error(`${bin} failed: ${failure.message}`)
   }
 }
@@ -280,6 +327,7 @@ export function apply(ctx: Context, config: Config): void {
         timeoutMs: commandTimeoutMs,
         maxOutputChars,
         signal: exec.signal,
+        uniqueCollapse: uniqueCollapsePcapFields(fields),
       })
       return { text: fields.length > 0 ? formatFieldRows(fields, stdout) : stdout }
     },

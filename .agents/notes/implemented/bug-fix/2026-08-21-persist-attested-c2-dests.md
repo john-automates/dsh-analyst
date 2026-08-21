@@ -16,7 +16,7 @@ Shrinking persist to the bound C2 first would drop the dest that evidences the a
 
 Persist `acceptedC2Ips` is the bound C2 when it is not CDN/CF, plus dests that evidence that accepted domain. A leftover victim-stamped WAN dest with no such attestation does not persist. Who/where stay the victim row. A second bind is not invented.
 
-Identity leftover, how the accepted C2-domain dest is chosen, Cloudflare prefixes, the CDN/update suffix list, Mission/Plan gates, auto-close, and 45.125 clipping stay out of this change. Tests use a synthetic LAN client, TEST-NET C2 `198.51.100.80`, extra WAN `203.0.113.50` with `payload.example.test` or `c2.example.test`, unnamed extra `203.0.113.60`, CDN dest `203.0.113.80`, and Cloudflare-range fixture `104.16.1.1`. Live-case gold names and IPs are not listed.
+Identity leftover, how the accepted C2-domain dest is chosen, Cloudflare prefixes, the CDN/update suffix list, Mission/Plan gates, auto-close, and extra-wan clip stay out of this change ([unique-collapse extra-wan before clip](2026-08-21-unique-collapse-extra-wan-before-clip.md)). Tests use a synthetic LAN client, TEST-NET C2 `198.51.100.80`, extra WAN `203.0.113.50` with `payload.example.test` or `c2.example.test`, unnamed extra `203.0.113.60`, CDN dest `203.0.113.80`, and Cloudflare-range fixture `104.16.1.1`. Live-case gold names and IPs are not listed.
 
 ## Alternatives considered
 
@@ -30,7 +30,7 @@ Identity leftover, how the accepted C2-domain dest is chosen, Cloudflare prefixe
 
 **Auto-close identity, retouch leftover identity persist, or change Mission/Plan gates.** Rejected: those leftovers are separate.
 
-**Fix 45.125 leftover clip in the same persist.** Rejected: that miss is a separate leftover.
+**Fix extra-wan leftover clip in the same persist.** Rejected: that miss is a separate leftover ([unique-collapse extra-wan before clip](2026-08-21-unique-collapse-extra-wan-before-clip.md)).
 
 **Teach only the methodology prompt.** Rejected: leftover extras would still persist unnamed dests.
 

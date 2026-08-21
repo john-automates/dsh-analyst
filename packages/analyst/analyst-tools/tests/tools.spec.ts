@@ -12,7 +12,10 @@ import ToolRuntime, { type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import Investigation from '@deepseek-ai/dsh-investigation'
 import { stampReadyMindset } from '../../investigation/tests/mindset-fixture.ts'
 import * as tools from '../src/index.ts'
-import { clipOutput, formatFieldRows, helperFailureText, runHelper } from '../src/index.ts'
+import {
+  clipOutput, formatFieldRows, helperFailureText, runHelper, uniqueCollapseLines,
+  uniqueCollapsePcapFields,
+} from '../src/index.ts'
 
 const signal = new AbortController().signal
 let root: string | undefined
@@ -91,6 +94,14 @@ describe('analyst tools', () => {
     expect(formatFieldRows(['kerberos.CNameString', 'other'], 'alice\n')).toBe(
       'kerberos.CNameString: alice\tother: ',
     )
+    expect(uniqueCollapseLines('203.0.113.10\n203.0.113.10\n203.0.113.99\n203.0.113.10\n')).toBe(
+      '203.0.113.10\n203.0.113.99',
+    )
+    expect(uniqueCollapseLines('a\n\nb\na\n')).toBe('a\nb')
+    expect(uniqueCollapsePcapFields(['ip.dst'])).toBe(true)
+    expect(uniqueCollapsePcapFields(['ip.src'])).toBe(false)
+    expect(uniqueCollapsePcapFields(['ip.dst', 'ip.src'])).toBe(false)
+    expect(uniqueCollapsePcapFields([])).toBe(false)
     expect(helperFailureText({})).toBe('')
     expect(helperFailureText({ stdout: 1, stderr: 2 })).toBe('')
     expect(helperFailureText({ stdout: 'out' })).toBe('out')
@@ -240,6 +251,76 @@ describe('analyst tools', () => {
     expect(invalid.isError).toBe(true)
     expect(text(invalid)).toContain('ldap.sAMAccountName')
     expect(text(invalid)).not.toMatch(/INVALID_ARGS|invalid arguments/i)
+    await rm(binDir, { recursive: true, force: true })
+  })
+
+  it('unique-collapses extra-wan ip.dst before the output clip', async () => {
+    const early = '203.0.113.10'
+    const late = '203.0.113.99'
+    const packetLines = Array.from({ length: 10 }, () => early)
+    packetLines.push(late)
+    const raw = `${packetLines.join('\n')}\n`
+    expect(raw.length).toBeGreaterThan(80)
+    expect(raw.indexOf(late)).toBeGreaterThan(80)
+    expect(raw.length).toBeLessThan(320)
+    expect(uniqueCollapseLines(raw)).toBe(`${early}\n${late}`)
+    const binDir = await mkdtemp(join(tmpdir(), 'dsh-tshark-unique-dst-'))
+    const dump = join(binDir, 'dump.txt')
+    await writeFile(dump, raw)
+    const tsharkBin = await script(binDir, 'tshark', `cat '${dump}'`)
+    const extraWan = await setup({ tsharkBin, maxOutputChars: 80 })
+    const extraWanDump = await extraWan.ctx.tools.execute({
+      signal,
+      callId: CallId('extra-wan-unique'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: 'ip.src == 10.0.10.2',
+        fields: ['ip.dst'],
+      },
+      agent: extraWan.owner,
+    })
+    expect(extraWanDump.isError).toBe(false)
+    expect(text(extraWanDump)).toBe(`ip.dst: ${early}\nip.dst: ${late}`)
+    expect(text(extraWanDump)).not.toContain('truncated')
+    const otherEnd = await setup({ tsharkBin, maxOutputChars: 80 })
+    const otherEndDump = await otherEnd.ctx.tools.execute({
+      signal,
+      callId: CallId('other-end-clip'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: 'ip.dst == 198.51.100.80',
+        fields: ['ip.src'],
+      },
+      agent: otherEnd.owner,
+    })
+    expect(otherEndDump.isError).toBe(false)
+    expect(text(otherEndDump)).toContain(`ip.src: ${early}`)
+    expect(text(otherEndDump)).not.toContain(late)
+    expect(text(otherEndDump)).toContain('truncated')
+    const manyUnique = Array.from({ length: 10 }, (_, index) => `203.0.113.${index + 1}`)
+    const manyDump = join(binDir, 'many.txt')
+    await writeFile(manyDump, `${manyUnique.join('\n')}\n`)
+    const manyBin = await script(binDir, 'tshark-many', `cat '${manyDump}'`)
+    const clippedUnique = await setup({ tsharkBin: manyBin, maxOutputChars: 40 })
+    const clippedDump = await clippedUnique.ctx.tools.execute({
+      signal,
+      callId: CallId('extra-wan-clip-unique'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        fields: ['ip.dst'],
+      },
+      agent: clippedUnique.owner,
+    })
+    expect(clippedDump.isError).toBe(false)
+    expect(text(clippedDump)).toContain('ip.dst: 203.0.113.1')
+    expect(text(clippedDump)).toContain('truncated')
+    expect(text(clippedDump)).not.toContain('203.0.113.10')
+    await extraWan.ctx.fiber.dispose()
+    await otherEnd.ctx.fiber.dispose()
+    await clippedUnique.ctx.fiber.dispose()
     await rm(binDir, { recursive: true, force: true })
   })
 

@@ -16,7 +16,7 @@ Status: implemented
 
 持久化 `acceptedC2Ips` 是已绑定 C2（当它不是 CDN／CF 时），加上证据落在该已接受域名上的目的地址。没有这种证明的遗留、盖上受害端戳的 WAN 目的地址不持久化。who/where 仍是受害端行。不会发明第二次绑定。
 
-身份遗留、已接受 C2 域名目的地址的选择方式、Cloudflare 前缀、CDN／更新后缀列表、Mission／Plan 门、自动结案和 45.125 裁切不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2 `198.51.100.80`、带 `payload.example.test` 或 `c2.example.test` 的额外 WAN `203.0.113.50`、未点名额外地址 `203.0.113.60`、CDN 目的地址 `203.0.113.80`，以及 Cloudflare 段夹具 `104.16.1.1`。不列出线上案件的黄金名和 IP。
+身份遗留、已接受 C2 域名目的地址的选择方式、Cloudflare 前缀、CDN／更新后缀列表、Mission／Plan 门、自动结案和 extra-wan 裁切不在本次变更内（[在裁切之前对 extra-wan 目的地址按首次出现去重](2026-08-21-unique-collapse-extra-wan-before-clip.md)）。测试使用合成 LAN 客户端、TEST-NET C2 `198.51.100.80`、带 `payload.example.test` 或 `c2.example.test` 的额外 WAN `203.0.113.50`、未点名额外地址 `203.0.113.60`、CDN 目的地址 `203.0.113.80`，以及 Cloudflare 段夹具 `104.16.1.1`。不列出线上案件的黄金名和 IP。
 
 ## 备选方案
 
@@ -30,7 +30,7 @@ Status: implemented
 
 **自动结案身份、改动遗留身份持久化，或改 Mission／Plan 门。** 否决：那些遗留是分开的。
 
-**在同一次持久化里修 45.125 遗留裁切。** 否决：那次未命中是另一项遗留。
+**在同一次持久化里修 extra-wan 遗留裁切。** 否决：那次未命中是另一项遗留（[在裁切之前对 extra-wan 目的地址按首次出现去重](2026-08-21-unique-collapse-extra-wan-before-clip.md)）。
 
 **只改 methodology 提示。** 否决：遗留附加项仍会持久化未点名目的地址。
 
