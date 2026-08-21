@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-drop-locator-cidr-from-handle-string-coerce.md
-2026-08-21-drop-locator-cidr-from-handle-string-coerce.md: 9148f4bb84d9b570cfbad72211324f102120e918
-2026-08-21-drop-locator-cidr-from-handle-string-coerce.zh.md: 71967e77d9c302cec5c59b8f1e72db91a74a290d
+2026-08-21-drop-locator-cidr-from-handle-string-coerce.md: 6d7a34aabc84fbdcd1830eed23cdf3a2a1efcbe9
+2026-08-21-drop-locator-cidr-from-handle-string-coerce.zh.md: 851e0531b35dc0df4f310d99544b7346df788a2e
