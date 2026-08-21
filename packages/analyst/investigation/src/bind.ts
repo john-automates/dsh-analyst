@@ -542,10 +542,11 @@ function affiliatedWithDifferentEntity(
  * IPv4 a MAC, hostname, user, or full_name is evidenced on. A MAC uses the
  * unique talking IP from tool-result frames (`ip.src`, outbound `ip → peer`,
  * or ARP `is at`); hunt-subject `evidence_id` does not win over that. A user
- * or full_name uses the unique conversation client (`ip.src`). A stamped
- * client `evidence_id` is not a hunt-subject DC and does not invert the
- * endpoints. A hostname still uses hunt-subject `evidence_id`, then a
- * unique name-service line.
+ * or full_name uses the unique conversation client (`ip.src`), or the
+ * unique LAN / non-DC peer talking to a DC when the account line has no
+ * IP. A stamped client `evidence_id` is not a hunt-subject DC and is not
+ * passed into `conversationClientIp`. A hostname still uses hunt-subject
+ * `evidence_id`, then a unique name-service line.
  * @param identity - ledger identity.
  * @param evidenceText - tool-result text.
  * @returns the scoped IPv4, or undefined when none is unique.
@@ -566,8 +567,9 @@ function scopedIpForIdentity(identity: Identity, evidenceText: string): string |
  * Whether tool-result text evidences this identity on `victimAddr`.
  * A MAC is sourced from that IP (`ip.src`, outbound `ip → peer`, or ARP
  * `is at`). A user or full_name is on a Kerberos/SAMR conversation whose
- * client is that IP. Hostname uses hunt-subject or name-service scope and
- * is not selected here.
+ * client is that IP, or a field-only SAMR/CName line whose evidence text
+ * names that client talking to a DC. Hostname uses hunt-subject or
+ * name-service scope and is not selected here.
  * @param identity - ledger identity.
  * @param victimAddr - bound victim IPv4.
  * @param evidenceText - tool-result text.

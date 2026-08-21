@@ -5,12 +5,14 @@
  * that IP. A MAC stamps `evidence_id` from the talking IP that sources that
  * eth.src on the line, not from an `eth-src` hunt subject. User and full_name
  * stamp `evidence_id` from the conversation client IPv4 (the LAN / non-DC
- * end), not from a SAMR/CNameString hunt subject. A `name-service` hunt
+ * end), not from a SAMR/CNameString hunt subject. A field-only SAMR/CName
+ * line with no IP resolves that client from evidenceText. Protocol field
+ * names and truncated dumps are not identities. A `name-service` hunt
  * subject still stamps `evidence_id` on hostname.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
-import { c2TalkingLanIps } from './hunts.ts'
+import { c2TalkingLanIps, isLanIpv4 } from './hunts.ts'
 import type { Identity, IdentityKind } from './types.ts'
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
@@ -27,8 +29,14 @@ const SAMR_HEX = /\b((?:[0-9a-fA-F]{2}:){7,}[0-9a-fA-F]{2})\b/g
 const ARP_IS_AT = /(\d{1,3}(?:\.\d{1,3}){3})\s+is at\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
 
 const HOST_LABEL = /(?:^|[\s,;|])(?:hostname|host|nbns\.name|dns\.qry\.name)\s*[:=]\s*(\w[\w.-]{0,253})/gi
-const USER_LABEL = /(?:^|[\s,;|])(?:user|username|account_name|kerberos\.CNameString|CNameString|cname)\s*[:=]\s*([^\s,;|]*)/gi
-const NAME_LABEL = /(?:^|[\s,;|])(?:full_name|full name|samr\.samr_UserInfo21\.full_name)\s*[:=]\s*(.+)$/gim
+const USER_LABEL = new RegExp(
+  String.raw`(?:^|[\s,;.|])(?:samr\.samr_UserInfo21\.account_name|username|account_name|` +
+    String.raw`kerberos\.CNameString|CNameString|user|cname)\s*[:=]\s*([^\s,;|]*)`,
+  'gi',
+)
+const NAME_LABEL = /(?:^|[\s,;.|])(?:full_name|full name|samr\.samr_UserInfo21\.full_name)\s*[:=]\s*(.+)$/gim
+const PROTOCOL_FIELD_VALUE = /^[a-z][a-z0-9]*\./i
+const TRUNCATED_VALUE = /\[truncated/i
 
 // tshark default Info text names hosts without hostname:= labels.
 // Domain/Workgroup and Local Master announcements, and NBNS <1b>–<1e>, are workgroup/domain tokens.
@@ -66,15 +74,28 @@ export const IDENTITY_LABELS: Readonly<Record<IdentityKind, string>> = {
  * Normalize one identity value for uniqueness.
  * @param kind - identity kind.
  * @param value - raw harvested value.
- * @returns trimmed, kind-specific canonical value, or undefined when empty.
+ * @returns trimmed, kind-specific canonical value, or undefined when empty or a non-identity.
  */
 export function normalizeIdentityValue(kind: IdentityKind, value: string): string | undefined {
   const trimmed = value.trim()
   if (trimmed === '') return undefined
   if (kind === 'mac') return trimmed.toLowerCase().replace(/-/g, ':')
   if (kind === 'hostname' || kind === 'ip') return trimmed.toLowerCase()
+  if (isNonIdentityAccountValue(trimmed)) return undefined
   if (kind === 'full_name') return trimmed.replace(/\s+/g, ' ')
   return trimmed
+}
+
+/**
+ * Whether a captured user or full_name is a tshark/SAMR/Kerberos field name
+ * or a truncated dump, not an identity. Empty captures are non-identities.
+ * @param value - trimmed captured value.
+ * @returns true when the value must not enter the user or full_name ledger.
+ */
+function isNonIdentityAccountValue(value: string): boolean {
+  if (TRUNCATED_VALUE.test(value)) return true
+  if (value.endsWith(':')) return true
+  return PROTOCOL_FIELD_VALUE.test(value)
 }
 
 /**
@@ -94,7 +115,7 @@ export function decodeUtf16LeHex(raw: string): string | undefined {
  * Build one identity record after normalization.
  * @param kind - identity kind.
  * @param value - raw value.
- * @returns the identity, or undefined when the value is empty after normalize.
+ * @returns the identity, or undefined when the value is empty or a non-identity after normalize.
  */
 export function identityOf(kind: IdentityKind, value: string): Identity | undefined {
   const normalized = normalizeIdentityValue(kind, value)
@@ -113,11 +134,15 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
  * A harvested MAC carries the talking IPv4 that sources that eth.src on the
  * line as `evidence_id`. A harvested user or full_name carries the
  * conversation client IPv4 — `ip.src` talking to a DC, or the peer that is
- * not `scopeIp` — as `evidence_id`. Hunt-subject `scopeIp` (usually the DC)
- * does not stamp user or full_name. When `scopeIp` is an IPv4 hunt subject
- * and that talking or client IP differs, the talking or client IP wins. A
- * `name-service` hunt-subject `scopeIp` still stamps harvested hostname
- * records.
+ * not `scopeIp` — as `evidence_id`. A field-only SAMR/CName line with no IP
+ * takes that client from `evidenceText`: the LAN / non-DC peer talking to
+ * the hunt-subject DC (`ip.src` or `LAN → DC`). Hunt-subject `scopeIp`
+ * (usually the DC) does not stamp user or full_name. A client `evidence_id`
+ * is not passed back into `conversationClientIp` as if it were the DC.
+ * Protocol field names and truncated dumps are not user or full_name
+ * identities. When `scopeIp` is an IPv4 hunt subject and that talking or
+ * client IP differs, the talking or client IP wins. A `name-service`
+ * hunt-subject `scopeIp` still stamps harvested hostname records.
  * @param text - rendered tool output being harvested.
  * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @param scopeIp - hunt-subject IPv4 that scoped this dump, when known.
@@ -147,6 +172,7 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
     if (!SKIP_IPS.has(ip)) add('ip', ip)
   }
   harvestMacs(text, new Set(c2TalkingLanIps(evidenceText)), add)
+  const fallbackClient = fieldOnlyConversationClient(evidenceText, scope)
 
   for (const match of text.matchAll(HOST_LABEL)) {
     const host = regexCapture(match)
@@ -169,7 +195,7 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
   }
 
   for (const line of text.split(/\r?\n/)) {
-    const client = conversationClientIp(line, scope)
+    const client = conversationClientIp(line, scope) ?? fallbackClient
     USER_LABEL.lastIndex = 0
     for (const match of line.matchAll(USER_LABEL)) {
       add('user', regexCapture(match), client)
@@ -202,9 +228,10 @@ export function identityKey(identity: Identity): string {
  * text. A MAC is sourced from `ip.src`, outbound `ip → peer`, or ARP `is at`.
  * A hostname is on a labeled or tshark-summary host line that also names
  * `ip.src` / `ip.addr` (including `==`). A user or full_name is on a
- * Kerberos/SAMR line whose conversation client is that IPv4 (`ip.src`).
- * A client `evidence_id` is not a hunt-subject DC and does not invert the
- * endpoints. Other kinds return no IPs.
+ * Kerberos/SAMR line whose conversation client is that IPv4 (`ip.src`), or
+ * the unique LAN / non-DC peer talking to a DC in the same text when the
+ * account line has no IP. A client `evidence_id` is not a hunt-subject DC
+ * and is not passed into `conversationClientIp`. Other kinds return no IPs.
  * @param identity - ledger identity.
  * @param text - tool-result text.
  * @returns unique IPv4s in first-seen order.
@@ -342,12 +369,61 @@ function conversationClientIp(line: string, scopeIp?: string): string | undefine
   return undefined
 }
 
+/**
+ * Conversation endpoints on one line. Labeled `ip.src` / `ip.dst` win when
+ * present; otherwise `ip → peer`. Used for user/full_name only.
+ * @param line - one tool-output line.
+ * @returns src and dst IPv4s when this line names them.
+ */
+function conversationEndpoints(line: string): { src?: string; dst?: string } {
+  const labeledSrc = labeledIpv4(line, IP_SRC_LABEL)
+  const labeledDst = labeledIpv4(line, IP_DST_LABEL)
+  const conversation = IP_CONVERSATION.exec(line)
+  const src = labeledSrc ?? conversation?.[1]
+  const dst = labeledDst ?? conversation?.[2]
+  return {
+    ...(src === undefined ? {} : { src }),
+    ...(dst === undefined ? {} : { dst }),
+  }
+}
+
+/**
+ * Conversation client when a SAMR/CName dump line has no IP.
+ * With a hunt-subject DC, the unique LAN / non-DC `ip.src` or `LAN → DC`
+ * peer talking to that DC wins. Without a hunt subject, the unique LAN src
+ * talking to a LAN peer wins. The hunt-subject DC does not win. A client
+ * passed as `scopeIp` does not invert onto the DC.
+ * @param evidenceText - current and prior tool-result text.
+ * @param scopeIp - harvest hunt-subject IPv4, when known.
+ * @returns the unique client IPv4, or undefined when none is unique.
+ */
+function fieldOnlyConversationClient(evidenceText: string, scopeIp?: string): string | undefined {
+  const candidates = new Set<string>()
+  for (const line of evidenceText.split(/\r?\n/)) {
+    const { src, dst } = conversationEndpoints(line)
+    if (src === undefined || src === scopeIp) continue
+    const talkingToHuntDc = scopeIp !== undefined && (
+      dst === scopeIp || (dst === undefined && lineMentionsIp(line, scopeIp))
+    )
+    const talkingToLanPeer = scopeIp === undefined
+      && isLanIpv4(src)
+      && dst !== undefined
+      && isLanIpv4(dst)
+    if (!talkingToHuntDc && !talkingToLanPeer) continue
+    candidates.add(src)
+  }
+  if (candidates.size !== 1) return undefined
+  const [client] = candidates
+  return client
+}
+
 function ipsEvidencingAccount(identity: Identity, text: string): string[] {
   const ips: string[] = []
   const seen = new Set<string>()
+  const fallback = fieldOnlyConversationClient(text)
   for (const line of text.split(/\r?\n/)) {
     if (!lineNamesAccount(line, identity)) continue
-    const client = conversationClientIp(line)
+    const client = conversationClientIp(line) ?? fallback
     if (client === undefined || seen.has(client)) continue
     seen.add(client)
     ips.push(client)
@@ -376,6 +452,10 @@ function lineNamesAccount(line: string, identity: Identity): boolean {
     }
   }
   return false
+}
+
+function lineMentionsIp(line: string, ip: string): boolean {
+  return new RegExp(`(?<!\\d)${ip.replaceAll('.', '\\.')}(?!\\d)`).test(line)
 }
 
 function labeledIpv4(line: string, pattern: RegExp): string | undefined {

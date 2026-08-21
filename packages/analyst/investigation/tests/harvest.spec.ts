@@ -15,6 +15,13 @@ describe('identity harvest', () => {
     expect(normalizeIdentityValue('full_name', '  Becka   Rolf ')).toBe('Becka Rolf')
     expect(normalizeIdentityValue('user', '   ')).toBeUndefined()
     expect(identityOf('user', '   ')).toBeUndefined()
+    expect(normalizeIdentityValue('user', 'samr.samr_UserInfo21.account_name:')).toBeUndefined()
+    expect(normalizeIdentityValue('user', 'samr.samr_UserInfo21.account_name')).toBeUndefined()
+    expect(normalizeIdentityValue('user', 'kerberos.CNameString')).toBeUndefined()
+    expect(normalizeIdentityValue('user', '[truncated:')).toBeUndefined()
+    expect(normalizeIdentityValue('user', '[truncated')).toBeUndefined()
+    expect(normalizeIdentityValue('full_name', 'samr.samr_UserInfo21.full_name:')).toBeUndefined()
+    expect(identityOf('user', '[truncated:')).toBeUndefined()
     expect(IDENTITY_LABELS.full_name).toBe('full name')
   })
 
@@ -344,5 +351,75 @@ describe('identity harvest', () => {
       user,
       `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}\n${C2} → ${LAN_B}  kerberos.CNameString: ${USER}`,
     )).toEqual([LAN_A, C2])
+  })
+
+  it('rejects protocol-field and truncated dumps and stamps field-only SAMR/CName from the conversation client', () => {
+    const LAN_A = '10.0.10.2'
+    const LAN_B = '10.0.10.3'
+    const C2 = '198.51.100.80'
+    const USER = 'lan-user'
+    const OTHER = 'idle-user'
+    expect(harvestIdentities([
+      'samr.samr_UserInfo21.account_name:',
+      'account_name: [truncated:',
+      'kerberos.CNameString:',
+      'full_name: [truncated: 12]',
+    ].join('\n')).filter(item => item.kind === 'user' || item.kind === 'full_name')).toEqual([])
+
+    const arrowEvidence = `${LAN_A} → ${LAN_B}`
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `${arrowEvidence}\nkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `samr.samr_UserInfo21.account_name: ${USER}`,
+      `${arrowEvidence}\nsamr.samr_UserInfo21.account_name: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `samr.samr_UserInfo21.account_name: ${USER}`,
+      `ip.src: ${LAN_A}\tip.dst: ${LAN_B}\nsamr.samr_UserInfo21.account_name: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `ip.src: ${LAN_A}\t${LAN_A} → ${LAN_B}\nkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `ip.src: ${LAN_A} talking to ${LAN_B}\nkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `${arrowEvidence}\nkerberos.CNameString: ${USER}`,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user', evidence_id: LAN_A })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `${arrowEvidence}\nkerberos.CNameString: ${USER}`,
+      LAN_A,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user' })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `${LAN_A} → ${C2}\nkerberos.CNameString: ${USER}`,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user' })
+    expect(harvestIdentities(
+      `kerberos.CNameString: ${USER}`,
+      `ip.src: ${LAN_A}\nkerberos.CNameString: ${USER}`,
+      LAN_B,
+    ).find(item => item.kind === 'user')).toEqual({ kind: 'user', value: USER, label: 'user' })
+
+    const user = identityOf('user', USER)!
+    expect(ipsEvidencingIdentity(user, `${arrowEvidence}\nkerberos.CNameString: ${USER}`)).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(
+      { ...user, evidence_id: LAN_A },
+      `${arrowEvidence}\nkerberos.CNameString: ${USER}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(
+      identityOf('user', OTHER)!,
+      `${arrowEvidence}\nip.src: ${LAN_B}\tkerberos.CNameString: ${OTHER}`,
+    )).toEqual([LAN_B])
   })
 })
