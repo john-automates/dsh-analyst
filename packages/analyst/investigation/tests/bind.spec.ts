@@ -331,8 +331,8 @@ describe('BindRelationship', () => {
     const lanC2 = {
       relationship: dcRelationship,
       endpoints: [
-        { addr: LAN, role: 'victim', because: dcBecause },
-        { addr: DISTRACTOR, role: 'c2', because: dcBecause },
+        { addr: LAN, role: 'victim' as const, because: dcBecause },
+        { addr: DISTRACTOR, role: 'c2' as const, because: dcBecause },
       ],
     }
     expect(c2DomainHuntForBind(lanC2)).toBeUndefined()
