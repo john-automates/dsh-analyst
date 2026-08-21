@@ -542,9 +542,9 @@ function affiliatedWithDifferentEntity(
  * IPv4 a MAC, hostname, user, or full_name is evidenced on. A MAC uses the
  * unique talking IP from tool-result frames (`ip.src`, outbound `ip → peer`,
  * or ARP `is at`); hunt-subject `evidence_id` does not win over that. A user
- * or full_name uses the unique conversation client (`ip.src` talking to a
- * DC, or the non-hunt-subject peer); hunt-subject `evidence_id` does not
- * win over that. A hostname still uses hunt-subject `evidence_id`, then a
+ * or full_name uses the unique conversation client (`ip.src`). A stamped
+ * client `evidence_id` is not a hunt-subject DC and does not invert the
+ * endpoints. A hostname still uses hunt-subject `evidence_id`, then a
  * unique name-service line.
  * @param identity - ledger identity.
  * @param evidenceText - tool-result text.

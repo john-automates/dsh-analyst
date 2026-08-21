@@ -321,9 +321,13 @@ describe('identity harvest', () => {
     const name = identityOf('full_name', FULL)!
     expect(ipsEvidencingIdentity(user, `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}`)).toEqual([LAN_A])
     expect(ipsEvidencingIdentity(
+      { ...user, evidence_id: LAN_A },
+      `${LAN_A} → ${LAN_B}  kerberos.CNameString: ${USER}`,
+    )).toEqual([LAN_A])
+    expect(ipsEvidencingIdentity(
       { ...user, evidence_id: LAN_B },
       `ip.src: ${LAN_B}\tip.dst: ${LAN_A}\tkerberos.CNameString: ${USER}`,
-    )).toEqual([LAN_A])
+    )).toEqual([LAN_B])
     expect(ipsEvidencingIdentity(name, `ip.src: ${LAN_A}\tip.dst: ${LAN_B}\tfull_name: ${FULL}`)).toEqual([LAN_A])
     expect(ipsEvidencingIdentity(identityOf('full_name', 'Becka Rolf')!, `${LAN_A} → ${LAN_B}  ${BECKA_HEX}`))
       .toEqual([LAN_A])

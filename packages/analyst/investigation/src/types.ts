@@ -27,7 +27,7 @@ export interface Identity {
    * conversation client IPv4 (LAN / non-DC end). A `name-service` hunt-subject
    * IPv4 scopes a hostname. A slot whose `evidence_id` points at a non-victim
    * entity cannot donate who/where, except a MAC later sourced from the bound
-   * victim IP, or a user or full_name whose conversation client is that victim.
+   * victim IP, or a user or full_name whose conversation `ip.src` is that victim.
    */
   evidence_id?: string
 }

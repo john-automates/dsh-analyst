@@ -611,6 +611,18 @@ describe('BindRelationship', () => {
       user: USER,
       full_name: FULL_NAME,
     })
+    const clientStampedUser = { ...identityOf('user', USER)!, evidence_id: LAN }
+    const clientStampedName = { ...identityOf('full_name', FULL_NAME)!, evidence_id: LAN }
+    const clientStamped = [identityOf('ip', LAN)!, clientStampedUser, clientStampedName, otherUser, otherName]
+    expect(identityDonatesToVictim(clientStampedUser, live, clientStamped, conversations)).toBe(true)
+    expect(identityDonatesToVictim(clientStampedName, live, clientStamped, conversations)).toBe(true)
+    expect(identityDonatesToVictim(otherUser, live, clientStamped, conversations)).toBe(false)
+    expect(requireCaseReport(live, clientStamped, claims, conversations).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+      full_name: FULL_NAME,
+    })
     const macFrames = `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`
     const hostScoped = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
     const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }

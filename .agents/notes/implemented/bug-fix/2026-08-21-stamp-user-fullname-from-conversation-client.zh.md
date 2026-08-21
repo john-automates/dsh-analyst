@@ -14,7 +14,7 @@ Status: implemented
 
 收割到的用户（`kerberos.CNameString`／`account_name`）或全名（`samr.samr_UserInfo21.full_name`）把 `evidence_id` 写成该会话的客户端 IPv4：LAN／非域控端（对域控讲话的 `ip.src`，或不是 hunt 主体 `scopeIp` 的对等体）。hunt 主体 `scopeIp`（通常是域控）不戳用户或全名。
 
-当前绑定之后，即使用户或全名第一次出现在域控或对等体 hunt 下，只要该会话的客户端是被绑定 victim，就仍捐给 victim。hunt 主体 `evidence_id` 不能否决。持久化的 who／where 携带该用户和全名。从未作为客户端是被绑定 victim 的会话之客户端出现的域账户不捐出。不会编造槽位。
+当前绑定之后，即使用户或全名第一次出现在域控或对等体 hunt 下，只要该会话的客户端（`ip.src`）是被绑定 victim，就仍捐给 victim。已戳成客户端的 `evidence_id` 不是 hunt 主体域控，不会对调两端。hunt 主体 `evidence_id` 不能否决捐出。持久化的 who／where 携带该用户和全名。从未作为客户端是被绑定 victim 的会话之客户端出现的域账户不捐出。不会编造槽位。
 
 [通信 IP 戳 MAC](2026-08-21-stamp-mac-evidence-from-talking-ip.md) 和[主机名捐出](2026-08-21-donate-victim-ip-scoped-mac-hostname.md) 保持不变。线索作为 victim 仍被拒绝，并仍下发 [other-end](2026-08-21-other-end-hunt-on-cue-victim.md)。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体和空闲或域控 LAN 行。
 
@@ -23,6 +23,8 @@ Status: implemented
 **继续让用户和全名不打标签，只让 `uniqueUnaffiliated` 忽略其他域账户。** 否决：账本上的其他账户是真实的。唯一性分不清哪个账户是会话客户端。
 
 **把 hunt 主体 `evidence_id` 戳在用户和全名上。** 否决：SAMR／CNameString hunt 通常限定在域控。那会把工作站账户锁到域控，正是 [通信 IP 戳记](2026-08-21-stamp-mac-evidence-from-talking-ip.md) 已经补上的 MAC 漏洞。
+
+**把已戳成客户端的 `evidence_id` 当作 hunt 主体 `scopeIp` 传进 `conversationClientIp`。** 否决：正确收割戳记之后客户端 IP 等于 `ip.src`。把该戳记当成域控会返回另一端，并捐给域控。
 
 **在后来的受害端客户端转储上改戳 `evidence_id`。** 否决：`recordIdentity` 按 kind+value 唯一。捐出读会话，不改写账本行。
 
@@ -36,8 +38,8 @@ Status: implemented
 
 `packages/analyst/investigation/tests/harvest.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲或域控行（`10.0.10.3`）。客户端为 `10.0.10.2` 的 Kerberos／SAMR 会话上的用户或全名即使 `scopeIp` 是 `10.0.10.3` 也戳成该 IP。主机名仍戳 hunt 主体。只有 CNameString 字段的转储不会把 hunt 主体 `evidence_id` 继承到用户。
 
-`packages/analyst/investigation/tests/bind.spec.ts` 先把用户+全名记成 `evidence_id=10.0.10.3`（或来自域控限定转储的未打标签值），再给出客户端为 `10.0.10.2` 的 Kerberos／SAMR 会话证据文本。当前绑定之后，这些值捐出并持久化到 who／where。`10.0.10.3` 上的第二个域账户不捐出。MAC 和主机名捐出以及拒绝将线索指定为 victim 保持不变。
+`packages/analyst/investigation/tests/bind.spec.ts` 先把用户+全名记成 `evidence_id=10.0.10.3`、来自域控限定转储的未打标签值、或已经戳成 `evidence_id=10.0.10.2`，再给出客户端为 `10.0.10.2` 的 Kerberos／SAMR 会话证据文本。当前绑定之后，这些值捐出并持久化到 who／where。`10.0.10.3` 上的第二个域账户不捐出。MAC 和主机名捐出以及拒绝将线索指定为 victim 保持不变。
 
 ## 后果
 
-当会话点名了不同的客户端 IP 时，限定在域控的第一次收割不能把工作站用户或全名锁到域控。即使第一次戳记错误或该行未打标签，后来的 Kerberos／SAMR 文本显示被绑定 victim 是该会话的客户端时仍会捐出。没有该客户端的其他域账户不进入受害端行。MAC 通信 IP 捐出和主机名捐出不变。
+当会话点名了不同的客户端 IP 时，限定在域控的第一次收割不能把工作站用户或全名锁到域控。即使第一次戳记错误、该行未打标签、或已经正确戳成客户端，后来的 Kerberos／SAMR 文本显示 `ip.src` 是被绑定 victim 时仍会捐出。没有该客户端的其他域账户不进入受害端行。MAC 通信 IP 捐出和主机名捐出不变。

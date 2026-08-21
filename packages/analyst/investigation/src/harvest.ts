@@ -202,9 +202,9 @@ export function identityKey(identity: Identity): string {
  * text. A MAC is sourced from `ip.src`, outbound `ip → peer`, or ARP `is at`.
  * A hostname is on a labeled or tshark-summary host line that also names
  * `ip.src` / `ip.addr` (including `==`). A user or full_name is on a
- * Kerberos/SAMR line whose conversation client is that IPv4 (`ip.src`
- * talking to a DC, or the peer that is not a hunt-subject `evidence_id`).
- * Other kinds return no IPs.
+ * Kerberos/SAMR line whose conversation client is that IPv4 (`ip.src`).
+ * A client `evidence_id` is not a hunt-subject DC and does not invert the
+ * endpoints. Other kinds return no IPs.
  * @param identity - ledger identity.
  * @param text - tool-result text.
  * @returns unique IPv4s in first-seen order.
@@ -321,11 +321,12 @@ function hasIpv4(text: string): boolean {
 
 /**
  * Client IPv4 of a Kerberos/SAMR conversation on one line.
- * `ip.src` talking to a peer is the client. When `scopeIp` is the hunt
- * subject (usually the DC) and is `ip.src`, the other end is the client.
- * Hunt-subject `scopeIp` alone does not qualify.
+ * `ip.src` talking to a peer is the client. `scopeIp` is the harvest hunt
+ * subject (usually the DC). When that hunt subject is `ip.src`, the other
+ * end is the client. A stamped client `evidence_id` is not `scopeIp` and
+ * must not be passed here. Hunt-subject `scopeIp` alone does not qualify.
  * @param line - one tool-output line.
- * @param scopeIp - hunt-subject IPv4, when known.
+ * @param scopeIp - harvest hunt-subject IPv4, when known.
  * @returns the client IPv4, or undefined when this line has none.
  */
 function conversationClientIp(line: string, scopeIp?: string): string | undefined {
@@ -342,14 +343,11 @@ function conversationClientIp(line: string, scopeIp?: string): string | undefine
 }
 
 function ipsEvidencingAccount(identity: Identity, text: string): string[] {
-  const scope = identity.evidence_id === undefined
-    ? undefined
-    : normalizeIdentityValue('ip', identity.evidence_id)
   const ips: string[] = []
   const seen = new Set<string>()
   for (const line of text.split(/\r?\n/)) {
     if (!lineNamesAccount(line, identity)) continue
-    const client = conversationClientIp(line, scope)
+    const client = conversationClientIp(line)
     if (client === undefined || seen.has(client)) continue
     seen.add(client)
     ips.push(client)
