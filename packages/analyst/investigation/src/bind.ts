@@ -1581,9 +1581,10 @@ function ipSourcesDcOrGatewayOnlyMac(
 /**
  * Whether one leftover token is a dotted domain / workgroup announcement
  * that is not a victim-row handle and is not C2-stamped. Single-label
- * leftover hostnames stay leftover handles. A leftover dotted name
- * evidenced on an attested C2 dest, or that donates to a non-LAN entity,
- * stays a leftover handle.
+ * leftover hostnames stay leftover handles. A leftover IPv4 or CIDR is
+ * not a domain announcement. A leftover dotted name evidenced on an
+ * attested C2 dest, or that donates to a non-LAN entity, stays a leftover
+ * handle.
  * @param token - one leftover identity-like token.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1602,7 +1603,7 @@ function leftoverAdDomainToken(
 ): boolean {
   if (matchesVictimHandle(token, handles)) return false
   const host = normalizeIdentityValue('hostname', token)
-  if (host === undefined || !host.includes('.') || isIpv4(host)) return false
+  if (host === undefined || !host.includes('.') || isIpv4(host) || CIDR_EXACT.test(host)) return false
   for (const ip of attestedC2Ips(bind, identities, evidenceText)) {
     if (hostnamesEvidencedOnIp(ip, identities, evidenceText).includes(host)) return false
   }
