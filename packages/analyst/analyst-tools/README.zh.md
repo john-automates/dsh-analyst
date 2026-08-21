@@ -6,7 +6,7 @@
 
 ## 工具
 
-`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 向调用会话追加 5W1H 结案包。
+`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 向调用会话追加 5W1H 结案包。当账本或 `c2TalkingLanIps` 已知正在与 C2 通信的 LAN IP 时，点名非 LAN IP 或对端 MAC 的 `who` / `where` 会被改写为该 LAN IP 及其来源 `eth.src` MAC。不会插入主机名、用户或全名。
 
 辅助进程用 `execFile` 启动（不经过 shell），`cwd` 为案件目录，并遵守工具的 `signal`。
 
@@ -62,7 +62,7 @@
 
 #### 模型看到什么
 
-`case_report` 返回六个 5W1H 字段，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。
+`case_report` 返回六个 5W1H 字段，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。当已知正在与 C2 通信的 LAN 身份时，点名非 LAN IP 或对端 MAC 的 `who` / `where` 会被改写到该 LAN 客户端。
 
 #### Token 影响
 

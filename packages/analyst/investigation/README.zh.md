@@ -10,7 +10,7 @@
 
 - `identities(session)` / `hunts(session)` / `report(session)` 折叠日志。
 - `recordIdentity` / `recordHunt` 仅在 kind+value（或 kind+subject）为新值时追加。
-- `recordReport` 以整值替换 5W1H 结案包。
+- `recordReport` 以整值替换 5W1H 结案包。`case_report` 会先把点名非 LAN IP 或对端 MAC 的 `who` / `where` 改写为正在与 C2 通信的 LAN IP 以及账本上唯一的来源 `eth.src` MAC。不会编造姓名。
 - `resolveInsideCase`、`isEvidence`、`isWritable` 和 `contains` 强制案件目录范围。
 
 `tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。当一个 LAN IP 与非 LAN 单播对等体出现在同一行时，这些身份 hunt 只对该 C2 通信 IP 下发；`eth-src` 通知使用 `ip.src ==` 该主体，且 MAC 收割只记录来自该 IP 的 `eth.src`，而不是对端或空闲工作站的网卡。其他以 IP 为主体的通知使用 `ip.addr ==` 该主体。当 `autoHunt` 为 true 时，已下发且尚未执行的 hunt 会用同一套限定范围的 `display_filter` 和字段跑 `pcap_filter`；插件不等模型调用 `pcap_filter`。优先正在与 C2 通信的 LAN 主体；非 LAN / C2 IP 主体不会自动运行。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。

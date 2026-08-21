@@ -2,7 +2,9 @@
  * Case-scoped investigation ledger: harvest unique labeled identities from
  * tool results, auto-issue hunts after new identities, auto-run outstanding
  * issued hunts through `pcap_filter`, deny writes to evidence and work
- * outside the case directory, and persist a 5W1H close packet.
+ * outside the case directory, and persist a 5W1H close packet. When a
+ * C2-talking LAN identity is known, case_report who/where that name a non-LAN
+ * IP or a remote MAC are rewritten to that LAN IP and its sourced eth.src MAC.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -39,6 +41,8 @@ export {
   huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
   isNonLanUnicastIpv4, shouldAutoRunHunt,
 } from './hunts.ts'
+export { bindCaseReportToC2TalkingLan, c2TalkingLanVictim } from './report.ts'
+export type { C2TalkingLanVictim } from './report.ts'
 export {
   denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
