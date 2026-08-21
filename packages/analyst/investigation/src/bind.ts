@@ -183,13 +183,15 @@ export function victimOf(bind: RelationshipBind): BoundEndpoint | undefined {
 export function coerceBindRequest(request: BindRequest): CoercedBindRequest | string {
   const endpoints = coerceBindEndpoints(request.endpoints)
   if (endpoints === undefined) return ENDPOINTS_ARRAY_REASON
-  return {
-    relationship: {
-      ...request.relationship,
-      dport: coerceBindDport(request.relationship.dport),
-    },
-    endpoints,
+  const dport = coerceBindDport(request.relationship.dport)
+  const relationship: BindRelationshipInput = {
+    src: request.relationship.src,
+    dst: request.relationship.dst,
+    t: request.relationship.t,
+    evidence_id: request.relationship.evidence_id,
   }
+  if (dport !== undefined) relationship.dport = dport
+  return { relationship, endpoints }
 }
 
 /**
@@ -509,10 +511,11 @@ function normalizeRelationship(raw: BindRelationshipInput): Relationship | strin
   }
   if (evidenceId === '') return 'bind_relationship relationship evidence_id must be a non-empty string'
   if (time === '') return 'bind_relationship relationship t must be a non-empty string'
-  if (!Number.isInteger(raw.dport) || raw.dport < 1 || raw.dport > 65535) {
+  const dport = raw.dport
+  if (typeof dport !== 'number' || !Number.isInteger(dport) || dport < 1 || dport > 65535) {
     return 'bind_relationship relationship dport must be an integer 1-65535'
   }
-  return { src, dst, dport: raw.dport, t: time, evidence_id: evidenceId }
+  return { src, dst, dport, t: time, evidence_id: evidenceId }
 }
 
 /**
