@@ -62,7 +62,7 @@ export type * from './types.ts'
 export type { HuntFilterSpec } from './hunts.ts'
 export {
   decodeUtf16LeHex, harvestIdentities, hostnamesEvidencedOnIp, identityKey, identityOf,
-  IDENTITY_LABELS, isC2DomainName, isCdnOrUpdateName, normalizeIdentityValue,
+  IDENTITY_LABELS, isC2DomainName, isCdnOrUpdateName, isCloudflareIpv4, normalizeIdentityValue,
 } from './harvest.ts'
 export {
   c2DomainDisplayFilter, c2DomainHunt, c2TalkingLanIps, displayFilterFor, evidenceTextForHunts,

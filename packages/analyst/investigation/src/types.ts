@@ -133,7 +133,8 @@ export interface InvestigationAction {
 export interface CaseReportExtras {
   /**
    * Bound C2 IPv4 plus extra WAN dests whose `evidence_id` is the victim,
-   * omitting CDN/update. Omitted when none remain.
+   * omitting CDN/update names and published Cloudflare anycast dests.
+   * Omitted when none remain.
    */
   c2_ips?: string[]
   /**
@@ -235,9 +236,9 @@ export interface CaseReport {
   how: string
   /**
    * Bound C2 IPv4 plus extra WAN destination IPs whose `evidence_id` is
-   * that victim, omitting an IP whose evidenced hostname is a well-known
-   * CDN or update name. Omitted when none remain. Not a who/where slot
-   * and not a second bind.
+   * that victim, omitting an IP in a published Cloudflare anycast prefix
+   * or whose evidenced hostname is a well-known CDN or update name.
+   * Omitted when none remain. Not a who/where slot and not a second bind.
    */
   c2_ips?: string[]
   /**
@@ -297,9 +298,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      * not persisted as user. A submitted mac is kept unless talking-IP frames
      * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
      * plus extra WAN destinations whose `evidence_id` is that victim, omitting
-     * an IP whose evidenced hostname is a well-known CDN or update name, when
-     * any remain. `c2_domain` is the harvested TLS SNI or DNS name evidenced
-     * on any remaining C2 IPv4s that is not CDN/update, when one exists.
+     * an IP in a published Cloudflare anycast prefix or whose evidenced
+     * hostname is a well-known CDN or update name, when any remain.
+     * `c2_domain` is the harvested TLS SNI or DNS name evidenced on any
+     * remaining C2 IPv4s that is not CDN/update, when one exists.
      */
     'investigation/report': CaseReport
     /**

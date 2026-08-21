@@ -6,9 +6,10 @@
  * A live bind is required to close; who/where project from the victim entity row.
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, extra WAN destinations whose `evidence_id` is the
- * victim persist as `c2_ips` unless an evidenced hostname on that IP is
- * a well-known CDN or update name. A dotted name evidenced on any
- * remaining C2 IP persists as `c2_domain` when it is not CDN/update.
+ * victim persist as `c2_ips` unless that IP is a published Cloudflare
+ * anycast dest or an evidenced hostname on it is a well-known CDN or
+ * update name. A dotted name evidenced on any remaining C2 IP persists
+ * as `c2_domain` when it is not CDN/update.
  * A who/where string whose leftover
  * identity tokens are victim-row handles is coerced to
  * `{ entity_id: victim }` even when labels or a sentence wrap those
@@ -29,7 +30,7 @@
 
 import {
   hostnamesEvidencedOnIp, ipsEvidencingIdentity, isC2DomainName, isCdnOrUpdateName,
-  normalizeIdentityValue,
+  isCloudflareIpv4, normalizeIdentityValue,
 } from './harvest.ts'
 import {
   c2DomainHunt, extraWanHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
@@ -106,7 +107,8 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
 
 /**
  * C2-domain hunts for the bound C2 plus extra WAN IPv4s stamped on the victim.
- * IPs whose evidenced hostname is a well-known CDN or update name are omitted.
+ * IPs whose dest is a published Cloudflare anycast prefix, or whose
+ * evidenced hostname is a well-known CDN or update name, are omitted.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -134,10 +136,11 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 
 /**
  * Bound C2 IPv4 plus extra non-LAN unicast IPs whose `evidence_id` is
- * the bound victim. An IP whose evidenced hostname is a well-known CDN
- * or update name is omitted, including the bound C2. LAN / DC / gateway
- * / multicast / unbound WAN stay off. Who/where are not updated. A
- * second bind is not invented.
+ * the bound victim. An IP in a published Cloudflare anycast prefix, or
+ * whose evidenced hostname is a well-known CDN or update name, is
+ * omitted, including the bound C2. LAN / DC / gateway / multicast /
+ * unbound WAN stay off. Who/where are not updated. A second bind is
+ * not invented.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -156,7 +159,7 @@ export function acceptedC2Ips(
   const consider = (ip: string): void => {
     if (seen.has(ip)) return
     seen.add(ip)
-    if (ipHasCdnOrUpdateName(ip, identities, evidenceText)) return
+    if (ipIsCdnOrUpdate(ip, identities, evidenceText)) return
     out.push(ip)
   }
   consider(bound)
@@ -423,9 +426,10 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
  * addresses default to `c2`. The cited conversation must include a
  * cue/observation address; a both-LAN conversation is unbound and does not
  * issue a hunt. Role `c2` cannot be a LAN address; tokens are not swapped.
- * Role `c2` cannot be a well-known CDN or update destination evidenced by a
- * harvested hostname or cited-conversation SNI / HTTP host / DNS name on
- * that unique C2 IPv4; a replacement C2 is not invented. Assigning `victim`
+ * Role `c2` cannot be a well-known CDN or update destination: a published
+ * Cloudflare anycast IPv4, or a harvested hostname or cited-conversation
+ * SNI / HTTP host / DNS name on that unique C2 IPv4; a replacement C2 is
+ * not invented. Assigning `victim`
  * to a cue/observation address is always unbound and names the other-end
  * hunt for that cue. Zero or two victims fail. A JSON array string of
  * endpoint objects and a numeric-string dport are coerced first; a missing
@@ -704,10 +708,11 @@ export function completeAcceptedSlot(
  * not persisted as user. A submitted mac is kept unless talking-IP
  * frames source that MAC only from a non-victim. Bound C2 plus extra
  * WAN IPv4s whose `evidence_id` is that victim persist as `c2_ips`,
- * omitting an IP whose evidenced hostname is a well-known CDN or update
- * name. A harvested C2 DNS/SNI name evidenced on any remaining C2 IP
- * persists as `c2_domain` when it is not CDN/update and does not fill
- * who/where hostname.
+ * omitting an IP in a published Cloudflare anycast prefix or whose
+ * evidenced hostname is a well-known CDN or update name. A harvested
+ * C2 DNS/SNI name evidenced on any remaining C2 IP persists as
+ * `c2_domain` when it is not CDN/update and does not fill who/where
+ * hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -957,8 +962,10 @@ function resolveEndpoint(
 }
 
 /**
- * Whether the unique non-LAN C2 has an evidenced well-known CDN or
- * update hostname. A replacement C2 is not invented.
+ * Whether the unique non-LAN C2 is a well-known CDN or update dest.
+ * A published Cloudflare anycast IPv4 qualifies even when the
+ * evidenced hostname is a customer domain. A replacement C2 is not
+ * invented.
  * @param bind - resolved conversation bind before persist.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -971,22 +978,24 @@ function uniqueC2IsCdnOrUpdate(
 ): boolean {
   const c2 = boundC2Ipv4(bind)
   if (c2 === undefined) return false
-  return ipHasCdnOrUpdateName(c2, identities, evidenceText)
+  return ipIsCdnOrUpdate(c2, identities, evidenceText)
 }
 
 /**
- * Whether an IPv4 has a harvested or cited-conversation hostname whose
- * suffix is a well-known CDN or update domain.
+ * Whether an IPv4 is a published Cloudflare anycast dest, or has a
+ * harvested or cited-conversation hostname whose suffix is a
+ * well-known CDN or update domain.
  * @param ip - candidate C2 IPv4.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
  * @returns true when that IP must stay off `c2_ips` and cannot bind as c2.
  */
-function ipHasCdnOrUpdateName(
+function ipIsCdnOrUpdate(
   ip: string,
   identities: readonly Identity[],
   evidenceText: string,
 ): boolean {
+  if (isCloudflareIpv4(ip)) return true
   return hostnamesEvidencedOnIp(ip, identities, evidenceText).some(isCdnOrUpdateName)
 }
 

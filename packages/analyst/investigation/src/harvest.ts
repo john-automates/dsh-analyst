@@ -134,8 +134,8 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
 /**
  * Whether a harvested hostname is a DNS name that may persist as `c2_domain`.
  * Single-label NetBIOS / LAN / DC names and dotted IPv4s are not domains.
- * Well-known CDN / update names still pass; {@link isCdnOrUpdateName} is
- * the additional persist and bind check.
+ * Well-known CDN / update names still pass; {@link isCdnOrUpdateName} and
+ * {@link isCloudflareIpv4} are the additional persist and bind checks.
  * @param value - normalized hostname.
  * @returns true when the value contains a dot and is not an IPv4.
  */
@@ -146,8 +146,9 @@ export function isC2DomainName(value: string): boolean {
 
 /**
  * Registrable suffixes of well-known public CDN and software-update
- * domains. Subdomains match. IPv4 ranges are not this list. Live-case
- * gold hostnames are not listed.
+ * domains. Subdomains match. IPv4 ranges are not this list; published
+ * Cloudflare prefixes use {@link isCloudflareIpv4}. Live-case gold
+ * hostnames are not listed.
  */
 const CDN_OR_UPDATE_SUFFIXES = [
   'microsoft.com',
@@ -181,7 +182,9 @@ const CONVERSATION_HOST_LABEL = new RegExp(
  * Matches the registrable suffix and its subdomains
  * (`update.microsoft.com`, `windows.msn.com`, `www.bing.com`,
  * `login.microsoftonline.com`, `sfx.ms`, `a1.akamai.net`). IPv4
- * ranges are not this test. Live-case gold names are not listed.
+ * ranges are not this test; published Cloudflare prefixes use
+ * {@link isCloudflareIpv4}. Live-case gold names are not listed.
+ * `evilcloudflare.com` is false.
  * @param value - raw or normalized hostname.
  * @returns true when the hostname is that suffix or a subdomain of it.
  */
@@ -190,6 +193,67 @@ export function isCdnOrUpdateName(value: string): boolean {
   if (host === undefined || host === '') return false
   for (const suffix of CDN_OR_UPDATE_SUFFIXES) {
     if (host === suffix || host.endsWith(`.${suffix}`)) return true
+  }
+  return false
+}
+
+/**
+ * Published Cloudflare IPv4 anycast prefixes
+ * (https://www.cloudflare.com/ips/). A dest in these ranges is CDN
+ * even when the evidenced hostname is a customer domain, not
+ * `cloudflare.com`. Generic VPS / hosting ranges are not this list.
+ * Live-case gold IPs are not listed.
+ */
+const CLOUDFLARE_IPV4_CIDRS = [
+  '103.21.244.0/22',
+  '103.22.200.0/22',
+  '103.31.4.0/22',
+  '104.16.0.0/13',
+  '104.24.0.0/14',
+  '108.162.192.0/18',
+  '131.0.72.0/22',
+  '141.101.64.0/18',
+  '162.158.0.0/15',
+  '172.64.0.0/13',
+  '173.245.48.0/20',
+  '188.114.96.0/20',
+  '190.93.240.0/20',
+  '197.234.240.0/22',
+  '198.41.128.0/17',
+] as const
+
+const CLOUDFLARE_IPV4_RANGES = CLOUDFLARE_IPV4_CIDRS.map((cidr) => {
+  const slash = cidr.indexOf('/')
+  const prefix = Number(cidr.slice(slash + 1))
+  const mask = prefix === 0 ? 0 : (0xFFFFFFFF << (32 - prefix)) >>> 0
+  return { network: ipv4ToInt(cidr.slice(0, slash)) & mask, mask }
+})
+
+/**
+ * Unsigned 32-bit value of a dotted IPv4.
+ * @param ip - dotted IPv4.
+ * @returns the integer.
+ */
+function ipv4ToInt(ip: string): number {
+  let value = 0
+  for (const part of ip.split('.')) value = (value << 8) + Number(part)
+  return value >>> 0
+}
+
+/**
+ * Whether an IPv4 is in a published Cloudflare anycast prefix,
+ * including `104.16.0.0/13`. Customer hostnames on those dests are
+ * still CDN. Generic VPS / hosting dests are false. Live-case gold
+ * IPs are not listed.
+ * @param value - raw or normalized IPv4.
+ * @returns true when the address is in a published Cloudflare prefix.
+ */
+export function isCloudflareIpv4(value: string): boolean {
+  const ip = normalizeIdentityValue('ip', value)
+  if (ip === undefined || !DOTTED_IPV4.test(ip)) return false
+  const n = ipv4ToInt(ip)
+  for (const range of CLOUDFLARE_IPV4_RANGES) {
+    if ((n & range.mask) === range.network) return true
   }
   return false
 }

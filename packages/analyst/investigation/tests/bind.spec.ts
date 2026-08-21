@@ -556,6 +556,76 @@ describe('BindRelationship', () => {
     expect(report.where.ip).toBe(LAN)
   })
 
+  it('omits Cloudflare-range dests and prefers a later non-CDN dotted name', () => {
+    const CF_DEST = '104.16.1.1'
+    const CF_CUSTOMER = 'cdn-customer.example.test'
+    const live = bind()
+    const cfHost = { ...identityOf('hostname', CF_CUSTOMER)!, evidence_id: CF_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const payloadOnExtra = { ...identityOf('hostname', PAYLOAD)!, evidence_id: EXTRA_WAN }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', CF_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      victimHost,
+      cfHost,
+      payloadOnC2,
+      payloadOnExtra,
+    ]
+    expect(resolveBind({
+      relationship: { ...relationship, dst: CF_DEST, evidence_id: 'conv-cf' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${CF_DEST}` }],
+    })).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: { ...relationship, dst: CF_DEST, evidence_id: 'conv-cf' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${CF_DEST}` }],
+    }, [cfHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(C2)
+    expect(acceptedC2Ips(live, identities)).not.toContain(CF_DEST)
+    expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === CF_DEST))
+      .toBe(false)
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, identities)).not.toBe(CF_CUSTOMER)
+    expect(acceptedC2Domain(live, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cfHost,
+      payloadOnExtra,
+      victimHost,
+    ])).toBe(PAYLOAD)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).not.toContain(CF_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(CF_CUSTOMER)
+    expect(report.where.hostname).not.toBe(CF_CUSTOMER)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+    const boundCf = bind({
+      relationship: { ...relationship, dst: CF_DEST, evidence_id: 'conv-cf' },
+      endpoints: [
+        { addr: LAN, role: 'victim', because: `${LAN} talking to ${CF_DEST}` },
+        { addr: CF_DEST, role: 'c2', because: 'cue/observation address' },
+      ],
+    })
+    expect(acceptedC2Ips(boundCf, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cfHost,
+      payloadOnExtra,
+    ])).toEqual([EXTRA_WAN])
+    expect(acceptedC2Domain(boundCf, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cfHost,
+      payloadOnExtra,
+    ])).toBe(PAYLOAD)
+  })
+
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
     const live = bind()
     expect(caseReportDenyReason({ what: 'x' }, undefined)).toBe(UNBOUND_REASON)
