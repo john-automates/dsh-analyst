@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-refuse-cdn-update-c2.md
-2026-08-21-refuse-cdn-update-c2.md: 6e1253f4a150cc257b06a77afc5d6674e2988b0f
-2026-08-21-refuse-cdn-update-c2.zh.md: d0cdc2a80bda131c5044b75934899ee93490b85f
+2026-08-21-refuse-cdn-update-c2.md: 9f79540570d5a13b23111275994b92f5f09ed40b
+2026-08-21-refuse-cdn-update-c2.zh.md: 24f1c811f71f142eb5d756e78d1354dbdd42b51a

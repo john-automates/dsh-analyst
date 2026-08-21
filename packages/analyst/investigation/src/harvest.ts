@@ -155,6 +155,7 @@ const CDN_OR_UPDATE_SUFFIXES = [
   'windowsupdate.com',
   'office.com',
   'live.com',
+  'msn.com',
   'akamai.net',
   'akamaiedge.net',
   'akamaihd.net',
@@ -175,8 +176,8 @@ const CONVERSATION_HOST_LABEL = new RegExp(
 /**
  * Whether a hostname is a well-known public CDN or software-update domain.
  * Matches the registrable suffix and its subdomains
- * (`update.microsoft.com`, `a1.akamai.net`). IPv4 ranges are not this
- * test. Live-case gold names are not listed.
+ * (`update.microsoft.com`, `windows.msn.com`, `a1.akamai.net`). IPv4
+ * ranges are not this test. Live-case gold names are not listed.
  * @param value - raw or normalized hostname.
  * @returns true when the hostname is that suffix or a subdomain of it.
  */
