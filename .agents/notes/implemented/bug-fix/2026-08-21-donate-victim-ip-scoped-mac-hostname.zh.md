@@ -38,4 +38,4 @@ Status: implemented
 
 ## 后果
 
-当前绑定会在 MAC 和主机名的证据落在被绑定 victim IP 上时写出这些值，即使账本上还有其他 MAC 或主机名行。用户和全名的唯一性不变。同一种类的两个未限定 MAC 仍会让该槽留空。线索作为 victim 和对调结案仍以未绑定失败。
+当前绑定会在 MAC 和主机名的证据落在被绑定 victim IP 上时写出这些值，即使账本上还有其他 MAC 或主机名行。证据落在客户端是被绑定 victim 的会话上的用户和全名按同样方式捐出（[会话客户端戳记](2026-08-21-stamp-user-fullname-from-conversation-client.md)）。同一种类的两个未限定 MAC 仍会让该槽留空。线索作为 victim 和对调结案仍以未绑定失败。

@@ -552,4 +552,92 @@ describe('BindRelationship', () => {
     expect(roleForIdentity(clientMac, live, identities, frames)).toBe('victim')
     expect(roleForIdentity(dcMac, live, identities, frames)).toBe('distractor')
   })
+
+  it('donates a user and full_name first seen on a DC hunt when the conversation client is the victim', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const victimUser = { ...identityOf('user', USER)!, evidence_id: DISTRACTOR }
+    const victimName = { ...identityOf('full_name', FULL_NAME)!, evidence_id: DISTRACTOR }
+    const otherUser = { ...identityOf('user', DISTRACTOR_USER)!, evidence_id: DISTRACTOR }
+    const otherName = { ...identityOf('full_name', 'Idle User')!, evidence_id: DISTRACTOR }
+    const emptyEntity = { ...identityOf('user', USER)!, evidence_id: DISTRACTOR, entity_id: '' }
+    const victimEntity = { ...identityOf('user', USER)!, evidence_id: DISTRACTOR, entity_id: LAN }
+    const otherEntity = { ...identityOf('user', USER)!, evidence_id: DISTRACTOR, entity_id: DISTRACTOR }
+    const untaggedUser = identityOf('user', USER)!
+    const untaggedName = identityOf('full_name', FULL_NAME)!
+    const conversations = [
+      `${LAN} → ${DISTRACTOR}  kerberos.CNameString: ${USER}`,
+      `${LAN} → ${DISTRACTOR}  samr.samr_UserInfo21.full_name: ${FULL_NAME}`,
+      `ip.src: ${DISTRACTOR}\tkerberos.CNameString: ${DISTRACTOR_USER}`,
+      `ip.src: ${DISTRACTOR}\tsamr.samr_UserInfo21.full_name: Idle User`,
+    ].join('\n')
+    const identities = [identityOf('ip', LAN)!, victimUser, victimName, otherUser, otherName]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    expect(identityDonatesToVictim(victimUser, live, identities, conversations)).toBe(true)
+    expect(identityDonatesToVictim(victimName, live, identities, conversations)).toBe(true)
+    expect(identityDonatesToVictim(emptyEntity, live, identities, conversations)).toBe(true)
+    expect(identityDonatesToVictim(victimEntity, live, identities, conversations)).toBe(true)
+    expect(identityDonatesToVictim(otherEntity, live, identities, conversations)).toBe(false)
+    expect(identityDonatesToVictim(otherUser, live, identities, conversations)).toBe(false)
+    expect(identityDonatesToVictim(otherName, live, identities, conversations)).toBe(false)
+    const report = requireCaseReport(live, identities, claims, conversations)
+    expect(report.who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+    expect(report.where).toEqual(report.who)
+    expect(report.who.user).not.toBe(DISTRACTOR_USER)
+    expect(report.who.full_name).not.toBe('Idle User')
+    expect(roleForIdentity(victimUser, live, identities, conversations)).toBe('victim')
+    expect(roleForIdentity(otherUser, live, identities, conversations)).toBe('distractor')
+    const untagged = [identityOf('ip', LAN)!, untaggedUser, untaggedName, otherUser, otherName]
+    expect(identityDonatesToVictim(untaggedUser, live, untagged, conversations)).toBe(true)
+    expect(identityDonatesToVictim(untaggedName, live, untagged, conversations)).toBe(true)
+    expect(identityDonatesToVictim(otherUser, live, untagged, conversations)).toBe(false)
+    expect(requireCaseReport(live, untagged, claims, conversations).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+    const clientStampedUser = { ...identityOf('user', USER)!, evidence_id: LAN }
+    const clientStampedName = { ...identityOf('full_name', FULL_NAME)!, evidence_id: LAN }
+    const clientStamped = [identityOf('ip', LAN)!, clientStampedUser, clientStampedName, otherUser, otherName]
+    expect(identityDonatesToVictim(clientStampedUser, live, clientStamped, conversations)).toBe(true)
+    expect(identityDonatesToVictim(clientStampedName, live, clientStamped, conversations)).toBe(true)
+    expect(identityDonatesToVictim(otherUser, live, clientStamped, conversations)).toBe(false)
+    expect(requireCaseReport(live, clientStamped, claims, conversations).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+    const macFrames = `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`
+    const hostScoped = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }
+    expect(requireCaseReport(
+      live,
+      [identityOf('ip', LAN)!, clientMac, hostScoped, victimUser, victimName, otherUser],
+      claims,
+      `${macFrames}\n${conversations}`,
+    ).who).toEqual({
+      entity_id: LAN,
+      ip: LAN,
+      mac: CLIENT_MAC,
+      hostname: HOST,
+      user: USER,
+      full_name: FULL_NAME,
+    })
+  })
 })

@@ -38,4 +38,4 @@ After a live bind, a MAC first seen under a DC or peer hunt still donates to the
 
 ## Consequences
 
-A DC-scoped first harvest cannot lock a workstation MAC to the DC when the frame names a different talking IP. A wrong first stamp still donates if later frames source that MAC from the bound victim. Hostname donate and unique-unaffiliated user/full_name donate are unchanged.
+A DC-scoped first harvest cannot lock a workstation MAC to the DC when the frame names a different talking IP. A wrong first stamp still donates if later frames source that MAC from the bound victim. Hostname donate is unchanged. User and full_name stamp the conversation client ([conversation-client stamp](2026-08-21-stamp-user-fullname-from-conversation-client.md)).

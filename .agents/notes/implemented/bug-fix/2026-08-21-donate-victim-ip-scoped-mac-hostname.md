@@ -38,4 +38,4 @@ A distractor evidenced on another IP or carrying another `entity_id` stays out. 
 
 ## Consequences
 
-A live bind writes victim mac and hostname when those values are evidenced on the bound victim IP, even if other MAC or hostname rows exist. User and full_name uniqueness is unchanged. Two unscoped macs of the same kind still leave that slot empty. Cue-as-victim and inverted closes still fail unbound.
+A live bind writes victim mac and hostname when those values are evidenced on the bound victim IP, even if other MAC or hostname rows exist. User and full_name evidenced on a conversation whose client is the bound victim donate the same way ([conversation-client stamp](2026-08-21-stamp-user-fullname-from-conversation-client.md)). Two unscoped macs of the same kind still leave that slot empty. Cue-as-victim and inverted closes still fail unbound.
