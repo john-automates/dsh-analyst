@@ -302,7 +302,7 @@ describe('investigation service', () => {
       text: expect.not.stringContaining('New identity: MAC 02:00:00:00:00:0b'),
     })
     expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
     ])
   })
 

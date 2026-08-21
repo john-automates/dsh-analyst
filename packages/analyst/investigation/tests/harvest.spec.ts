@@ -143,7 +143,7 @@ describe('identity harvest', () => {
       `eth.src: ${MAC_B}\tip.src: ${LAN_B}\tip.dst: ${LAN_GW}`,
     ].join('\n'), evidence)
     expect(bidirectional.filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: MAC_A, label: 'MAC' },
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
     ])
 
     const arrows = harvestIdentities([
@@ -152,7 +152,7 @@ describe('identity harvest', () => {
       `${LAN_B} → ${LAN_GW}  ${MAC_B} → ${MAC_FAR} NBNS`,
     ].join('\n'))
     expect(arrows.filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: MAC_A, label: 'MAC' },
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
     ])
 
     const arp = harvestIdentities([
@@ -161,7 +161,7 @@ describe('identity harvest', () => {
       `ARP ${LAN_B} is at ${MAC_B}`,
     ].join('\n'))
     expect(arp.filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: MAC_A, label: 'MAC' },
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
     ])
 
     const majority = harvestIdentities([
@@ -192,12 +192,12 @@ describe('identity harvest', () => {
       `eth.src: ${MAC_A}\t${LAN_A} → ${C2}`,
     )
     expect(labeledOnArrow.filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: MAC_A, label: 'MAC' },
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
     ])
 
     const srcWithoutEthLabel = harvestIdentities(`ip.src: ${LAN_A}\t${MAC_A}`, evidence)
     expect(srcWithoutEthLabel.filter(item => item.kind === 'mac')).toEqual([
-      { kind: 'mac', value: MAC_A, label: 'MAC' },
+      { kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A },
     ])
 
     const fieldOnlyOne = harvestIdentities(`eth.src: ${MAC_A}`, evidence)
