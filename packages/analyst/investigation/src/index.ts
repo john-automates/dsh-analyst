@@ -143,18 +143,32 @@ export function resolveCaseDir(caseDir: string): string {
 
 /**
  * Fold unique identities from a log prefix.
+ * First-seen kind+value wins the row. A later event may fill a missing
+ * `evidence_id` on that row so a field-only victim-IP `eth.src` dump can
+ * restamp an unaffiliated first harvest.
  * @param events - session log or any prefix of it.
  * @returns identities in first-seen order.
  */
 export function foldIdentities(events: readonly SessionEvent[]): Identity[] {
-  const seen = new Set<string>()
+  const seen = new Map<string, Identity>()
   const out: Identity[] = []
   for (const event of events) {
     if (event.type !== 'investigation/identity') continue
     const key = identityKey(event.data)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(event.data)
+    const existing = seen.get(key)
+    if (existing === undefined) {
+      const copy = { ...event.data }
+      seen.set(key, copy)
+      out.push(copy)
+      continue
+    }
+    if (
+      (existing.evidence_id === undefined || existing.evidence_id === '')
+      && event.data.evidence_id !== undefined
+      && event.data.evidence_id !== ''
+    ) {
+      existing.evidence_id = event.data.evidence_id
+    }
   }
   return out
 }
@@ -425,17 +439,30 @@ export class Investigation extends Service {
   }
 
   /**
-   * Append one identity when kind+value is new.
+   * Append one identity when kind+value is new, or when a later harvest
+   * supplies `evidence_id` that the first-seen row lacks.
+   * Unique-on-kind+value still yields one folded row. A restamp does not
+   * count as a new identity for hunt issuance.
    * @param session - session to append to.
    * @param identity - identity to record.
-   * @returns true when a new event was appended.
+   * @returns true when a new kind+value was appended.
    */
   recordIdentity(session: Session, identity: Identity): boolean {
-    if (foldIdentities(session.events).some(existing => identityKey(existing) === identityKey(identity))) {
-      return false
+    const existing = foldIdentities(session.events).find(
+      item => identityKey(item) === identityKey(identity),
+    )
+    if (existing === undefined) {
+      session.append('investigation/identity', identity)
+      return true
     }
-    session.append('investigation/identity', identity)
-    return true
+    if (
+      (existing.evidence_id === undefined || existing.evidence_id === '')
+      && identity.evidence_id !== undefined
+      && identity.evidence_id !== ''
+    ) {
+      session.append('investigation/identity', identity)
+    }
+    return false
   }
 
   /**
@@ -624,15 +651,17 @@ function scopeIpFromHunt(hunt: Hunt): string | undefined {
 
 /**
  * Hunt-subject IPv4 implied by a `pcap_filter` display filter.
- * `eth.src` with `ip.src ==` scopes a MAC dump; `llmnr` / `nbns` / `browser`
- * with `ip.addr ==` scopes a name-service dump.
+ * `eth.src` with `ip.src ==` or `ip.addr ==` scopes a MAC dump; `llmnr` /
+ * `nbns` / `browser` with `ip.addr ==` scopes a name-service dump.
  * @param args - tool arguments that may include `display_filter`.
  * @returns the scoped IPv4, or undefined when the filter is not those hunts.
  */
 function scopeIpFromPcapFilter(args: unknown): string | undefined {
   const filter = stringArg(args, ['display_filter'])
   if (filter === undefined) return undefined
-  const eth = /\beth\.src\b/.test(filter) ? /ip\.src\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter) : null
+  const eth = /\beth\.src\b/.test(filter)
+    ? /ip\.(?:src|addr)\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)
+    : null
   if (eth?.[1] !== undefined) return eth[1]
   if (!/\b(?:llmnr|nbns|browser)\b/.test(filter)) return undefined
   return /ip\.addr\s*==\s*(\d{1,3}(?:\.\d{1,3}){3})/.exec(filter)?.[1]

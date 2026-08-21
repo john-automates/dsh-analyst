@@ -249,7 +249,9 @@ describe('identity harvest', () => {
     expect(harvestIdentities(`ARP ${LAN_A} is at ${MAC_A}`, `ARP ${LAN_A} is at ${MAC_A}`, LAN_B)
       .find(item => item.kind === 'mac')).toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A })
     expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, LAN_B).find(item => item.kind === 'mac'))
-      .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC' })
+      .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_B })
+    expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, LAN_A).find(item => item.kind === 'mac'))
+      .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC', evidence_id: LAN_A })
     expect(harvestIdentities(`eth.src: ${MAC_A}`, `eth.src: ${MAC_A}`, '  ').find(item => item.kind === 'mac'))
       .toEqual({ kind: 'mac', value: MAC_A, label: 'MAC' })
     const mac = identityOf('mac', MAC_A)!

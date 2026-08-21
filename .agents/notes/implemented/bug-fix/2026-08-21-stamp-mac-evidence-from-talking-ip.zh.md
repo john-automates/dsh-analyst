@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-收割到的 MAC 把 `evidence_id` 写成该行上来源该 `eth.src` 的通信 IPv4：带标签的 `ip.src`、出站 `ip → peer`，或 ARP `is at`。`eth-src` hunt 主体 `scopeIp` 不戳 MAC。这两个 IP 不一致时，通信 IP 胜出。主机名仍从 `name-service` 转储戳 hunt 主体 `evidence_id`。
+收割到的 MAC 把 `evidence_id` 写成该行上来源该 `eth.src` 的通信 IPv4：带标签的 `ip.src`、出站 `ip → peer`，或 ARP `is at`。这两个 IP 不一致时，通信 IP 胜出。没有通信 IP 的仅字段 `eth.src` 转储戳 hunt 主体 `scopeIp`（[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)）。主机名仍从 `name-service` 转储戳 hunt 主体 `evidence_id`。
 
 当前绑定之后，即使 MAC 第一次出现在域控或对等体 hunt 下，只要任一工具结果帧把该 MAC 从来自被绑定 victim IP 的方向送出，就仍捐给 victim。hunt 主体 `evidence_id` 不能否决。持久化的 who/where 携带该 mac。从未作为来自 victim IP 的 `eth.src` 出现的域控或网关 MAC 不捐出。不会编造槽位。
 
@@ -22,7 +22,7 @@ Status: implemented
 
 **继续把 hunt 主体 `evidence_id` 戳在 MAC 上，只让捐出忽略它。** 对收割否决：第一次写入是持久的。戳通信 IP 记录的是谁送出了该帧。捐出仍会在后来的帧把该 MAC 从来自 victim 的方向送出时，忽略错误的第一次戳记。
 
-**在后来的受害端 IP 转储上改戳 `evidence_id`。** 否决：`recordIdentity` 按 kind+value 唯一。捐出读帧，不改写账本行。
+**在已经有通信 IP 或其他 IPv4 戳记的后来受害端 IP 转储上改戳 `evidence_id`。** 此处否决：行上仍是通信 IP 胜出，捐出已经读取后来的受害端 IP 帧。给第一次收割缺少的 `evidence_id` 补上限定在受害端 IP 的仅字段转储，见[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)。
 
 **捐出与 victim IP 出现在同一行的每一个 MAC（`ip.addr`）。** 否决：入站帧会带上对端或域控网卡。来源是指 `ip.src`、出站 `ip → peer` 或 ARP `is at`。
 
@@ -32,7 +32,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/harvest.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲或域控行（`10.0.10.3`）。通信 IP 为 `10.0.10.2` 的行上的 MAC 即使 `scopeIp` 是 `10.0.10.3` 也戳成该 IP。主机名仍戳 hunt 主体。只有 `eth.src` 字段的转储不会把 hunt 主体 `evidence_id` 继承到 MAC。
+`packages/analyst/investigation/tests/harvest.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲或域控行（`10.0.10.3`）。通信 IP 为 `10.0.10.2` 的行上的 MAC 即使 `scopeIp` 是 `10.0.10.3` 也戳成该 IP。主机名仍戳 hunt 主体。没有通信 IP 的仅字段 `eth.src` 转储戳 hunt 主体 `evidence_id`（[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)）。
 
 `packages/analyst/investigation/tests/bind.spec.ts` 先把客户端 MAC 记成 `evidence_id=10.0.10.3`，再给出 `ip.src=10.0.10.2` 上的 `eth.src` 证据文本。当前绑定之后，该 MAC 捐出并持久化到 who/where。从未出现在 `10.0.10.2` 上的域控 MAC 不捐出。主机名捐出和拒绝将线索指定为 victim 保持不变。
 

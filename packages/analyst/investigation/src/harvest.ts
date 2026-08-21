@@ -3,7 +3,8 @@
  * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries. After a
  * C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
  * that IP. A MAC stamps `evidence_id` from the talking IP that sources that
- * eth.src on the line, not from an `eth-src` hunt subject. User and full_name
+ * eth.src on the line. A field-only `eth.src` dump with no talking IP stamps
+ * an `eth-src` hunt-subject `scopeIp`. User and full_name
  * stamp `evidence_id` from the conversation client IPv4 (the LAN / non-DC
  * end), not from a SAMR/CNameString hunt subject. A field-only SAMR/CName
  * line with no IP resolves that client from evidenceText. Protocol field
@@ -132,7 +133,9 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
  * sourced from that IP (`ip.src`, outbound `focus → peer`, or ARP `is at`).
  * A bidirectional dump cannot persist the far-side NIC.
  * A harvested MAC carries the talking IPv4 that sources that eth.src on the
- * line as `evidence_id`. A harvested user or full_name carries the
+ * line as `evidence_id`. A field-only `eth.src` line with no talking IP
+ * stamps hunt-subject `scopeIp` when that scope is an IPv4 (`ip.src` /
+ * `ip.addr ==` that IP). A harvested user or full_name carries the
  * conversation client IPv4 — `ip.src` talking to a DC, or the peer that is
  * not `scopeIp` — as `evidence_id`. A field-only SAMR/CName line with no IP
  * takes that client from `evidenceText`: the LAN / non-DC peer talking to
@@ -158,7 +161,10 @@ export function harvestIdentities(text: string, evidenceText = text, scopeIp?: s
     const key = `${identity.kind}\0${identity.value}`
     if (seen.has(key)) return
     seen.add(key)
-    if (kind === 'mac' || kind === 'user' || kind === 'full_name') {
+    if (kind === 'mac') {
+      const source = talkingIp === undefined ? scope : normalizeIdentityValue('ip', talkingIp)
+      if (source !== undefined) identity.evidence_id = source
+    } else if (kind === 'user' || kind === 'full_name') {
       const source = talkingIp === undefined ? undefined : normalizeIdentityValue('ip', talkingIp)
       if (source !== undefined) identity.evidence_id = source
     } else if (scope !== undefined && kind === 'hostname') {
@@ -247,7 +253,8 @@ export function ipsEvidencingIdentity(identity: Identity, text: string): string[
  * Record MACs. With no C2-talking focus, every MAC is kept. With a focus IP,
  * only a MAC sourced from that IP is kept; a bidirectional dump cannot persist
  * the far-side NIC. A kept MAC stamps the talking IP on its line when one
- * sources that eth.src.
+ * sources that eth.src. A field-only `eth.src` dump stamps hunt-subject
+ * `scopeIp` through `add` when the line has no talking IP.
  */
 function harvestMacs(
   text: string,
