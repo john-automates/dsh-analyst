@@ -6,7 +6,7 @@ SOC/NSM tools for the `analyst` preset: `pcap_info`, `pcap_filter`, `logs`, and 
 
 ## Tools
 
-`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; wrapping quotes on `display_filter` are stripped before `-Y`. A string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet to the calling session.
+`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; wrapping quotes on `display_filter` are stripped before `-Y`. A string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet to the calling session. When a C2-talking LAN IP is known from the ledger or from `c2TalkingLanIps`, `who` and `where` that name a non-LAN IP or a remote MAC are rewritten to that LAN IP and its sourced `eth.src` MAC. Hostname, user, and full name are not inserted.
 
 Helpers spawn with `execFile` (no shell), `cwd` set to the case directory, and the tool's `signal`.
 
@@ -62,7 +62,7 @@ Results append after the reusable request prefix.
 
 #### What the model sees
 
-`case_report` returns the six 5W1H fields and records `investigation/report` on the session. A non-agent caller is rejected.
+`case_report` returns the six 5W1H fields and records `investigation/report` on the session. A non-agent caller is rejected. A `who` or `where` that names a non-LAN IP or a remote MAC is rewritten to the C2-talking LAN client when that identity is known.
 
 #### Token effect
 

@@ -10,7 +10,9 @@ import { promisify } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-investigation'
+import {
+  bindCaseReportToC2TalkingLan, foldToolResultText,
+} from '@deepseek-ai/dsh-investigation'
 import { coercePcapFilterFields, rejectInvalidTsharkFields, unwrapPcapDisplayFilter } from './fields.ts'
 
 export { INVALID_TSHARK_FIELDS, RECOMMENDED_TSHARK_FIELDS, rejectInvalidTsharkFields } from './fields.ts'
@@ -299,8 +301,13 @@ export function apply(ctx: Context, config: Config): void {
       for (const [field, value] of Object.entries(report)) {
         if (value === '') throw new Error(`case_report ${field} must be a non-empty string`)
       }
-      ctx.investigation.recordReport(exec.agent.session, report)
-      return Promise.resolve(report)
+      const bound = bindCaseReportToC2TalkingLan(
+        report,
+        ctx.investigation.identities(exec.agent.session),
+        foldToolResultText(exec.agent.session.events),
+      )
+      ctx.investigation.recordReport(exec.agent.session, bound)
+      return Promise.resolve(bound)
     },
     presentCall: args => ({ card: 'generic', title: 'Case report', kind: 'other', rawInput: args }),
   }))

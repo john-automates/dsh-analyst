@@ -240,6 +240,39 @@ describe('analyst tools', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
+  it('rewrites case_report who/where that name the C2 onto the ledger LAN client', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '198.51.100.80', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'hostname', value: 'lan-host', label: 'hostname' })
+    const inverted = {
+      who: '198.51.100.80',
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: '198.51.100.80 02:00:00:00:00:cc',
+      why: 'c2',
+      how: 'https',
+    }
+    const result = await ctx.tools.execute({
+      signal, callId: CallId('report-c2'), name: 'case_report', arguments: inverted, agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: '10.0.10.2',
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: '10.0.10.2 02:00:00:00:00:0a',
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2')
+    expect(text(result)).toContain('Where: 10.0.10.2 02:00:00:00:00:0a')
+    expect(text(result)).toContain('What: beacon to 198.51.100.80')
+    expect(text(result)).not.toContain('Who: 198.51.100.80')
+    expect(text(result)).not.toContain('lan-host')
+  })
+
   it('records a 5W1H case_report and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const report = {
