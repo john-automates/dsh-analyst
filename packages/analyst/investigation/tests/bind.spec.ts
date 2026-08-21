@@ -621,6 +621,8 @@ describe('BindRelationship', () => {
     const labeledWho = `User Account: ${USER} / Full Name: ${FULL_NAME} / MAC Address: ${CLIENT_MAC}`
     const labeledWhoWithHost = `${labeledWho} / Hostname: ${HOST}`
     const sentenceWhere = `The infected host was identified as ${HOST} (${LAN})`
+    const quotedWhere = `The infected host was identified as ${LAN}, hostname "${HOST}"`
+    const quotedWhereSingle = `The infected host was identified as ${LAN}, hostname '${HOST}'`
     expect(identityDonatesToVictim(dcDonated, live, identities, evidence)).toBe(false)
     expect(identityDonatesToVictim(victimUser, live, identities, evidence)).toBe(false)
     expect(caseReportDenyReason({
@@ -633,9 +635,11 @@ describe('BindRelationship', () => {
     }, live, identities, evidence)).toBeUndefined()
     expect(caseReportDenyReason({ who: labeledWhoWithHost }, live, identities, evidence)).toBeUndefined()
     expect(caseReportDenyReason({ where: sentenceWhere }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ where: quotedWhere }, live, identities, evidence)).toBeUndefined()
+    expect(caseReportDenyReason({ where: quotedWhereSingle }, live, identities, evidence)).toBeUndefined()
     expect(caseReportDenyReason({
       who: labeledWho,
-      where: sentenceWhere,
+      where: quotedWhere,
     }, live, identities, evidence)).toBeUndefined()
     expect(caseReportDenyReason({ who: `${labeledWho} / ${C2}` }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
@@ -645,12 +649,16 @@ describe('BindRelationship', () => {
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ where: `${sentenceWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${quotedWhere} talking to ${C2}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ where: `${quotedWhere} / ${DISTRACTOR_MAC}` }, live, identities, evidence))
+      .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: 'the workstation on the LAN' }, live, identities, evidence))
       .toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: ' () ' }, live, identities, evidence)).toBe(UNBOUND_REASON)
     const report = requireCaseReport(live, identities, claims, evidence, {
       who: labeledWho,
-      where: sentenceWhere,
+      where: quotedWhere,
     })
     expect(report.who).toEqual({
       entity_id: LAN,

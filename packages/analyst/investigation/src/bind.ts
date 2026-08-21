@@ -123,6 +123,8 @@ const HANDLE_WRAPPER_WORDS = new Set([
   'user', 'account', 'full', 'name', 'mac', 'address', 'hostname', 'host',
   'the', 'infected', 'was', 'identified', 'as',
 ])
+/** Who/where delimiters: whitespace, punctuation, and ASCII quotes. */
+const HANDLE_TOKEN_DELIMITERS = String.raw`\s,;:|/'"`
 
 /** Model-supplied who/where after deny/coerce, before the row fills omitted keys. */
 export interface SubmittedIdentitySlots {
@@ -589,8 +591,9 @@ export function requireCaseReport(
  * string whose identity tokens are all victim-row handles (bound victim IP,
  * or a ledger user / full_name / hostname / MAC that donates to that victim
  * or is evidenced on that victim the same way omitted mac/user persist) is
- * coerced to `{ entity_id: victim.addr }`. Label words and sentence wrappers
- * are not identity tokens. A multi-word full_name is one handle. A user,
+ * coerced to `{ entity_id: victim.addr }`. Label words, sentence wrappers,
+ * and wrapping ASCII quotes are not identity tokens. A multi-word full_name
+ * is one handle. A user,
  * hostname, MAC, or full_name is a victim-row handle, not an entity id; the
  * persisted packet still uses the victim address. A string that names the
  * c2, a distractor, another IPv4, or unmatched identity tokens stays unbound.
@@ -1086,8 +1089,8 @@ function coerceIdentitySlotArg(
 /**
  * Whether every identity token in `text` is a victim-row handle.
  * The whole trimmed string may itself be one handle (user, full_name,
- * hostname, MAC, or bound victim IP). Label words and sentence wrappers
- * are ignored. A multi-word full_name is one handle.
+ * hostname, MAC, or bound victim IP). Label words, sentence wrappers, and
+ * wrapping ASCII quotes are ignored. A multi-word full_name is one handle.
  * @param text - trimmed who/where string.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
@@ -1182,8 +1185,9 @@ function matchesVictimHandle(token: string, handles: Set<string>): boolean {
 /**
  * Identity tokens: parenthesized groups, then victim-row handles in the
  * remaining text (longest match, so a multi-word full_name stays one
- * token), then leftover words that are not field labels or sentence
- * wrappers. Unmatched identity tokens fail the victim-row handle check.
+ * token), then leftover words that are not field labels, sentence
+ * wrappers, or wrapping ASCII quotes. Unmatched identity tokens fail the
+ * victim-row handle check.
  * @param text - trimmed who/where string.
  * @param handles - victim-row handle values used for longest-match extract.
  * @returns tokens in encounter order.
@@ -1209,7 +1213,7 @@ function identityLikeTokens(text: string, handles: ReadonlySet<string> = new Set
       }
     }
   }
-  for (const match of mask.join('').matchAll(/[^\s,;:|/]+/g)) {
+  for (const match of mask.join('').matchAll(new RegExp(`[^${HANDLE_TOKEN_DELIMITERS}]+`, 'g'))) {
     if (!HANDLE_WRAPPER_WORDS.has(match[0].toLowerCase())) tokens.push(match[0])
   }
   return tokens
@@ -1225,11 +1229,15 @@ function handleSearchVariants(handle: string): string[] {
 }
 
 /**
- * Case-insensitive handle match bounded by start/end or a who/where delimiter.
+ * Case-insensitive handle match bounded by start/end or a who/where
+ * delimiter (whitespace, punctuation, or an ASCII quote).
  * @param handle - one search spelling.
  * @returns the global match pattern.
  */
 function handleBoundaryPattern(handle: string): RegExp {
   const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![^\\s,;:|/])${escaped}(?![^\\s,;:|/])`, 'gi')
+  return new RegExp(
+    `(?<![^${HANDLE_TOKEN_DELIMITERS}])${escaped}(?![^${HANDLE_TOKEN_DELIMITERS}])`,
+    'gi',
+  )
 }

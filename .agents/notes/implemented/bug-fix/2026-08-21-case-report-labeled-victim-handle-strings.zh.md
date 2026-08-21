@@ -19,7 +19,7 @@ Status: implemented
 
 当前绑定之后，当 `who` / `where` 字符串里的每个身份 token 都是受害端行句柄（IP／MAC／主机名／用户／`full_name`）时，`caseReportDenyReason` 把它强制转换成 `{ entity_id: victim }`，即使字符串还带字段标签或句子包裹。随后由已有的完整投影路径持久化省略的 mac／user。
 
-标签词和句子包裹不是身份 token。多词 `full_name` 作为一句柄匹配。MAC、用户、主机名或 `full_name` 在捐给被绑定 victim，或按省略 mac／user 持久化的同一方式（受害端 IP 帧／会话客户端戳记）证据落在该 victim 上时，是受害端行句柄。粘滞的域控捐出不会让受害端 IP 送来的 MAC 通不过句柄检查。
+标签词和句子包裹不是身份 token。ASCII 单引号和双引号是 who/where 分隔符，所以带引号的主机名仍作为一句柄匹配。多词 `full_name` 作为一句柄匹配。MAC、用户、主机名或 `full_name` 在捐给被绑定 victim，或按省略 mac／user 持久化的同一方式（受害端 IP 帧／会话客户端戳记）证据落在该 victim 上时，是受害端行句柄。粘滞的域控捐出不会让受害端 IP 送来的 MAC 通不过句柄检查。
 
 点名 C2、干扰项、另一个 IPv4 或非 victim 身份的字符串仍保持未绑定。无法匹配的身份 token 仍拒绝。不编造身份。不对调 token。将线索指定为 victim 仍被拒绝。
 
@@ -28,6 +28,8 @@ Status: implemented
 ## 备选方案
 
 **继续把每个剩余词都当成身份 token。** 否决：字段标签和句子包裹会在正确绑定之后让句柄检查失败。
+
+**句柄边界仍只认空白和 `,;:|/`。** 否决：主机名外的 ASCII 引号会让 `"hostname"` 成为无法匹配的剩余 token。
 
 **当前绑定之后把任意字符串强制转换成 victim。** 否决：点名 C2、干扰项、另一个 IPv4 或无法匹配的身份 token 的字符串必须保持未绑定。
 
@@ -41,7 +43,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC`、`DISTRACTOR_MAC`、`lan-user`、`Lan User` 和 `lan-host`。当前绑定之后，带标签的 who `User Account: lan-user / Full Name: Lan User / MAC Address: CLIENT_MAC` 会强制转换并接受。点名受害端 IP 与主机名的句子 where 会强制转换并接受。同样的字符串若还点名 C2 或域控 MAC 则保持未绑定。没有身份 token 的无法匹配散文保持未绑定。强制转换之后，粘滞域控捐出让投影行为空时，省略的 mac／user 从受害端 IP 帧／会话客户端证据持久化。行上已有的 ip／hostname 保留。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一带标签／句子 `case_report` 先跑 `bind_relationship` 再跑 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC`、`DISTRACTOR_MAC`、`lan-user`、`Lan User` 和 `lan-host`。当前绑定之后，带标签的 who `User Account: lan-user / Full Name: Lan User / MAC Address: CLIENT_MAC` 会强制转换并接受。点名受害端 IP 与主机名的句子 where 会强制转换并接受，包括 `The infected host was identified as <IP>, hostname "<hostname>"`。同样的字符串若还点名 C2 或域控 MAC 则保持未绑定。没有身份 token 的无法匹配散文保持未绑定。强制转换之后，粘滞域控捐出让投影行为空时，省略的 mac／user 从受害端 IP 帧／会话客户端证据持久化。行上已有的 ip／hostname 保留。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一带标签／句子 `case_report` 先跑 `bind_relationship` 再跑 `case_report`。
 
 ## 后果
 
