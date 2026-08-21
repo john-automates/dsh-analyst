@@ -424,6 +424,58 @@ describe('BindRelationship', () => {
     ])).toBe(PAYLOAD)
   })
 
+  it('omits windows.msn.com dests and prefers a later non-CDN dotted name', () => {
+    const MSN_NAME = 'windows.msn.com'
+    const MSN_DEST = '203.0.113.81'
+    const MICROSOFT_DEST = '203.0.113.82'
+    const AKAMAI_DEST = '203.0.113.83'
+    const live = bind()
+    const msnHost = { ...identityOf('hostname', MSN_NAME)!, evidence_id: MSN_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const microsoftHost = { ...identityOf('hostname', CDN_NAME)!, evidence_id: MICROSOFT_DEST }
+    const akamaiHost = { ...identityOf('hostname', 'a1.akamai.net')!, evidence_id: AKAMAI_DEST }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', MSN_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', MICROSOFT_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', AKAMAI_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      victimHost,
+      msnHost,
+      microsoftHost,
+      akamaiHost,
+      payloadOnC2,
+    ]
+    expect(resolveBind({
+      relationship: { ...relationship, dst: MSN_DEST, evidence_id: 'conv-msn' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${MSN_DEST}` }],
+    }, [msnHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(C2)
+    expect(acceptedC2Ips(live, identities)).not.toContain(MSN_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(MICROSOFT_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(AKAMAI_DEST)
+    expect(acceptedC2Ips(live, [
+      { ...identityOf('ip', MSN_DEST)!, evidence_id: LAN },
+    ], `ip.addr: ${MSN_DEST}\thttp.host: ${MSN_NAME}`)).toEqual([C2])
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, identities)).not.toBe(MSN_NAME)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).not.toContain(MSN_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(MSN_NAME)
+    expect(report.where.hostname).not.toBe(MSN_NAME)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+  })
+
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
     const live = bind()
     expect(caseReportDenyReason({ what: 'x' }, undefined)).toBe(UNBOUND_REASON)
