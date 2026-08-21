@@ -367,9 +367,7 @@ export function apply(ctx: Context, config: Config): void {
           `Where: ${renderIdentitySlot(value.where)}`,
           `Why: ${value.why}`,
           `How: ${value.how}`,
-          ...value.c2_ips === undefined || value.c2_ips.length === 0
-            ? []
-            : [`C2 IPs: ${value.c2_ips.join(', ')}`],
+          ...value.c2_ips === undefined ? [] : [`C2 IPs: ${value.c2_ips.join(', ')}`],
           ...value.c2_domain === undefined ? [] : [`C2 domain: ${value.c2_domain}`],
         ].join('\n'),
       }],

@@ -401,6 +401,8 @@ describe('BindRelationship', () => {
     expect(c2DomainHuntsForBind(lanC2, [])).toEqual([])
     expect(acceptedC2Domain(lanC2, [])).toBeUndefined()
     expect(acceptedC2Ips(lanC2, [])).toEqual([])
+    expect(projectCaseReport(lanC2, [], { what: 'a', when: 'b', why: 'c', how: 'd' })?.c2_ips)
+      .toBeUndefined()
     expect(otherEndHuntForDeniedBind({
       relationship: dcRelationship,
       endpoints: [{ addr: C2, role: 'victim', because: 'the alert named this IP' }],

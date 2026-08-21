@@ -1897,6 +1897,44 @@ describe('analyst tools', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
+  it('omits C2 IPs on case_report when the live bind has two C2s', async () => {
+    const { ctx, owner } = await setup()
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-two-c2'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+          { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+          { addr: '203.0.113.50', role: 'c2', because: 'second WAN peer' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-two-c2'),
+      name: 'case_report',
+      arguments: {
+        what: 'beacon to 198.51.100.80',
+        when: '2026-08-21',
+        why: 'c2',
+        how: 'https',
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)?.c2_ips).toBeUndefined()
+    expect(text(result)).not.toContain('C2 IPs:')
+  })
+
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const bind = await ctx.tools.execute({

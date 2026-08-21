@@ -579,6 +579,9 @@ describe('investigation service', () => {
       execute: (args) => {
         const filter = typeof args.display_filter === 'string' ? args.display_filter : ''
         if (filter.includes('ip.src ==')) return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a' })
+        if (filter.includes('tls.handshake.extensions_server_name')) {
+          return Promise.resolve({ text: 'tls.handshake.extensions_server_name: c2.example.test' })
+        }
         if (filter.includes('ip.addr ==')) return Promise.resolve({ text: 'hostname: lan-host' })
         if (filter.includes('eth.src')) return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0c' })
         if (filter.includes('llmnr')) return Promise.resolve({ text: 'hostname: other-host' })
@@ -629,11 +632,29 @@ describe('investigation service', () => {
       arguments: { path: 'evidence/a.pcap', display_filter: 'tcp' },
       agent: owner,
     })
+    const domain = await ctx.tools.execute({
+      signal,
+      callId: CallId('pcap-c2-domain-scoped'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter:
+          '(tls.handshake.extensions_server_name or dns.qry.name or dns.resp.name) and ip.addr == 198.51.100.80',
+        fields: [
+          'tls.handshake.extensions_server_name',
+          'dns.qry.name',
+          'dns.resp.name',
+        ],
+      },
+      agent: owner,
+    })
+    expect(domain.isError).toBe(false)
     expect(ctx.investigation.identities(owner.session)).toEqual(expect.arrayContaining([
       { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', evidence_id: '10.0.10.2' },
       { kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2' },
       { kind: 'mac', value: '02:00:00:00:00:0c', label: 'MAC' },
       { kind: 'hostname', value: 'other-host', label: 'hostname' },
+      { kind: 'hostname', value: 'c2.example.test', label: 'hostname', evidence_id: '198.51.100.80' },
     ]))
   })
 
@@ -1624,6 +1645,65 @@ describe('investigation service', () => {
     expect(report.where.hostname).not.toBe(DOMAIN)
     expect(ctx.investigation.bind(owner.session)?.endpoints.filter(endpoint => endpoint.role === 'c2'))
       .toHaveLength(1)
+  })
+
+  it('issues neither extra-wan nor c2-domain when the live bind has two C2s', async () => {
+    const { ctx, owner } = await setup()
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-two-c2'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+          { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+          { addr: '203.0.113.50', role: 'c2', because: 'second WAN peer' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'extra-wan')).toBe(false)
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
+    expect(requireCaseReport(
+      ctx.investigation.bind(owner.session),
+      ctx.investigation.identities(owner.session),
+      { what: 'a', when: 'b', why: 'c', how: 'd' },
+    ).c2_ips).toBeUndefined()
+  })
+
+  it('does not issue c2-domain from extra-wan when no bind is live', async () => {
+    const { ctx, caseDir, owner } = await setup()
+    await mkdir(join(caseDir, 'evidence'), { recursive: true })
+    await writeFile(join(caseDir, 'evidence', 'a.pcap'), 'pcap')
+    ctx.investigation.recordHunt(owner.session, {
+      kind: 'extra-wan', subjectKind: 'ip', subject: '10.0.10.2',
+    })
+    ctx.tools.register(defineTool({
+      name: 'pcap_filter',
+      description: 'Stub capture filter.',
+      parameters: {
+        path: { type: 'string', required: true },
+        display_filter: { type: 'string' },
+        fields: { type: 'array', items: { type: 'string' } },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+        render: (_args, value) => [{ type: 'text', text: value.text }],
+      },
+      execute: () => Promise.resolve({ text: 'ip.dst: 203.0.113.50' }),
+    }))
+    const echoed = await ctx.tools.execute({
+      signal, callId: CallId('echo-extra-wan-unbound'), name: 'echo',
+      arguments: { text: '10.0.10.2' }, agent: owner,
+    })
+    expect(echoed.isError).toBe(false)
+    expect(ctx.investigation.bind(owner.session)).toBeUndefined()
+    expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
+    expect(ctx.investigation.identities(owner.session)).toContainEqual({
+      kind: 'ip', value: '203.0.113.50', label: 'IP',
+    })
   })
 
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {

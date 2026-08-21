@@ -96,6 +96,12 @@ describe('investigation invariants', () => {
       c2_domain: 'c2.example.test',
       c2_ips: ['198.51.100.80', '203.0.113.50'],
     })
+    session.append('investigation/report', {
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+      what: 'b', when: 'c',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+      why: 'e', how: 'f',
+    })
     expect(() => { ctx.emit('session/event', {} as Session, { type: 'todo/write', seq: 0, time: 0, data: {} } as SessionEvent) }).not.toThrow()
     expect(session.events.some(event => event.type === 'investigation/identity')).toBe(true)
   })
