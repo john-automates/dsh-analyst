@@ -241,6 +241,12 @@ describe('BindRelationship', () => {
     }).ok).toBe(false)
     expect(normalizeEndpointAddr('LAN-HOST')).toBe('lan-host')
     expect(projectVictimSlot(bind(), [])).toEqual({ entity_id: LAN, ip: LAN })
+    expect(projectVictimSlot(bind({
+      endpoints: [
+        { addr: HOST, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue' },
+      ],
+    }), [])).toEqual({ entity_id: HOST })
     expect(caseReportDenyReason('x', bind())).toBeUndefined()
     expect(caseReportDenyReason({ who: 1 }, bind())).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ who: { entity_id: 1 } }, bind())).toBe(UNBOUND_REASON)
@@ -515,6 +521,9 @@ describe('BindRelationship', () => {
     const clientMac = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }
     const dcMac = { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR }
     const victimHost = { ...identityOf('hostname', HOST)!, evidence_id: LAN }
+    const emptyEntity = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR, entity_id: '' }
+    const victimEntity = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR, entity_id: LAN }
+    const otherEntity = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR, entity_id: DISTRACTOR }
     const frames = [
       `eth.src: ${CLIENT_MAC}\tip.src: ${LAN}`,
       `eth.src: ${DISTRACTOR_MAC}\tip.src: ${DISTRACTOR}`,
@@ -522,7 +531,14 @@ describe('BindRelationship', () => {
     const identities = [identityOf('ip', LAN)!, clientMac, dcMac, victimHost]
     const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
     expect(identityDonatesToVictim(clientMac, live, identities, frames)).toBe(true)
+    expect(identityDonatesToVictim(emptyEntity, live, identities, frames)).toBe(true)
+    expect(identityDonatesToVictim(victimEntity, live, identities, frames)).toBe(true)
+    expect(identityDonatesToVictim(otherEntity, live, identities, frames)).toBe(false)
     expect(identityDonatesToVictim(dcMac, live, identities, frames)).toBe(false)
+    const strayA = identityOf('mac', '02:00:00:00:00:0c')!
+    const strayB = identityOf('mac', '02:00:00:00:00:0d')!
+    expect(identityDonatesToVictim(strayA, live, [identityOf('ip', LAN)!, clientMac, strayA, strayB], frames))
+      .toBe(false)
     expect(identityDonatesToVictim(victimHost, live, identities, frames)).toBe(true)
     const report = requireCaseReport(live, identities, claims, frames)
     expect(report.who).toEqual({

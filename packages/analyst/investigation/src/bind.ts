@@ -246,11 +246,11 @@ export function identityDonatesToVictim(
   evidenceText = '',
 ): boolean {
   const victim = victimOf(bind)
-  if (victim === undefined) return false
-  if (identity.kind === 'mac' && macSourcedFromVictim(identity, victim.addr, evidenceText)) {
+  if (identity.kind === 'mac' && victim !== undefined && macSourcedFromVictim(identity, victim.addr, evidenceText)) {
     return identity.entity_id === undefined || identity.entity_id === '' || identity.entity_id === victim.addr
   }
   if (pointsAtNonVictim(identity.evidence_id, bind)) return false
+  if (victim === undefined) return false
   return entityIdForIdentity(identity, bind, identities, evidenceText) === victim.addr
 }
 
