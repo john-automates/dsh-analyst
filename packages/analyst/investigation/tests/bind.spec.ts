@@ -287,6 +287,15 @@ describe('BindRelationship', () => {
       who: { entity_id: USER },
       where: { entity_id: LAN },
     }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: JSON.stringify({ entity_id: USER }),
+      where: JSON.stringify({ entity_id: LAN }),
+    }, live, identities)).toBeUndefined()
+    expect(caseReportDenyReason({
+      who: `{"entity_id":"${C2}"}`,
+    }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: '{not-json' }, live, identities)).toBe(UNBOUND_REASON)
+    expect(caseReportDenyReason({ who: USER }, live, identities)).toBe(UNBOUND_REASON)
     expect(caseReportDenyReason({ where: { entity_id: USER } }, live, identities)).toBeUndefined()
     const report = requireCaseReport(live, identities, claims)
     expect(report.who).toEqual({ entity_id: LAN, ip: LAN, user: USER })

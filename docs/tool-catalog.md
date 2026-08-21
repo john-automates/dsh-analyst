@@ -2325,26 +2325,40 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
       "description": "How it happened, as evidenced."
     },
     "who": {
-      "type": "object",
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text who is denied.",
-      "additionalProperties": false,
-      "properties": {
-        "entity_id": {
-          "type": "string",
-          "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entity_id": {
+              "type": "string",
+              "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+            }
+          }
+        },
+        {
+          "type": "string"
         }
-      }
+      ],
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A JSON object string with entity_id is the same handle. Free-text who is denied."
     },
     "where": {
-      "type": "object",
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text where is denied.",
-      "additionalProperties": false,
-      "properties": {
-        "entity_id": {
-          "type": "string",
-          "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entity_id": {
+              "type": "string",
+              "description": "Bound victim address, or a user, hostname, MAC, or full_name on that victim row."
+            }
+          }
+        },
+        {
+          "type": "string"
         }
-      }
+      ],
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A JSON object string with entity_id is the same handle. Free-text where is denied."
     }
   },
   "required": [

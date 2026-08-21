@@ -295,20 +295,46 @@ export function apply(ctx: Context, config: Config): void {
       why: { type: 'string', required: true, description: 'Why it happened, as evidenced.' },
       how: { type: 'string', required: true, description: 'How it happened, as evidenced.' },
       who: {
-        type: 'object',
-        additionalProperties: false,
-        description: 'Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text who is denied.',
-        properties: {
-          entity_id: { type: 'string', description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.' },
-        },
+        description: [
+          'Optional victim-row handle.',
+          'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
+          'A JSON object string with entity_id is the same handle.',
+          'Free-text who is denied.',
+        ].join(' '),
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              entity_id: {
+                type: 'string',
+                description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.',
+              },
+            },
+          },
+          { type: 'string' },
+        ],
       },
       where: {
-        type: 'object',
-        additionalProperties: false,
-        description: 'Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. Free-text where is denied.',
-        properties: {
-          entity_id: { type: 'string', description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.' },
-        },
+        description: [
+          'Optional victim-row handle.',
+          'The bound victim address, or a user, hostname, MAC, or full_name on that row.',
+          'A JSON object string with entity_id is the same handle.',
+          'Free-text where is denied.',
+        ].join(' '),
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              entity_id: {
+                type: 'string',
+                description: 'Bound victim address, or a user, hostname, MAC, or full_name on that victim row.',
+              },
+            },
+          },
+          { type: 'string' },
+        ],
       },
     },
     output: {

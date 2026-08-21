@@ -417,6 +417,77 @@ describe('analyst tools', () => {
     expect(text(result)).toContain('Who: 10.0.10.2 lan-user')
   })
 
+  it('closes case_report when who/where are JSON strings with entity_id after a live bind', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'user', value: 'lan-user', label: 'user', entity_id: '10.0.10.2',
+    })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const stringSlots = {
+      ...claims,
+      who: JSON.stringify({ entity_id: 'lan-user' }),
+      where: JSON.stringify({ entity_id: '10.0.10.2' }),
+    }
+    const unbound = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-json-unbound'),
+      name: 'case_report',
+      arguments: stringSlots,
+      agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(text(unbound)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-json-slots'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const inverted = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-json-inverted'),
+      name: 'case_report',
+      arguments: { ...claims, who: JSON.stringify({ entity_id: '198.51.100.80' }) },
+      agent: owner,
+    })
+    expect(inverted.isError).toBe(true)
+    expect(text(inverted)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-json-slots'),
+      name: 'case_report',
+      arguments: stringSlots,
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2', user: 'lan-user' },
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2', user: 'lan-user' },
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 lan-user')
+  })
+
   it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const bind = await ctx.tools.execute({
