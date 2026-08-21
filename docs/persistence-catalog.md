@@ -536,18 +536,19 @@ Source: [`packages/analyst/investigation/src/types.ts:140`](../packages/analyst/
 /**
  * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
  * who/where are the projected victim entity row; omitted model keys are
- * filled from that row after deny/coerce. Omitted mac and user also
- * persist from victim-IP evidence when a sticky DC donate or uniqueness
- * left the row empty. A submitted user, hostname, or full_name is kept
+ * filled from that row after deny/coerce. Omitted mac persists the
+ * unique ledger MAC that is not DC/gateway-only when a sticky DC donate
+ * or uniqueness left the row empty. Omitted user still persists from
+ * victim-IP evidence. A submitted user, hostname, or full_name is kept
  * when the row has no donated value and that identity does not donate to
- * a different entity. A submitted mac is kept unless that MAC only
- * appears on DC/gateway frames. `c2_domain` is the harvested TLS SNI or
- * DNS name evidenced on the bound C2 IPv4, when one exists.
+ * a different entity. A submitted mac is kept unless talking-IP frames
+ * source that MAC only from a non-victim. `c2_domain` is the harvested
+ * TLS SNI or DNS name evidenced on the bound C2 IPv4, when one exists.
  */
 'investigation/report': CaseReport
 ```
 
-Source: [`packages/analyst/investigation/src/types.ts:172`](../packages/analyst/investigation/src/types.ts)
+Source: [`packages/analyst/investigation/src/types.ts:173`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

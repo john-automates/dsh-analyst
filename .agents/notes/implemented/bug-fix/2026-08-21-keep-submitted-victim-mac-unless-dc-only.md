@@ -16,7 +16,7 @@ DC-scoped stay-off means a MAC that only appears on DC/gateway frames, not a MAC
 
 When projecting or remapping who/where onto the bound victim entity, keep a submitted `mac` if the model offered that key, the projected row has no donated value, and that MAC is not DC/gateway-only. Persist that mac on accepted who/where. Do not invent a MAC the model never submitted.
 
-A MAC is DC/gateway-only when it never appears as `eth.src` on the bound victim IP and never appears in a victim-IP-scoped `eth.src` dump. Talking-IP / `ipsEvidencingMac` / `evidencedOnVictimIp` / victim-IP-scoped dump helpers decide that. A sticky DC `evidence_id` is not DC-only when victim-IP frames also source that MAC, or when the model submitted it on the victim close and those helpers show it is not DC-only.
+DC/gateway-only is exclusive non-victim talking-IP: [DC-only MAC is exclusive non-victim talking-IP](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md) owns that test. Absence of talking-IP evidence is not DC-only. Ledger `evidence_id`, `entity_id`, and first-donate are not the ownership test.
 
 A model-offered IP does not replace the bound victim ip. Submitted user/hostname/`full_name` still persist under [keep submitted victim-row identities](2026-08-21-keep-submitted-victim-row-identities.md). Donated ip/hostname/user/`full_name` already on the row stay.
 
@@ -42,8 +42,8 @@ The hole is the empty-`projected[key]` branch in `completeAcceptedSlot` — the 
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET C2 (`198.51.100.80`), idle or DC row (`10.0.10.3`), `CLIENT_MAC`, and `DISTRACTOR_MAC`. After a live bind, who/where that submit `CLIENT_MAC` (ledger first donated it to the DC; victim-IP frames also source it) persist `CLIENT_MAC`. A submitted DC-only `DISTRACTOR_MAC` stays off. Submitted user/hostname/`full_name` still persist. An omitted mac is not invented. A model-offered other IP does not replace the bound victim ip. `packages/analyst/analyst-tools/tests/tools.spec.ts` records the same submitted-mac close through `bind_relationship` then `case_report`.
+`packages/analyst/investigation/tests/bind.spec.ts` uses a synthetic LAN client (`10.0.10.2`), TEST-NET C2 (`198.51.100.80`), idle or DC row (`10.0.10.3`), `CLIENT_MAC`, and `DISTRACTOR_MAC`. After a live bind, who/where that submit `CLIENT_MAC` (ledger first donated it to the DC) persist `CLIENT_MAC` whether or not victim-IP frames also source it. A submitted DC-only `DISTRACTOR_MAC` stays off. Submitted user/hostname/`full_name` still persist. An omitted mac is not invented when several MACs are equally unproven. A model-offered other IP does not replace the bound victim ip. `packages/analyst/analyst-tools/tests/tools.spec.ts` records the same submitted-mac close through `bind_relationship` then `case_report`.
 
 ## Consequences
 
-A live bind plus a submitted victim MAC writes that mac even when a sticky DC donate left the projected row empty. A DC/gateway-only MAC still stays off. An omitted mac is still not invented when no victim-IP evidence exists. Bound victim ip stays. Submitted user/hostname/`full_name` and donated slots stay.
+A live bind plus a submitted victim MAC writes that mac even when a sticky DC donate left the projected row empty. A DC/gateway-only MAC still stays off. An omitted mac is still not invented when several MACs are equally unproven. Bound victim ip stays. Submitted user/hostname/`full_name` and donated slots stay.

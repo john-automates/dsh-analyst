@@ -14,11 +14,11 @@ Status: implemented
 
 ## 决策
 
-当前绑定之后，即使模型只提交 `entity_id`，也把省略的 `mac` 和 `user` 从受害端 IP 证据持久化到已接受的 who/where。
+当前绑定之后，即使模型只提交 `entity_id`，也把省略的 `mac` 和 `user` 持久化到已接受的 who/where。
 
-先捐给域控的 MAC，只要受害端 IP 帧来源于它，或限定在受害端 IP 的 `eth.src` 转储证明它，仍填入省略的 mac 槽。粘滞的域控 `entity_id` 或 `evidence_id` 不得否决该省略持久化。证据落在被绑定 victim 上的 user（会话客户端戳记，或客户端为该 IP 的 Kerberos／SAMR 会话）即使唯一性会阻止捐出，也填入省略的 user。不编造 user。不持久化捐给非 victim、且证据不在 victim 上的 user。
+先捐给域控的 MAC，只要它是唯一不是仅域控／网关的账本 MAC，仍填入省略的 mac 槽。[仅域控 MAC 须为排他的非 victim 通信 IP](2026-08-21-dc-only-mac-is-exclusive-non-victim-talking-ip.md) 拥有该测试。粘滞的域控 `entity_id` 或 `evidence_id` 不得隐藏未被证明为仅域控的网卡。若干同样未被证明的 MAC 都不持久化。证据落在被绑定 victim 上的 user（会话客户端戳记，或客户端为该 IP 的 Kerberos／SAMR 会话）即使唯一性会阻止捐出，也填入省略的 user。不编造 user。不持久化捐给非 victim、且证据不在 victim 上的 user。
 
-不丢掉 ip／hostname／`full_name`。不编造该行或帧无法证明的 MAC。仅域控／网关 MAC 保持不在。
+不丢掉 ip／hostname／`full_name`。若干账本 MAC 同样未被证明时不编造 MAC。仅域控／网关 MAC 保持不在。
 
 [除非仅出现在域控／网关帧上，否则保留提交的受害端 MAC](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md) 保持：提交的受害端 MAC 仍持久化；提交的仅域控 MAC 仍保持不在。[持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍复制已捐出的投影键。捐出和 `entityIdForIdentity` 保持：显式域控 `entity_id` 仍赢得归属。漏洞在 `completeAcceptedSlot` 中模型省略 mac／user 时 `projected[key]` 为空的分支。
 
@@ -42,8 +42,8 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC`、`DISTRACTOR_MAC`、`lan-user` 和干扰用户。当前绑定之后，只提交 `{ entity_id: victim }` 的 who/where 在受害端 IP 帧来源于 `CLIENT_MAC` 时持久化该 MAC，即使账本先把它捐给域控。证据落在受害端会话客户端上的省略 user 即使唯一性会阻止也持久化。仅域控 `DISTRACTOR_MAC` 保持不在。捐给非 victim 的 user 不持久化。ip／hostname／`full_name` 保留。没有受害端 IP 证据时不编造省略的 mac。提交的受害端 MAC 仍持久化。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一只含 `entity_id` 的结案走 `bind_relationship` 再走 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET C2（`198.51.100.80`）、空闲或域控行（`10.0.10.3`）、`CLIENT_MAC`、`DISTRACTOR_MAC`、`lan-user` 和干扰用户。当前绑定之后，只提交 `{ entity_id: victim }` 的 who/where 在 `CLIENT_MAC` 是唯一非仅域控账本 MAC 时持久化该 MAC，即使账本先把它捐给域控。证据落在受害端会话客户端上的省略 user 即使唯一性会阻止也持久化。仅域控 `DISTRACTOR_MAC` 保持不在。捐给非 victim 的 user 不持久化。ip／hostname／`full_name` 保留。若干同样未被证明的 MAC 时不编造省略的 mac。提交的受害端 MAC 仍持久化。`packages/analyst/analyst-tools/tests/tools.spec.ts` 用同一只含 `entity_id` 的结案走 `bind_relationship` 再走 `case_report`。
 
 ## 后果
 
-当前绑定加上只含 `entity_id` 的结案会在存在受害端 IP 证据时写出省略的 mac 和 user，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。捐给非 victim 的 user 仍保持不在。没有证据时仍不编造省略的槽位。提交的受害端 MAC 保留仍然有效。已捐出的 ip／hostname／`full_name` 保留。
+当前绑定加上只含 `entity_id` 的结案会在该 MAC 是唯一非仅域控账本值时写出省略的 mac，并在存在受害端 IP 证据时写出省略的 user，即使粘滞的域控捐出让投影行为空。仅域控／网关 MAC 仍保持不在。捐给非 victim 的 user 仍保持不在。若干同样未被证明的 MAC 仍都不持久化。提交的受害端 MAC 保留仍然有效。已捐出的 ip／hostname／`full_name` 保留。

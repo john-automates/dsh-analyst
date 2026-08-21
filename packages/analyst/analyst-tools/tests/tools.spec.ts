@@ -1016,6 +1016,15 @@ describe('analyst tools', () => {
     noMac.ctx.investigation.recordIdentity(noMac.owner.session, {
       kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
     })
+    noMac.owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-dc-only-mac'),
+        content: [{ type: 'text', text: 'eth.src: 02:00:00:00:00:0b\tip.src: 10.0.10.3' }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
     const noMacBind = await noMac.ctx.tools.execute({
       signal,
       callId: CallId('bind-no-victim-mac'),
@@ -1389,7 +1398,11 @@ describe('analyst tools', () => {
       agent: omitted.owner,
     })
     expect(omittedReport.isError).toBe(false)
-    expect(omitted.ctx.investigation.report(omitted.owner.session)?.who.mac).toBeUndefined()
+    expect(omitted.ctx.investigation.report(omitted.owner.session)?.who).toEqual({
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+    })
     await omitted.ctx.fiber.dispose()
   })
 

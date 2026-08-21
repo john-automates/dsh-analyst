@@ -6,12 +6,13 @@
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, a who/where string whose identity tokens are victim-row
  * handles is coerced to `{ entity_id: victim }` even when labels or a
- * sentence wrap those handles. Omitted mac and user also persist from
- * victim-IP evidence when a sticky DC donate or uniqueness left the
- * projected row empty. A submitted user,
- * hostname, or full_name is kept when the row has no donated value and that
- * identity does not donate to a different entity. A submitted mac is kept
- * unless that MAC only appears on DC/gateway frames.
+ * sentence wrap those handles. Omitted mac persists the unique ledger MAC
+ * that is not DC/gateway-only when a sticky DC donate or uniqueness left
+ * the projected row empty. Omitted user still persists from victim-IP
+ * evidence. A submitted user, hostname, or full_name is kept when the row
+ * has no donated value and that identity does not donate to a different
+ * entity. A submitted mac is kept unless talking-IP frames source that
+ * MAC only from a non-victim.
  * @module @deepseek-ai/dsh-investigation/bind
  */
 
@@ -444,29 +445,33 @@ export function projectVictimSlot(
  * Persist the projected victim row after deny/coerce.
  * Keys the model omitted are filled from that row. A donated victim-IP-sourced
  * MAC — including a field-only `eth.src` dump scoped to that IP — is copied
- * even when the model omits `mac`. When the row did not donate `mac` or
- * `user`, an omitted key still persists from victim-IP evidence: a MAC
- * sourced from the bound victim IP (`ip.src`, outbound `ip → peer`, or ARP
- * `is at`) or a victim-IP-scoped `eth.src` dump, and a user evidenced on
- * that victim (conversation-client stamp). A sticky DC `entity_id` or
- * `evidence_id` does not veto that omitted persist. Uniqueness does not
- * block an omitted conversation-client user. A user that donates to a
- * non-victim and is not evidenced on the victim stays off. A submitted
- * user, hostname, or full_name is kept when the row has no donated value
- * and that identity does not donate to a different entity. A submitted mac
- * is kept unless that MAC only appears on DC/gateway frames (never as
- * eth.src on the bound victim IP, and never in a victim-IP-scoped dump).
+ * even when the model omits `mac`. When the row did not donate `mac`, the
+ * unique ledger MAC that is not DC/gateway-only still persists. Talking-IP
+ * frames that source a MAC only from a non-victim exclude that MAC.
+ * Absence of talking-IP evidence is not DC-only. A sticky DC `entity_id` or
+ * `evidence_id` is not the ownership test and does not hide a NIC that is
+ * not proven DC-only. Several equally unproven MACs persist none. When the
+ * row did not donate `user`, an omitted user still persists from victim-IP
+ * evidence (conversation-client stamp). Uniqueness does not block an
+ * omitted conversation-client user. A user that donates to a non-victim
+ * and is not evidenced on the victim stays off. A submitted user,
+ * hostname, or full_name is kept when the row has no donated value and
+ * that identity does not donate to a different entity. A submitted mac is
+ * kept unless talking-IP frames source that MAC only from a non-victim
+ * (never as eth.src from the bound victim IP; never the NIC of that
+ * victim). A submitted string that is not a six-octet MAC stays off.
  * A sticky DC `evidence_id` or donate does not override that submitted
- * victim MAC. A model-offered IP does not replace the bound victim ip.
+ * MAC. A model-offered IP does not replace the bound victim ip.
  * Slots the row and frames do not evidence are not invented.
  * @param projected - victim entity row from {@link projectVictimSlot}.
  * @param submitted - raw who or where argument after deny/coerce, or omitted.
  * @param bind - live bind used to reject a value that donates elsewhere.
  * @param identities - folded ledger identities for that donate check.
  * @param evidenceText - tool-result text for victim-IP scope and conversation-client donate.
- * @returns the accepted slot: entity_id, ip, donated or evidenced omitted
- * mac/user, donated hostname/full_name, kept submitted mac unless DC-only,
- * and kept submitted user/hostname/full_name.
+ * @returns the accepted slot: entity_id, ip, donated or unique non-DC-only
+ * omitted mac, evidenced omitted user, donated hostname/full_name, kept
+ * submitted mac unless talking-IP proves DC/gateway-only, and kept
+ * submitted user/hostname/full_name.
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
@@ -489,9 +494,10 @@ export function completeAcceptedSlot(
       const normalized = normalizeIdentityValue(key, offered)
       if (normalized === undefined) continue
       if (key === 'mac') {
+        if (!MAC_HANDLE.test(normalized)) continue
         if (
           bind === undefined
-          || !offeredMacEvidencedOnVictim(normalized, bind, identities, evidenceText)
+          || !offeredMacEvidencedOnVictim(normalized, bind, evidenceText)
         ) {
           continue
         }
@@ -524,13 +530,14 @@ export function completeAcceptedSlot(
 /**
  * Build the persisted case_report packet. who/where are the victim row.
  * Model-supplied who/where go through deny/coerce first; omitted keys are
- * filled from that projected row. Omitted mac and user also persist from
- * victim-IP evidence when a sticky DC donate or uniqueness left the row
- * empty. A submitted user, hostname, or full_name is kept when the row has
- * no donated value and that identity does not donate to a different entity.
- * A submitted mac is kept unless that MAC only appears on DC/gateway
- * frames. A harvested C2 DNS/SNI name persists as `c2_domain` and does not
- * fill who/where hostname.
+ * filled from that projected row. Omitted mac persists the unique ledger
+ * MAC that is not DC/gateway-only when a sticky DC donate or uniqueness
+ * left the row empty. Omitted user still persists from victim-IP evidence.
+ * A submitted user, hostname, or full_name is kept when the row has no
+ * donated value and that identity does not donate to a different entity.
+ * A submitted mac is kept unless talking-IP frames source that MAC only
+ * from a non-victim. A harvested C2 DNS/SNI name persists as `c2_domain`
+ * and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -926,14 +933,14 @@ function isIpv4(addr: string): boolean {
 }
 
 /**
- * First ledger MAC evidenced on the bound victim IP.
- * Talking-IP frames and a victim-IP-scoped `eth.src` dump qualify. A sticky
- * DC `entity_id` or `evidence_id` does not skip that MAC. A DC/gateway-only
- * MAC is not returned.
+ * Unique ledger MAC that is not DC/gateway-only.
+ * Talking-IP frames that source a MAC only from a non-victim exclude that
+ * MAC. A sticky DC `entity_id` or `evidence_id` does not hide a NIC that
+ * is not proven DC-only. Several equally unproven MACs return undefined.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
- * @returns the first evidenced MAC, or undefined when none exists.
+ * @returns the unique non-DC-only MAC, or undefined when none is unique.
  */
 function omittedMacEvidencedOnVictim(
   bind: RelationshipBind,
@@ -942,11 +949,13 @@ function omittedMacEvidencedOnVictim(
 ): string | undefined {
   const victim = victimOf(bind)
   if (victim === undefined) return undefined
+  const values = new Set<string>()
   for (const identity of identities) {
     if (identity.kind !== 'mac') continue
-    if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return identity.value
+    if (macIsDcOrGatewayOnly(identity.value, victim.addr, evidenceText)) continue
+    values.add(identity.value)
   }
-  return undefined
+  return values.size === 1 ? [...values][0] : undefined
 }
 
 /**
@@ -976,30 +985,38 @@ function omittedUserEvidencedOnVictim(
 }
 
 /**
- * Whether a model-offered MAC is evidenced on the bound victim IP.
- * Talking-IP frames (`ip.src`, outbound `ip → peer`, or ARP `is at`) and a
- * victim-IP-scoped `eth.src` dump (`evidence_id` of that IP) qualify. A
- * sticky DC `evidence_id` is not DC-only when those victim-IP frames or
- * that dump also evidence the MAC.
+ * Whether talking-IP frames source this MAC only from a non-victim.
+ * Absence of talking-IP evidence is not DC/gateway-only. Ledger
+ * `evidence_id`, `entity_id`, and first-donate are not this test.
+ * @param mac - normalized MAC.
+ * @param victimAddr - bound victim IPv4.
+ * @param evidenceText - tool-result text.
+ * @returns true when every talking IP is a non-victim.
+ */
+function macIsDcOrGatewayOnly(mac: string, victimAddr: string, evidenceText: string): boolean {
+  const talkingIps = ipsEvidencingIdentity({ kind: 'mac', value: mac, label: 'MAC' }, evidenceText)
+  if (talkingIps.length === 0) return false
+  return talkingIps.every(ip => ip !== victimAddr)
+}
+
+/**
+ * Whether a model-offered MAC may persist on the bound victim.
+ * Persist unless talking-IP frames source that MAC only from a non-victim.
+ * A sticky DC `evidence_id` or `entity_id` is not DC-only. Absence of
+ * talking-IP evidence is not DC-only.
  * @param mac - normalized offered MAC.
  * @param bind - live bind.
- * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
  * @returns true when the MAC is not DC/gateway-only.
  */
 function offeredMacEvidencedOnVictim(
   mac: string,
   bind: RelationshipBind,
-  identities: readonly Identity[],
   evidenceText: string,
 ): boolean {
   const victim = victimOf(bind)
   if (victim === undefined) return false
-  for (const identity of identities) {
-    if (identity.kind !== 'mac' || identity.value !== mac) continue
-    if (evidencedOnVictimIp(identity, victim.addr, evidenceText)) return true
-  }
-  return evidencedOnVictimIp({ kind: 'mac', value: mac, label: 'MAC' }, victim.addr, evidenceText)
+  return !macIsDcOrGatewayOnly(mac, victim.addr, evidenceText)
 }
 
 /**
