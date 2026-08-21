@@ -13,7 +13,7 @@
 - `recordReport` 以整值替换 5W1H 结案包。
 - `resolveInsideCase`、`isEvidence`、`isWritable` 和 `contains` 强制案件目录范围。
 
-`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。当一个 LAN IP 与非 LAN 单播对等体出现在同一行时，这些身份 hunt 只对该 C2 通信 IP 下发，且通知里的 `display_filter` 包含 `ip.addr ==` 该主体。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。
+`tools/pre-execute` 拒绝写入证据和捕获文件、离开案件目录的 shell 命令，以及恶意软件运行器（`wine`、`qemu`、捕获的 `.exe`）。`tools/post-execute` 从成功的工具文本中收割 IP、MAC、主机名、用户和全名，包括 UTF-16LE SAMR 十六进制（`Becka Rolf`）以及 NBNS、BROWSER、SMB 和 LLMNR 的 tshark 摘要中的主机名。能区分出的工作组和域 token（Domain/Workgroup Announcement、Local Master Announcement，或 NBNS `<1b>`–`<1e>`）不会记为主机名。新的 IP 对该主体下发 `eth-src`、`name-service`、`kerberos-cname` 与 `samr-userinfo`；新主机名下发 `kerberos-cname` 与 `samr-userinfo`；新用户下发 `samr-userinfo`。当一个 LAN IP 与非 LAN 单播对等体出现在同一行时，这些身份 hunt 只对该 C2 通信 IP 下发；`eth-src` 通知使用 `ip.src ==` 该主体，且 MAC 收割只记录来自该 IP 的 `eth.src`，而不是对端或空闲工作站的网卡。其他以 IP 为主体的通知使用 `ip.addr ==` 该主体。`name-service` 是 `llmnr or nbns or browser`。SMB 不是 hunt 种类。
 
 `investigation:policy` 章节陈述 DINQ、5W1H、证据优先工作，以及有效的 tshark 4.4.16 字段。`investigation:ledger` 是列出已记录身份与 hunt 的动态上下文。
 
@@ -72,7 +72,7 @@ You are a network-security investigation analyst, not a coding agent. Define the
 
 #### 模型看到什么
 
-产生新身份的成功工具结果会追加一条插件来源的通知，点名该身份；当 `autoHunt` 为 true 时，还点名已下发的 hunt 以及有效 tshark 4.4.16 字段。IP 通知会点名 `eth.src`，以及会产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行的 `llmnr or nbns or browser` 过滤器。以 IP 为主体的通知包含 `ip.addr ==` 该主体。见到正在与 C2 通信的 LAN IP 之后，空闲 LAN 工作站不会收到 eth-src、Kerberos 或 SAMR hunt。Kerberos 通知会要求模型立刻跑 SAMR QueryUserInfo，而不等待用户名出现。
+产生新身份的成功工具结果会追加一条插件来源的通知，点名该身份；当 `autoHunt` 为 true 时，还点名已下发的 hunt 以及有效 tshark 4.4.16 字段。IP 通知会点名 `eth.src`，以及会产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行的 `llmnr or nbns or browser` 过滤器。`eth-src` 通知包含 `ip.src ==` 该主体；其他以 IP 为主体的通知包含 `ip.addr ==` 该主体。见到正在与 C2 通信的 LAN IP 之后，空闲 LAN 工作站不会收到 eth-src、Kerberos 或 SAMR hunt，且 MAC 收割不记录它们的网卡，也不记录双向转储中的对端网卡。Kerberos 通知会要求模型立刻跑 SAMR QueryUserInfo，而不等待用户名出现。
 
 #### Token 影响
 
@@ -99,5 +99,5 @@ You are a network-security investigation analyst, not a coding agent. Define the
 ## 已知限制与延后工作
 
 - Shell 策略按 token 扫描命令；精心构造的一行命令仍可能以扫描器错过的方式点名案件外路径。对证据优先使用 `pcap_filter` 和 `logs`，而不是自由 shell。
-- 收割基于文本。从未渲染为文本的结构化工具值不会被记录。来自 tshark 摘要的主机名限于 NBNS、BROWSER、SMB 和 LLMNR 的主机形式；已区分的工作组和域 token 会被省略。
+- 收割基于文本。从未渲染为文本的结构化工具值不会被记录。来自 tshark 摘要的主机名限于 NBNS、BROWSER、SMB 和 LLMNR 的主机形式；已区分的工作组和域 token 会被省略。见到 C2 通信 IP 之后，只记录来自该 IP 的 MAC；没有 IPv4 的纯 `eth.src` 字段转储回退到严格多数，对端网卡仍可能占多数。
 - 账本尚无 Web 投影卡片；UI 读取 `session/event` 或折叠日志。

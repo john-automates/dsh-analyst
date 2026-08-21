@@ -16,7 +16,7 @@ Status: implemented
 
 `c2TalkingLanIps` 按行读取一次会话。RFC1918 是 LAN。回环、链路本地、组播、保留和广播都不是 C2 对等体。空闲的 LAN 到 LAN 行不会聚焦客户端。检测使用当前工具结果，加上会话日志中已折叠的 `tool/result` 文本。
 
-以 IP 为主体的 `huntNotice` 在 `display_filter` 中包含 `ip.addr ==` 该主体。主机名和用户通知保持不限定范围；一旦已知 C2 通信 IP，它们就不会下发。
+以 IP 为主体的 `huntNotice` 在 `display_filter` 中包含 `ip.addr ==` 该主体，但 `eth-src` 使用 `ip.src ==`，这样双向转储就不能持久化对端网卡（[来源 MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)）。主机名和用户通知保持不限定范围；一旦已知 C2 通信 IP，它们就不会下发。
 
 [调查分析预设](../feature/2026-08-20-analyst-investigation-preset.md) 仍拥有收割、SAMR 和其他 hunt 旋钮。`DSH_CASE_DIR`、字符串字段强制转换、XML 恢复、主机名收割以及无效 tshark 字段拒绝保持不变。
 
@@ -36,7 +36,7 @@ scout、家族收割、自动运行 hunt 以及新评测不在本次变更内。
 
 ## 测试
 
-`packages/analyst/investigation/tests/hunts.spec.ts` 喂入合成的双客户端 fixture。见到正在与 C2 通信的 LAN IP 之后，`huntsForNewIdentities` 只为该 IP 下发身份 hunt。`huntNotice` 包含 `ip.addr ==` 该主体，并且不点名空闲工作站。去重、单客户端下发和无效 tshark 字段拒绝仍由既有测试覆盖。
+`packages/analyst/investigation/tests/hunts.spec.ts` 喂入合成的双客户端 fixture。见到正在与 C2 通信的 LAN IP 之后，`huntsForNewIdentities` 只为该 IP 下发身份 hunt。`huntNotice` 对名称服务、Kerberos 和 SAMR 包含 `ip.addr ==` 该主体，对 `eth-src` 包含 `ip.src ==`，并且不点名空闲工作站。去重、单客户端下发和无效 tshark 字段拒绝仍由既有测试覆盖。
 
 ## 后果
 

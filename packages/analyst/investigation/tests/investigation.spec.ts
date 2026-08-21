@@ -244,6 +244,40 @@ describe('investigation service', () => {
     expect(ctx.investigation.identities(owner.session).some(item => item.value === 'lan-b-host')).toBe(true)
   })
 
+  it('records only the MAC sourced from the C2-talking LAN IP', async () => {
+    const { ctx, owner } = await setup()
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('echo-two-mac'),
+      name: 'echo',
+      arguments: {
+        text: [
+          '10.0.10.2 → 198.51.100.80 TCP',
+          '10.0.10.3 → 10.0.10.1 NBNS',
+          'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2\tip.dst: 198.51.100.80',
+          'eth.src: 02:00:00:00:00:cc\tip.src: 198.51.100.80\tip.dst: 10.0.10.2',
+          'eth.src: 02:00:00:00:00:0b\tip.src: 10.0.10.3\tip.dst: 10.0.10.1',
+        ].join('\n'),
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const notice = result.additionalContexts?.[0]?.content[0]
+    expect(notice).toMatchObject({ type: 'text', text: expect.stringContaining('ip.src == 10.0.10.2') })
+    expect(notice).toMatchObject({ type: 'text', text: expect.stringContaining('New identity: MAC 02:00:00:00:00:0a') })
+    expect(notice).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('New identity: MAC 02:00:00:00:00:cc'),
+    })
+    expect(notice).toMatchObject({
+      type: 'text',
+      text: expect.not.stringContaining('New identity: MAC 02:00:00:00:00:0b'),
+    })
+    expect(ctx.investigation.identities(owner.session).filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' },
+    ])
+  })
+
   it('skips harvest without an agent or when autoHunt is off, and skips errors', async () => {
     const { ctx, owner } = await setup({ autoHunt: false })
     const noAgent = await ctx.tools.execute({

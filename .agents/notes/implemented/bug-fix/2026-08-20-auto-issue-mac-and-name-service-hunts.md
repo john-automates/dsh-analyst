@@ -14,7 +14,7 @@ Live r6 (`b9f2075`, Bedrock 30B, Easy as 123) scored 3/5. User `brolf`, full nam
 
 A new IP also issues `eth-src` and `name-service` for that subject, then the existing Kerberos and SAMR hunts. `name-service` uses display filter `llmnr or nbns or browser`. SMB is not a `HuntKind` and is not issued. New hostname and user issuance is unchanged. Dedup remains kind+subject against existing hunts and the batch itself.
 
-`huntNotice` names valid tshark 4.4.16 fields: `eth.src` for the MAC hunt, and `llmnr`, `nbns`, and `browser` for the name-service hunt that produces DESKTOP-* / NBNS Registration / BROWSER Host Announcement lines. After a LAN IP talks to a non-LAN peer, those identity hunts issue only for that C2-talking IP ([two-client fusion](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)). The [analyst investigation preset](../feature/2026-08-20-analyst-investigation-preset.md) still owns harvest, SAMR, and the other hunt knobs.
+`huntNotice` names valid tshark 4.4.16 fields: `eth.src` for the MAC hunt (with `ip.src ==` the C2-talking IP when known; [sourced MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)), and `llmnr`, `nbns`, and `browser` for the name-service hunt that produces DESKTOP-* / NBNS Registration / BROWSER Host Announcement lines. After a LAN IP talks to a non-LAN peer, those identity hunts issue only for that C2-talking IP ([two-client fusion](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)). The [analyst investigation preset](../feature/2026-08-20-analyst-investigation-preset.md) still owns harvest, SAMR, and the other hunt knobs.
 
 Scout, family harvest, auto-run hunts, and new evals stay out of this change.
 

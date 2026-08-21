@@ -126,4 +126,86 @@ describe('identity harvest', () => {
       { kind: 'hostname', value: 'workstation1', label: 'hostname' },
     ])
   })
+
+  it('records only the MAC sourced from the C2-talking LAN IP on a two-client fixture', () => {
+    const LAN_A = '10.0.10.2'
+    const LAN_B = '10.0.10.3'
+    const LAN_GW = '10.0.10.1'
+    const C2 = '198.51.100.80'
+    const MAC_A = '02:00:00:00:00:0a'
+    const MAC_B = '02:00:00:00:00:0b'
+    const MAC_FAR = '02:00:00:00:00:cc'
+    const evidence = `${LAN_A} → ${C2} TCP\n${LAN_B} → ${LAN_GW} NBNS`
+
+    const bidirectional = harvestIdentities([
+      `eth.src: ${MAC_A}\tip.src: ${LAN_A}\tip.dst: ${C2}`,
+      `eth.src: ${MAC_FAR}\tip.src: ${C2}\tip.dst: ${LAN_A}`,
+      `eth.src: ${MAC_B}\tip.src: ${LAN_B}\tip.dst: ${LAN_GW}`,
+    ].join('\n'), evidence)
+    expect(bidirectional.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const arrows = harvestIdentities([
+      `${LAN_A} → ${C2}  ${MAC_A} → ${MAC_FAR} TCP`,
+      `${C2} → ${LAN_A}  ${MAC_FAR} → ${MAC_A} TCP`,
+      `${LAN_B} → ${LAN_GW}  ${MAC_B} → ${MAC_FAR} NBNS`,
+    ].join('\n'))
+    expect(arrows.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const arp = harvestIdentities([
+      evidence,
+      `ARP ${LAN_A} is at ${MAC_A}`,
+      `ARP ${LAN_B} is at ${MAC_B}`,
+    ].join('\n'))
+    expect(arp.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const majority = harvestIdentities([
+      `eth.src: ${MAC_A}`,
+      `eth.src: ${MAC_A}`,
+      `eth.src: ${MAC_FAR}`,
+    ].join('\n'), evidence)
+    expect(majority.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const tie = harvestIdentities([
+      `eth.src: ${MAC_A}`,
+      `eth.src: ${MAC_FAR}`,
+    ].join('\n'), evidence)
+    expect(tie.filter(item => item.kind === 'mac')).toEqual([])
+
+    const noMac = harvestIdentities(`ip.src: ${LAN_A}\tip.dst: ${C2}`, evidence)
+    expect(noMac.filter(item => item.kind === 'mac')).toEqual([])
+
+    const bogusSrc = harvestIdentities(
+      `ip.src: 999.1.1.1\teth.src: ${MAC_FAR}\n${LAN_A} → ${C2}`,
+      evidence,
+    )
+    expect(bogusSrc.filter(item => item.kind === 'mac')).toEqual([])
+
+    const labeledOnArrow = harvestIdentities(
+      `eth.src: ${MAC_A}\t${LAN_A} → ${C2}`,
+    )
+    expect(labeledOnArrow.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const srcWithoutEthLabel = harvestIdentities(`ip.src: ${LAN_A}\t${MAC_A}`, evidence)
+    expect(srcWithoutEthLabel.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const fieldOnlyOne = harvestIdentities(`eth.src: ${MAC_A}`, evidence)
+    expect(fieldOnlyOne.filter(item => item.kind === 'mac')).toEqual([
+      { kind: 'mac', value: MAC_A, label: 'MAC' },
+    ])
+
+    const emptyFieldDump = harvestIdentities('no addresses here', evidence)
+    expect(emptyFieldDump.filter(item => item.kind === 'mac')).toEqual([])
+  })
 })
