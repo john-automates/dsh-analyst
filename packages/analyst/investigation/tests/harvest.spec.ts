@@ -232,7 +232,12 @@ describe('identity harvest', () => {
     expect(stamped.filter(item => item.kind === 'hostname')).toEqual([
       { kind: 'hostname', value: HOST_A, label: 'hostname', evidence_id: LAN_A },
     ])
-    expect(stamped.find(item => item.kind === 'ip')?.evidence_id).toBeUndefined()
+    expect(stamped.find(item => item.kind === 'ip')?.evidence_id).toBe(LAN_A)
+    expect(harvestIdentities('ip.dst: 203.0.113.50', 'ip.dst: 203.0.113.50', LAN_A)
+      .find(item => item.kind === 'ip' && item.value === '203.0.113.50'))
+      .toEqual({ kind: 'ip', value: '203.0.113.50', label: 'IP', evidence_id: LAN_A })
+    expect(harvestIdentities('ip.dst: 203.0.113.50').find(item => item.kind === 'ip')?.evidence_id)
+      .toBeUndefined()
     const dcHunt = harvestIdentities(
       `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,
       `eth.src: ${MAC_A}\thostname: ${HOST_A}\tip.src: ${LAN_A}`,

@@ -16,6 +16,7 @@ const LAN_CIDR = '10.0.10.0/24'
 const OTHER_CIDR = '172.16.0.0/12'
 const C2 = '198.51.100.80'
 const EXTRA_WAN = '203.0.113.50'
+const DISTRACTOR_WAN = '203.0.113.99'
 const DISTRACTOR = '10.0.10.3'
 const CLIENT_MAC = '02:00:00:00:00:0a'
 const DISTRACTOR_MAC = '02:00:00:00:00:0b'
@@ -246,10 +247,15 @@ describe('BindRelationship', () => {
       ...identityOf('hostname', DOMAIN)!,
       evidence_id: EXTRA_WAN,
     }
+    const extraWan = { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN }
+    const unboundWan = identityOf('ip', DISTRACTOR_WAN)!
+    const stampedOnC2 = { ...identityOf('ip', DISTRACTOR_WAN)!, evidence_id: C2 }
+    const stampedOnDc = { ...identityOf('ip', DISTRACTOR_WAN)!, evidence_id: DISTRACTOR }
     const identities = [
       identityOf('ip', LAN)!,
       identityOf('ip', C2)!,
-      identityOf('ip', EXTRA_WAN)!,
+      extraWan,
+      unboundWan,
       identityOf('ip', DISTRACTOR)!,
       identityOf('ip', '10.0.10.1')!,
       identityOf('ip', '224.0.0.252')!,
@@ -257,16 +263,27 @@ describe('BindRelationship', () => {
       extraHost,
     ]
     expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).not.toContain(DISTRACTOR_WAN)
     expect(acceptedC2Ips(live, identities)).not.toContain(DISTRACTOR)
     expect(acceptedC2Ips(live, identities)).not.toContain('10.0.10.1')
     expect(acceptedC2Ips(live, identities)).not.toContain('224.0.0.252')
+    expect(acceptedC2Ips(live, [
+      ...identities.filter(item => item.value !== DISTRACTOR_WAN),
+      stampedOnC2,
+    ])).not.toContain(DISTRACTOR_WAN)
+    expect(acceptedC2Ips(live, [
+      ...identities.filter(item => item.value !== DISTRACTOR_WAN),
+      stampedOnDc,
+    ])).not.toContain(DISTRACTOR_WAN)
     expect(acceptedC2Domain(live, identities)).toBe(DOMAIN)
     expect(c2DomainHuntsForBind(live, identities)).toEqual([
       { kind: 'c2-domain', subjectKind: 'ip', subject: C2 },
       { kind: 'c2-domain', subjectKind: 'ip', subject: EXTRA_WAN },
     ])
+    expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === DISTRACTOR_WAN))
+      .toBe(false)
     expect(identityDonatesToVictim(extraHost, live, identities)).toBe(false)
-    expect(identityDonatesToVictim(identityOf('ip', EXTRA_WAN)!, live, identities)).toBe(false)
+    expect(identityDonatesToVictim(extraWan, live, identities)).toBe(false)
     const slot = projectVictimSlot(live, identities)
     expect(slot).toEqual({ entity_id: LAN, ip: LAN, hostname: HOST })
     expect(slot?.hostname).not.toBe(DOMAIN)
@@ -276,6 +293,7 @@ describe('BindRelationship', () => {
     expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
     expect(report.c2_ips).toContain(C2)
     expect(report.c2_ips).toContain(EXTRA_WAN)
+    expect(report.c2_ips).not.toContain(DISTRACTOR_WAN)
     expect(report.c2_ips).not.toContain(DISTRACTOR)
     expect(report.c2_ips).not.toContain('10.0.10.1')
     expect(report.c2_domain).toBe(DOMAIN)

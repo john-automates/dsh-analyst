@@ -1527,6 +1527,9 @@ describe('investigation service', () => {
       kind: 'ip', value: '10.0.10.2', label: 'IP',
     })
     ctx.investigation.recordIdentity(owner.session, {
+      kind: 'ip', value: '203.0.113.99', label: 'IP',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
       kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2', evidence_id: '10.0.10.2',
     })
     ctx.investigation.recordIdentity(owner.session, {
@@ -1620,8 +1623,14 @@ describe('investigation service', () => {
     expect(extraWanCall?.display_filter).toContain('ip.src == 10.0.10.2')
     expect(extraWanCall?.display_filter).toContain('not ip.dst == 198.51.100.80')
     expect(ctx.investigation.identities(owner.session)).toContainEqual({
-      kind: 'ip', value: EXTRA, label: 'IP',
+      kind: 'ip', value: EXTRA, label: 'IP', evidence_id: '10.0.10.2',
     })
+    expect(ctx.investigation.identities(owner.session)).toContainEqual({
+      kind: 'ip', value: '203.0.113.99', label: 'IP',
+    })
+    expect(ctx.investigation.hunts(owner.session).some(hunt => (
+      hunt.kind === 'c2-domain' && hunt.subject === '203.0.113.99'
+    ))).toBe(false)
     expect(ctx.investigation.identities(owner.session)).toContainEqual({
       kind: 'hostname', value: DOMAIN, label: 'hostname', evidence_id: EXTRA,
     })
@@ -1636,6 +1645,7 @@ describe('investigation service', () => {
     ctx.investigation.recordReport(owner.session, report)
     expect(report.c2_ips).toEqual(['198.51.100.80', EXTRA])
     expect(report.c2_ips).toContain('198.51.100.80')
+    expect(report.c2_ips).not.toContain('203.0.113.99')
     expect(report.c2_ips).not.toContain('10.0.10.3')
     expect(report.c2_ips).not.toContain('10.0.10.1')
     expect(report.c2_domain).toBe(DOMAIN)
@@ -1702,7 +1712,7 @@ describe('investigation service', () => {
     expect(ctx.investigation.bind(owner.session)).toBeUndefined()
     expect(ctx.investigation.hunts(owner.session).some(hunt => hunt.kind === 'c2-domain')).toBe(false)
     expect(ctx.investigation.identities(owner.session)).toContainEqual({
-      kind: 'ip', value: '203.0.113.50', label: 'IP',
+      kind: 'ip', value: '203.0.113.50', label: 'IP', evidence_id: '10.0.10.2',
     })
   })
 
