@@ -202,6 +202,44 @@ describe('analyst tools', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
+  it('spawns tshark -Y with wrapping quotes stripped from display_filter', async () => {
+    const binDir = await mkdtemp(join(tmpdir(), 'dsh-tshark-filter-argv-'))
+    const tsharkBin = await script(binDir, 'tshark', [
+      'printf "%s\\n" "$@" > argv.log',
+      'echo rows',
+    ].join('\n'))
+    const { ctx, owner, caseDir } = await setup({ tsharkBin })
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('quoted-filter'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: '"ip.addr == 1.2.3.4"',
+      },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const argv = (await readFile(join(caseDir, 'argv.log'), 'utf8')).trim().split('\n')
+    expect(argv).toContain('-Y')
+    expect(argv[argv.indexOf('-Y') + 1]).toBe('ip.addr == 1.2.3.4')
+    const invalid = await ctx.tools.execute({
+      signal,
+      callId: CallId('quoted-invalid'),
+      name: 'pcap_filter',
+      arguments: {
+        path: 'evidence/a.pcap',
+        display_filter: "'llmnr or nbns or browser'",
+        fields: 'ldap.sAMAccountName',
+      },
+      agent: owner,
+    })
+    expect(invalid.isError).toBe(true)
+    expect(text(invalid)).toContain('ldap.sAMAccountName')
+    expect(text(invalid)).not.toMatch(/INVALID_ARGS|invalid arguments/i)
+    await rm(binDir, { recursive: true, force: true })
+  })
+
   it('records a 5W1H case_report and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
     const report = {
