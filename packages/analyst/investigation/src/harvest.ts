@@ -1,15 +1,22 @@
 /**
  * Extract unique labeled identities from tool-result text, including hostnames
- * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries.
+ * taken from NBNS, BROWSER, SMB, and LLMNR tshark summaries. After a
+ * C2-talking LAN IP is known, MAC harvest records only eth.src sourced from
+ * that IP.
  * @module @deepseek-ai/dsh-investigation/harvest
  */
 
+import { c2TalkingLanIps } from './hunts.ts'
 import type { Identity, IdentityKind } from './types.ts'
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
 const MAC = /(?<![0-9a-fA-F]:)(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}(?![:-][0-9a-fA-F]{2})/g
 const SKIP_IPS = new Set(['0.0.0.0', '255.255.255.255'])
 const DOTTED_IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/
+const IP_SRC_LABEL = /(?:^|[\s,;|])ip\.src\s*[:=]\s*(\d{1,3}(?:\.\d{1,3}){3})/i
+const ETH_SRC_LABEL = /(?:^|[\s,;|])eth\.src\s*[:=]\s*((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
+const IP_CONVERSATION = /(\d{1,3}(?:\.\d{1,3}){3})\s*(?:→|->)\s*(\d{1,3}(?:\.\d{1,3}){3})/
+const ARP_IS_AT = /(\d{1,3}(?:\.\d{1,3}){3})\s+is at\s+((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2})/i
 
 const HOST_LABEL = /(?:^|[\s,;|])(?:hostname|host|nbns\.name|dns\.qry\.name)\s*[:=]\s*(\w[\w.-]{0,253})/gi
 const USER_LABEL = /(?:^|[\s,;|])(?:user|username|account_name|kerberos\.CNameString|CNameString|cname)\s*[:=]\s*([^\s,;|]*)/gi
@@ -92,10 +99,14 @@ export function identityOf(kind: IdentityKind, value: string): Identity | undefi
  * Hostname also comes from NBNS, BROWSER, SMB, and LLMNR tshark summaries.
  * Workgroup and domain tokens distinguished as Domain/Workgroup Announcement,
  * Local Master Announcement, or NBNS `<1b>`–`<1e>` are not recorded as hostname.
- * @param text - rendered tool output.
+ * After `c2TalkingLanIps` finds a focus IP, a MAC is recorded only when it is
+ * sourced from that IP (`ip.src`, outbound `focus → peer`, or ARP `is at`).
+ * A bidirectional dump cannot persist the far-side NIC.
+ * @param text - rendered tool output being harvested.
+ * @param evidenceText - current and prior tool-result text used to detect C2-talking LAN IPs.
  * @returns identities in first-seen order, unique on kind+value.
  */
-export function harvestIdentities(text: string): Identity[] {
+export function harvestIdentities(text: string, evidenceText = text): Identity[] {
   const seen = new Set<string>()
   const out: Identity[] = []
   const add = (kind: IdentityKind, value: string): void => {
@@ -111,7 +122,7 @@ export function harvestIdentities(text: string): Identity[] {
     const ip = match[0]
     if (!SKIP_IPS.has(ip)) add('ip', ip)
   }
-  for (const match of text.matchAll(MAC)) add('mac', match[0])
+  harvestMacs(text, new Set(c2TalkingLanIps(evidenceText)), add)
 
   for (const match of text.matchAll(HOST_LABEL)) {
     const host = regexCapture(match)
@@ -155,6 +166,104 @@ export function harvestIdentities(text: string): Identity[] {
  */
 export function identityKey(identity: Identity): string {
   return `${identity.kind}\0${identity.value}`
+}
+
+/**
+ * Record MACs. With no C2-talking focus, every MAC is kept. With a focus IP,
+ * only a MAC sourced from that IP is kept; a bidirectional dump cannot persist
+ * the far-side NIC.
+ */
+function harvestMacs(
+  text: string,
+  focusIps: ReadonlySet<string>,
+  add: (kind: IdentityKind, value: string) => void,
+): void {
+  if (focusIps.size === 0) {
+    for (const match of text.matchAll(MAC)) add('mac', match[0])
+    return
+  }
+  let sourced = false
+  for (const line of text.split(/\r?\n/)) {
+    const mac = macSourcedFromFocusIp(line, focusIps)
+    if (mac === undefined) continue
+    sourced = true
+    add('mac', mac)
+  }
+  if (sourced || hasIpv4(text)) return
+  const majority = majorityLabeledEthSrc(text)
+  if (majority !== undefined) add('mac', majority)
+}
+
+/**
+ * MAC on one line that is sourced from a C2-talking LAN IP.
+ * Labeled `ip.src`, outbound `focus → peer`, or ARP `is at` qualify.
+ * Inbound `peer → focus` and idle-workstation lines do not.
+ * @param line - one tool-output line.
+ * @param focusIps - C2-talking LAN IPs.
+ * @returns the sourced MAC, or undefined when this line has none.
+ */
+function macSourcedFromFocusIp(line: string, focusIps: ReadonlySet<string>): string | undefined {
+  const ipSrc = labeledIpv4(line, IP_SRC_LABEL)
+  const ethSrc = labeledField(line, ETH_SRC_LABEL)
+  if (ipSrc !== undefined) {
+    if (!focusIps.has(ipSrc)) return undefined
+    return ethSrc ?? firstMac(line)
+  }
+  const arp = ARP_IS_AT.exec(line)
+  const arpIp = arp?.[1]
+  const arpMac = arp?.[2]
+  if (arpIp !== undefined && arpMac !== undefined && focusIps.has(arpIp)) return arpMac
+  const conversation = IP_CONVERSATION.exec(line)
+  const srcIp = conversation?.[1]
+  if (srcIp !== undefined && focusIps.has(srcIp)) return ethSrc ?? firstMac(line)
+  return undefined
+}
+
+/**
+ * Strict-majority labeled `eth.src` when a field-only dump has no IPv4.
+ * A tie records nothing so a bidirectional dump cannot win.
+ * @param text - tool output with `eth.src` columns and no IPv4.
+ * @returns the majority MAC, or undefined on a tie or empty dump.
+ */
+function majorityLabeledEthSrc(text: string): string | undefined {
+  const counts = new Map<string, number>()
+  for (const match of text.matchAll(new RegExp(ETH_SRC_LABEL, 'gi'))) {
+    const mac = regexCapture(match).toLowerCase().replace(/-/g, ':')
+    counts.set(mac, (counts.get(mac) ?? 0) + 1)
+  }
+  let best: string | undefined
+  let bestCount = 0
+  let tied = false
+  for (const [mac, count] of counts) {
+    if (count > bestCount) {
+      best = mac
+      bestCount = count
+      tied = false
+    } else if (count === bestCount) {
+      tied = true
+    }
+  }
+  return tied ? undefined : best
+}
+
+function hasIpv4(text: string): boolean {
+  return new RegExp(IPV4.source).test(text)
+}
+
+function labeledIpv4(line: string, pattern: RegExp): string | undefined {
+  const value = labeledField(line, pattern)
+  if (value === undefined) return undefined
+  return new RegExp(`^${IPV4.source}$`).test(value) ? value : undefined
+}
+
+function labeledField(line: string, pattern: RegExp): string | undefined {
+  const match = pattern.exec(line)
+  if (match === null) return undefined
+  return regexCapture(match)
+}
+
+function firstMac(line: string): string | undefined {
+  return new RegExp(MAC.source).exec(line)?.[0]
 }
 
 /**

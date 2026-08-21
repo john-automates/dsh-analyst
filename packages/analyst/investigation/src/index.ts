@@ -328,8 +328,9 @@ export class Investigation extends Service {
   private observe(exec: ToolExecution, result: ToolExecutionResult): UserMessage | undefined {
     if (result.isError || exec.agent === undefined) return undefined
     const session = exec.agent.session
+    const current = resultText(result)
     const added: Identity[] = []
-    for (const identity of harvestIdentities(resultText(result))) {
+    for (const identity of harvestIdentities(current, evidenceTextForHunts(session.events, current))) {
       if (this.recordIdentity(session, identity)) added.push(identity)
     }
     if (added.length === 0) return undefined
@@ -338,7 +339,7 @@ export class Investigation extends Service {
       for (const hunt of huntsForNewIdentities(
         added,
         foldHunts(session.events),
-        evidenceTextForHunts(session.events, resultText(result)),
+        evidenceTextForHunts(session.events, current),
       )) {
         this.recordHunt(session, hunt)
         lines.push(huntNotice(hunt))

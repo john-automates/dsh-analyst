@@ -16,7 +16,7 @@ After a LAN IP shares a tool-output line with a non-LAN unicast peer, subsequent
 
 `c2TalkingLanIps` reads one conversation per line. RFC1918 is LAN. Loopback, link-local, multicast, reserved, and broadcast are not C2 peers. Idle LAN-to-LAN lines do not focus a client. Detection uses the current tool result plus folded `tool/result` text already on the session log.
 
-`huntNotice` for an IP-subject hunt includes `ip.addr ==` that subject in `display_filter`. Hostname and user notices stay unscoped; they are not issued once a C2-talking IP is known.
+`huntNotice` for an IP-subject hunt includes `ip.addr ==` that subject in `display_filter`, except `eth-src`, which uses `ip.src ==` so a bidirectional dump cannot persist the far-side NIC ([sourced MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)). Hostname and user notices stay unscoped; they are not issued once a C2-talking IP is known.
 
 The [analyst investigation preset](../feature/2026-08-20-analyst-investigation-preset.md) still owns harvest, SAMR, and the other hunt knobs. `DSH_CASE_DIR`, string-field coerce, XML recovery, hostname harvest, and invalid tshark field rejection stay as they are.
 
@@ -36,7 +36,7 @@ Scout, family harvest, auto-run hunts, and new evals stay out of this change.
 
 ## Testing
 
-`packages/analyst/investigation/tests/hunts.spec.ts` feeds a synthetic two-client fixture. After the C2-talking LAN IP is seen, `huntsForNewIdentities` issues identity hunts only for that IP. `huntNotice` includes `ip.addr ==` that subject and does not name the idle workstation. Dedup, single-client issuance, and invalid tshark field rejection stay covered by existing tests.
+`packages/analyst/investigation/tests/hunts.spec.ts` feeds a synthetic two-client fixture. After the C2-talking LAN IP is seen, `huntsForNewIdentities` issues identity hunts only for that IP. `huntNotice` includes `ip.addr ==` that subject for name-service, Kerberos, and SAMR, and `ip.src ==` for `eth-src`, and does not name the idle workstation. Dedup, single-client issuance, and invalid tshark field rejection stay covered by existing tests.
 
 ## Consequences
 

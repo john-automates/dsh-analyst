@@ -151,14 +151,16 @@ export function huntsForNewIdentities(
 }
 
 /**
- * Display filter for one issued hunt. IP-subject hunts include `ip.addr == subject`.
+ * Display filter for one issued hunt. IP-subject hunts include `ip.addr == subject`,
+ * except `eth-src`, which uses `ip.src ==` so a bidirectional dump cannot win.
  * @param filter - kind-specific display filter.
  * @param hunt - the hunt being noticed.
  * @returns the filter, scoped to the IP subject when present.
  */
 function displayFilterFor(filter: string, hunt: Hunt): string {
   if (hunt.subjectKind !== 'ip') return filter
-  return `(${filter}) and ip.addr == ${hunt.subject}`
+  const ipField = hunt.kind === 'eth-src' ? 'ip.src' : 'ip.addr'
+  return `(${filter}) and ${ipField} == ${hunt.subject}`
 }
 
 /**

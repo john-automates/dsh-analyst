@@ -121,8 +121,15 @@ describe('auto-issued hunts', () => {
 
     for (const hunt of issued) {
       const notice = huntNotice(hunt)
-      expect(notice).toContain(`ip.addr == ${LAN_A}`)
+      if (hunt.kind === 'eth-src') {
+        expect(notice).toContain(`ip.src == ${LAN_A}`)
+        expect(notice).toContain('eth.src')
+        expect(notice).not.toContain('ip.addr ==')
+      } else {
+        expect(notice).toContain(`ip.addr == ${LAN_A}`)
+      }
       expect(notice).not.toContain(`ip.addr == ${LAN_B}`)
+      expect(notice).not.toContain(`ip.src == ${LAN_B}`)
     }
   })
 
@@ -147,7 +154,8 @@ describe('auto-issued hunts', () => {
     const macNotice = huntNotice(mac)
     expect(macNotice).toContain('eth.src')
     expect(macNotice).toContain('eth-src')
-    expect(macNotice).toContain('ip.addr == 10.0.0.5')
+    expect(macNotice).toContain('ip.src == 10.0.0.5')
+    expect(macNotice).not.toContain('ip.addr ==')
     const nameNotice = huntNotice(names)
     expect(nameNotice).toContain('llmnr')
     expect(nameNotice).toContain('nbns')

@@ -14,7 +14,7 @@ Status: implemented
 
 新 IP 还会对该主体下发 `eth-src` 与 `name-service`，然后再下发既有的 Kerberos 与 SAMR hunt。`name-service` 使用显示过滤器 `llmnr or nbns or browser`。SMB 不是 `HuntKind`，不会下发。新主机名与新用户的下发不变。去重仍按 kind+subject 对照已有 hunt 和本批次自身。
 
-`huntNotice` 点名有效的 tshark 4.4.16 字段：MAC hunt 用 `eth.src`；名称服务 hunt 用 `llmnr`、`nbns` 和 `browser`，以产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行。当一个 LAN IP 与非 LAN 对等体通信后，这些身份 hunt 只对该 C2 通信 IP 下发（[双客户端融合](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)）。[调查分析预设](../feature/2026-08-20-analyst-investigation-preset.md) 仍拥有收割、SAMR 和其他 hunt 旋钮。
+`huntNotice` 点名有效的 tshark 4.4.16 字段：MAC hunt 用 `eth.src`（已知 C2 通信 IP 时带 `ip.src ==` 该 IP；[来源 MAC](2026-08-21-harvest-eth-src-from-c2-talking-ip.md)）；名称服务 hunt 用 `llmnr`、`nbns` 和 `browser`，以产生 DESKTOP-* / NBNS Registration / BROWSER Host Announcement 行。当一个 LAN IP 与非 LAN 对等体通信后，这些身份 hunt 只对该 C2 通信 IP 下发（[双客户端融合](2026-08-20-scope-identity-hunts-to-c2-talking-client.md)）。[调查分析预设](../feature/2026-08-20-analyst-investigation-preset.md) 仍拥有收割、SAMR 和其他 hunt 旋钮。
 
 scout、家族收割、自动运行 hunt 以及新评测不在本次变更内。
 
