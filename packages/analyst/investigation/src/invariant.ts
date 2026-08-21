@@ -217,6 +217,15 @@ function validateEvent(event: SessionEvent, fail: InvariantFailure): void {
   }
   validateSlot(data.who, 'investigation/report who', fail)
   validateSlot(data.where, 'investigation/report where', fail)
+  if (data.victims !== undefined) {
+    if (!Array.isArray(data.victims) || data.victims.length < 2) {
+      fail('investigation/report victims must be an array of two or more identity slots')
+    } else {
+      for (const [index, row] of data.victims.entries()) {
+        validateSlot(row, `investigation/report victims[${index}]`, fail)
+      }
+    }
+  }
   if (data.c2_domain !== undefined) requireText(data.c2_domain, 'investigation/report c2_domain', fail)
   if (data.c2_ips !== undefined) {
     if (!Array.isArray(data.c2_ips) || data.c2_ips.length === 0) {

@@ -491,7 +491,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/action': InvestigationAction
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:327`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:348`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationbind--log-only"></a>
 
@@ -505,7 +505,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/bind': RelationshipBind
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:287`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:297`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationextras--log-only"></a>
 
@@ -521,7 +521,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/extras': CaseReportExtras
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:334`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:355`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -535,7 +535,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * peer, those identity hunts issue only for that C2-talking IP. Assigning
  * victim to a cue/observation address issues `other-end` for that cue IP
  * (`ip.dst ==` the cue, field `ip.src`). A successful bind with a unique
- * LAN victim and unique non-LAN C2 that is not a well-known CDN or
+ * LAN victim and a bound non-LAN C2 that is not a well-known CDN or
  * update destination issues `extra-wan` for that victim
  * (`ip.src ==` the victim, field `ip.dst`) and `c2-domain` for each
  * remaining C2 IPv4 (bound plus harvested extras; TLS SNI / DNS). A
@@ -551,7 +551,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/hunt': Hunt
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:282`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:292`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationidentity--log-only"></a>
 
@@ -565,7 +565,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/identity': Identity
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:261`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:271`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationmission--log-only"></a>
 
@@ -581,7 +581,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/mission': InvestigationMission
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:337`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationplan--log-only"></a>
 
@@ -595,7 +595,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/plan': InvestigationPlanEntry
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:321`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:342`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
@@ -603,30 +603,41 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
- * who/where are the projected victim entity row; omitted model keys are
- * filled from that row after deny/coerce. Omitted who/where also fold
- * sibling top-level identity keys (ip, mac, hostname, user, full_name)
- * from the same case_report arguments into that submitted slot. Omitted
- * mac persists the unique ledger MAC that is not DC/gateway-only when a
- * sticky DC donate or uniqueness left the row empty. Omitted user still
- * persists from victim-IP evidence. A submitted user, hostname, or
- * full_name is kept when the row has no donated value and that identity
- * does not donate to a different entity. A submitted human user is kept
- * without a conversation-client stamp. A machine SAM ending in `$` is
- * not persisted as user. A submitted mac is kept unless talking-IP frames
- * source that MAC only from a non-victim. `c2_ips` is the bound C2 IPv4
- * plus victim-stamped extra-wan dests, omitting an IP in a published
- * Cloudflare anycast prefix or whose evidenced hostname is a
- * well-known CDN or update name, when any remain. Unnamed extra-wan
- * dests that survive those omits persist. `c2_domain` is the harvested
- * TLS SNI or DNS name evidenced on an attested dest that is not
- * CDN/update, when one exists.
+ * 5W1H case-close packet. Claims, who/where, and extras on the last
+ * `investigation/report` win. Published victim rows fold by
+ * `entity_id`: a later accepted close or live bind that names a
+ * different victim appends a row and does not replace an
+ * already-published victim. A later close of the same victim updates
+ * that row. `victims` holds those rows when two or more distinct
+ * victim IPv4s were published; a single-bind close omits it.
+ * who/where are the projected victim entity row of the latest accepted
+ * close; omitted model keys are filled from that row after deny/coerce.
+ * Omitted who/where also fold sibling top-level identity keys (ip, mac,
+ * hostname, user, full_name) from the same case_report arguments into
+ * that submitted slot. Omitted mac persists the unique ledger MAC that
+ * is not DC/gateway-only when a sticky DC donate or uniqueness left the
+ * row empty. Omitted user still persists from victim-IP evidence. An
+ * AD SRV / DC locator hostname does not persist as who/where hostname.
+ * A submitted or harvested workstation hostname is kept. Hostname stays
+ * omitted when only that locator is harvested. A submitted user,
+ * hostname, or full_name is kept when the row has no donated value and
+ * that identity does not donate to a different entity. A submitted
+ * human user is kept without a conversation-client stamp. A machine SAM
+ * ending in `$` is not persisted as user. A submitted mac is kept
+ * unless talking-IP frames source that MAC only from a non-victim.
+ * Bind role infra, DC, gateway, and file-server rows are not published
+ * as victim rows. `c2_ips` is the bound C2 IPv4 plus victim-stamped
+ * extra-wan dests, omitting an IP in a published Cloudflare or Fastly
+ * anycast prefix or whose evidenced hostname is a well-known CDN or
+ * update name, when any remain. Unnamed extra-wan dests that survive
+ * those omits persist. `c2_domain` is the harvested TLS SNI or DNS
+ * name evidenced on an attested dest that is not CDN/update, when one
+ * exists.
  */
 'investigation/report': CaseReport
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:309`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:330`](../packages/analyst/investigation/src/types.ts)
 
 ### `llm/*`
 

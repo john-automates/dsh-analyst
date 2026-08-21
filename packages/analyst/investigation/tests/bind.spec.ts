@@ -3,22 +3,25 @@ import {
   acceptedC2Domain, acceptedC2Ips, BOTH_LAN_CONVERSATION_REASON, boundC2Ipv4,
   caseReportDenyReason, CDN_C2_REASON, c2DomainHuntForBind, c2DomainHuntsForBind,
   completeAcceptedSlot, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON,
-  extraWanHuntForBind, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
-  LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport,
-  projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
-  VICTIM_COUNT_REASON,
+  extraWanHuntForBind, foldBind, foldPublishedVictimRows, formatRolesCard,
+  identityDonatesToVictim, isCueObservationAddr, LAN_C2_REASON, mergePublishedVictimRows,
+  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
+  publishedVictimRows, requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON,
+  VICTIM_COUNT_REASON, boundVictimSlot, victimRowKey, withPublishedVictimRows,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { harvestIdentities, identityOf } from '../src/harvest.ts'
 import type { Identity, Relationship, RelationshipBind } from '../src/types.ts'
 
 const LAN = '10.0.10.2'
+const LAN2 = '10.0.10.8'
 const LAN_CIDR = '10.0.10.0/24'
 const OTHER_CIDR = '172.16.0.0/12'
 const GATEWAY = '10.0.10.1'
 const INFRA = '10.0.10.4'
 const AD_DOMAIN = 'ad.example.lan'
 const C2 = '198.51.100.80'
+const C2B = '198.51.100.81'
 const EXTRA_WAN = '203.0.113.50'
 const UNNAMED_WAN = '203.0.113.60'
 const CDN_DEST = '203.0.113.80'
@@ -27,12 +30,15 @@ const DISTRACTOR = '10.0.10.3'
 const PAYLOAD = 'payload.example.test'
 const CDN_NAME = 'update.microsoft.com'
 const CLIENT_MAC = '02:00:00:00:00:0a'
+const CLIENT_MAC2 = '02:00:00:00:00:0c'
 const DISTRACTOR_MAC = '02:00:00:00:00:0b'
 const HOST = 'lan-host'
+const HOST2 = 'lan-host-b'
 const WORKSTATION = 'desktop-test01'
 const AD_SRV = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
 const DISTRACTOR_HOST = 'idle-host'
 const USER = 'lan-user'
+const USER2 = 'lan-user-b'
 const FULL_NAME = 'Lan User'
 const DISTRACTOR_USER = 'idle-user'
 const MACHINE_SAM = 'lan-host$'
@@ -2719,5 +2725,70 @@ describe('BindRelationship', () => {
       identityOf('ip', LAN)!,
       { ...identityOf('hostname', '_notaservice.example.lan')!, evidence_id: LAN },
     ])?.hostname).toBe('_notaservice.example.lan')
+  })
+
+  it('persists every bound victim row and does not replace an earlier victim', () => {
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const firstIds = [
+      identityOf('ip', LAN)!,
+      { ...identityOf('mac', CLIENT_MAC)!, entity_id: LAN, evidence_id: LAN },
+      { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN },
+      { ...identityOf('user', USER)!, entity_id: LAN, evidence_id: LAN },
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('mac', DISTRACTOR_MAC)!, entity_id: DISTRACTOR },
+      { ...identityOf('hostname', AD_SRV)!, evidence_id: DISTRACTOR },
+    ]
+    const secondIds = [
+      ...firstIds,
+      identityOf('ip', LAN2)!,
+      { ...identityOf('mac', CLIENT_MAC2)!, entity_id: LAN2, evidence_id: LAN2 },
+      { ...identityOf('hostname', HOST2)!, entity_id: LAN2, evidence_id: LAN2 },
+      { ...identityOf('user', USER2)!, entity_id: LAN2, evidence_id: LAN2 },
+    ]
+    const first = requireCaseReport(bind(), firstIds, claims)
+    expect(first.victims).toBeUndefined()
+    expect(first.who).toEqual({
+      entity_id: LAN, ip: LAN, mac: CLIENT_MAC, hostname: HOST, user: USER,
+    })
+    const secondBind = bind({
+      relationship: {
+        src: LAN2, dst: C2B, dport: 443, t: '2026-08-21T00:01:00Z', evidence_id: 'conv-2',
+      },
+      endpoints: [
+        { addr: LAN2, role: 'victim', because: `${LAN2} talking to ${C2B}` },
+        { addr: C2B, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'infra', because: 'dc' },
+      ],
+    })
+    const second = requireCaseReport(secondBind, secondIds, claims)
+    expect(second.victims).toBeUndefined()
+    expect(second.who).toEqual({
+      entity_id: LAN2, ip: LAN2, mac: CLIENT_MAC2, hostname: HOST2, user: USER2,
+    })
+    expect(second.who.user).not.toBe(USER)
+    expect(second.who.hostname).not.toBe(AD_SRV)
+    expect(second.who.ip).not.toBe(DISTRACTOR)
+    const merged = withPublishedVictimRows(second, foldPublishedVictimRows([first, second]))
+    expect(merged.who).toEqual(second.who)
+    expect(merged.victims).toEqual([first.who, second.who])
+    expect(publishedVictimRows(merged)).toEqual([first.who, second.who])
+    expect(merged.victims?.some(row => row.entity_id === DISTRACTOR)).toBe(false)
+    const updated = requireCaseReport(bind(), [
+      ...firstIds,
+      { ...identityOf('full_name', FULL_NAME)!, entity_id: LAN, evidence_id: LAN },
+    ], claims)
+    expect(updated.who.full_name).toBe(FULL_NAME)
+    expect(withPublishedVictimRows(updated, foldPublishedVictimRows([first, updated])).victims)
+      .toBeUndefined()
+    expect(mergePublishedVictimRows([first.who], updated.who)).toEqual([updated.who])
+    expect(victimRowKey(first.who)).toBe(LAN)
+    expect(boundVictimSlot(secondBind, secondIds)).toEqual(second.who)
+    expect(boundVictimSlot({
+      relationship,
+      endpoints: [{ addr: C2, role: 'c2', because: 'cue/observation address' }],
+    }, firstIds)).toBeUndefined()
+    expect(withPublishedVictimRows(first, []).victims).toBeUndefined()
+    expect(foldPublishedVictimRows([])).toEqual([])
+    expect(publishedVictimRows(first)).toEqual([first.who])
   })
 })

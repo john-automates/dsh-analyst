@@ -166,6 +166,16 @@ describe('investigation invariants', () => {
       where: { entity_id: '10.0.10.2', ip: '10.0.10.2' },
       why: 'e', how: 'f',
     })
+    session.append('investigation/report', {
+      who: { entity_id: '10.0.10.8', ip: '10.0.10.8' },
+      what: 'b', when: 'c',
+      where: { entity_id: '10.0.10.8', ip: '10.0.10.8' },
+      why: 'e', how: 'f',
+      victims: [
+        { entity_id: '10.0.10.2', ip: '10.0.10.2' },
+        { entity_id: '10.0.10.8', ip: '10.0.10.8' },
+      ],
+    })
     session.append('investigation/mission', {
       purpose: 'Scope an identity+C2 case',
       slots: { '0a': { value: 'valid' } },
@@ -227,6 +237,9 @@ describe('investigation invariants', () => {
     [report({ c2_domain: '' }), /c2_domain must be a non-empty/],
     [report({ c2_ips: [] }), /c2_ips must be a non-empty/],
     [report({ c2_ips: [''] }), /c2_ips\[0\] must be a non-empty/],
+    [report({ victims: [] }), /victims must be an array of two or more/],
+    [report({ victims: [{ entity_id: '10.0.10.2', ip: '10.0.10.2' }] }), /victims must be an array of two or more/],
+    [report({ victims: [{ entity_id: '10.0.10.2' }, { entity_id: '' }] }), /entity_id must be a non-empty/],
     [mission({ cueValidation: 'maybe' }), /cueValidation "maybe" is not valid/],
     [mission({ purpose: '' }), /purpose must be a non-empty/],
     [mission({ cue: null }), /cue must be an object/],

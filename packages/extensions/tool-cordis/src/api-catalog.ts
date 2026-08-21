@@ -878,12 +878,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'recordReport(session: Session, report: CaseReport): void',
-        description: 'Append a whole-value 5W1H close packet. Re-merges leftover extras from the Report hook so a later accepted close keeps them.',
+        description: 'Append a 5W1H close packet. Re-merges leftover extras from the Report hook so a later accepted close keeps them. Merges this close\'s victim row with already-published victim rows by `entity_id`.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'report', description: '5W1H fields.' }],
       },
       {
         signature: 'recordBind(session: Session, bind: RelationshipBind): void',
-        description: 'Append a whole-value conversation bind. The last bind is the live bind.',
+        description: 'Append a whole-value conversation bind. The last bind is the live bind. When a 5W1H packet already exists, persist this bind\'s completed victim row onto that packet. A different victim appends; the same victim updates that row. Does not invent a close when none exists.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'bind', description: 'resolved relationship and endpoints.' }],
       },
       {
@@ -2987,7 +2987,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CaseReport',
-    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n    c2_ips?: string[];\n    c2_domain?: string;\n}',
+    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n    victims?: CaseIdentitySlot[];\n    c2_ips?: string[];\n    c2_domain?: string;\n}',
   },
   {
     name: 'CaseReportExtras',
