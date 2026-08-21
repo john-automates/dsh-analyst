@@ -379,11 +379,20 @@ describe('BindRelationship', () => {
       payloadOnExtra,
     ]
     expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, [
+      ...identities,
+      { ...identityOf('ip', C2)!, evidence_id: LAN },
+    ])).toEqual([C2, EXTRA_WAN])
     expect(acceptedC2Ips(live, identities)).not.toContain(CDN_DEST)
     expect(c2DomainHuntsForBind(live, identities).some(hunt => hunt.subject === CDN_DEST))
       .toBe(false)
     expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
-    expect(acceptedC2Domain(live, [cdnHost, payloadOnExtra, victimHost])).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cdnHost,
+      payloadOnExtra,
+      victimHost,
+    ])).toBe(PAYLOAD)
     const report = requireCaseReport(live, identities, {
       what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
     })
@@ -408,7 +417,11 @@ describe('BindRelationship', () => {
       cdnHost,
       payloadOnExtra,
     ])).toEqual([EXTRA_WAN])
-    expect(acceptedC2Domain(boundCdn, [cdnHost, payloadOnExtra])).toBe(PAYLOAD)
+    expect(acceptedC2Domain(boundCdn, [
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      cdnHost,
+      payloadOnExtra,
+    ])).toBe(PAYLOAD)
   })
 
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {

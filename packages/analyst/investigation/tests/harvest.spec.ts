@@ -474,6 +474,8 @@ describe('identity harvest', () => {
       [identityOf('hostname', 'update.microsoft.com')!],
       `ip.addr: ${cdnDest}\thostname: update.microsoft.com`,
     )).toEqual(['update.microsoft.com'])
+    expect(hostnamesEvidencedOnIp(cdnDest, [], `ip.addr: ${cdnDest}\thostname: ${C2}`))
+      .toEqual([])
     const dump = [
       `tls.handshake.extensions_server_name: ${DOMAIN}`,
       'dns.qry.name: c2.example.test',
