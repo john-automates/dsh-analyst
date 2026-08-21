@@ -22,7 +22,7 @@ Status: implemented
 
 `case_report` 的 `who` / `where` 是受害端实体行（IP、MAC、主机名、用户、全名）的投影，不是自由文本填写。IP 以自身作为实体。显式 `entity_id` 优先。唯一的来源 `eth.src` MAC 通过 `c2TalkingLanVictim` 归属到被绑定的 victim；该辅助函数不改写 `who` / `where`。当前绑定之后，证据落在被绑定 victim IP 上的 MAC 或主机名仍捐出，即使账本上还有同一种类的其他值（[受害端 IP 范围捐出](../bug-fix/2026-08-21-donate-victim-ip-scoped-mac-hostname.md)）。第一次在域控或对等体 hunt 下戳记的 MAC，只要后来的帧把它从来自 victim IP 的方向送出，就仍捐出（[通信 IP 戳 MAC](../bug-fix/2026-08-21-stamp-mac-evidence-from-talking-ip.md)）。第一次在域控或对等体 hunt 下看到的用户或全名，只要该会话的客户端是被绑定 victim，就仍捐出（[会话客户端戳记](../bug-fix/2026-08-21-stamp-user-fullname-from-conversation-client.md)）。未归属的账本身份在它是该种类中唯一未归属到其他实体的身份时捐出（[补全受害端行投影](../bug-fix/2026-08-21-complete-victim-row-projection.md)）。`entity_id` 已经是 victim 的身份仍捐出。同一种类的两个未归属身份都不捐出。distractor 留在账本上，不能捐出身份槽。不编造姓名。
 
-[去引号](../bug-fix/2026-08-21-pcap-filter-quoted-display-filter.md)、[字符串字段强制转换](../bug-fix/2026-08-20-pcap-filter-string-fields.md)、`eth-src` 使用 `ip.src`、[来源 MAC 收割](../bug-fix/2026-08-21-harvest-eth-src-from-c2-talking-ip.md) 和[自动运行](../bug-fix/2026-08-21-auto-run-outstanding-identity-hunts.md) 仍是辅助手段。BindRelationship 是结案检查。scout、遗留报告禁令和新评测不在本次变更内。
+[去引号](../bug-fix/2026-08-21-pcap-filter-quoted-display-filter.md)、[字符串字段强制转换](../bug-fix/2026-08-20-pcap-filter-string-fields.md)、[字符串化的 bind endpoints 与 dport](../bug-fix/2026-08-21-bind-relationship-stringified-args.md)、`eth-src` 使用 `ip.src`、[来源 MAC 收割](../bug-fix/2026-08-21-harvest-eth-src-from-c2-talking-ip.md) 和[自动运行](../bug-fix/2026-08-21-auto-run-outstanding-identity-hunts.md) 仍是辅助手段。BindRelationship 是结案检查。scout、遗留报告禁令和新评测不在本次变更内。
 
 ## 备选方案
 
@@ -48,7 +48,7 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、线索作为 victim 被拒绝、两个／零个 victim 被拒绝、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、唯一未归属的 mac／hostname／user／full_name 捐出、另一行存在时受害端 IP 范围内的 mac／hostname 捐出、两个未归属用户或 MAC 都不捐出、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄以及未归属的收割行。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
+`packages/analyst/investigation/tests/bind.spec.ts` 使用合成 LAN 客户端（`10.0.10.2`）、TEST-NET 对等体（`198.51.100.80`）和空闲 distractor。它检查线索默认 `c2`、线索作为 victim 被拒绝、两个／零个 victim 被拒绝、JSON 字符串 `endpoints` 加上数字字符串 `dport` 与原生数组加上整数 `dport` 解析为同一绑定、从受害端行投影、distractor 不捐出、唯一来源 MAC 归属、唯一未归属的 mac／hostname／user／full_name 捐出、另一行存在时受害端 IP 范围内的 mac／hostname 捐出、两个未归属用户或 MAC 都不捐出、未绑定／对调／自由文本拒绝，以及受害端行用户句柄（`who.entity_id` 为用户名）用 victim 地址结案。`packages/analyst/investigation/tests/investigation.spec.ts` 记录 `bind_relationship`，在没有当前 victim 之前拒绝 `case_report`，并在账本上渲染角色卡片。`packages/analyst/analyst-tools/tests/tools.spec.ts` 要求先绑定再结案，并从受害端投影 who/where，包括该行上的用户名句柄以及未归属的收割行。无密钥 `examples/analyst` pcap-case 快照是 `pcap_filter`，然后 `bind_relationship`，然后 `case_report`。
 
 ## 后果
 

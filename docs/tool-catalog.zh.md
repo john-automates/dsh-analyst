@@ -2246,8 +2246,15 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
       "description": "Conversation destination address."
     },
     "dport": {
-      "type": "integer",
-      "description": "Destination port."
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Destination port. A numeric string that is an integer 1-65535 is the same port."
     },
     "t": {
       "type": "string",
@@ -2258,37 +2265,44 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
       "description": "Id of the cited conversation evidence."
     },
     "endpoints": {
-      "type": "array",
-      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "addr": {
-            "type": "string",
-            "description": "Endpoint address."
-          },
-          "role": {
-            "type": "string",
-            "description": "victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.",
-            "enum": [
-              "victim",
-              "c2",
-              "infra",
-              "distractor",
-              "unknown"
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "addr": {
+                "type": "string",
+                "description": "Endpoint address."
+              },
+              "role": {
+                "type": "string",
+                "description": "victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.",
+                "enum": [
+                  "victim",
+                  "c2",
+                  "infra",
+                  "distractor",
+                  "unknown"
+                ]
+              },
+              "because": {
+                "type": "string",
+                "description": "Why this role. A cue/observation address cannot be victim."
+              }
+            },
+            "required": [
+              "addr",
+              "because"
             ]
-          },
-          "because": {
-            "type": "string",
-            "description": "Why this role. A cue/observation address cannot be victim."
           }
         },
-        "required": [
-          "addr",
-          "because"
-        ]
-      }
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim. A JSON array string of endpoint objects is the same list."
     }
   },
   "required": [

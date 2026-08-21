@@ -53,12 +53,16 @@ export { formatLedger } from './ledger.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES,
-  entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
-  normalizeEndpointAddr, otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot,
-  requireCaseReport, resolveBind, roleForIdentity, UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
+  caseReportDenyReason, coerceBindRequest, cueVictimUnboundReason, defaultRoleForAddr,
+  ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON, entityIdForIdentity, foldBind, formatRolesCard,
+  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, otherEndHuntForDeniedBind,
+  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
+  UNBOUND_REASON, victimOf, VICTIM_COUNT_REASON,
 } from './bind.ts'
-export type { BindEndpointInput, BindRequest, BindResolution, CaseReportClaims } from './bind.ts'
+export type {
+  BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
+  CoercedBindRequest,
+} from './bind.ts'
 export {
   CLOSE_FILE_REASON, denyCommand, denyReason, stringArg, tokenizeCommand,
 } from './policy.ts'
@@ -251,30 +255,45 @@ export class Investigation extends Service {
       parameters: {
         src: { type: 'string', required: true, description: 'Conversation source address.' },
         dst: { type: 'string', required: true, description: 'Conversation destination address.' },
-        dport: { type: 'integer', required: true, description: 'Destination port.' },
+        dport: {
+          required: true,
+          description: 'Destination port. A numeric string that is an integer 1-65535 is the same port.',
+          oneOf: [
+            { type: 'integer' },
+            { type: 'string' },
+          ],
+        },
         t: { type: 'string', required: true, description: 'Conversation time.' },
         evidence_id: { type: 'string', required: true, description: 'Id of the cited conversation evidence.' },
         endpoints: {
-          type: 'array',
           required: true,
-          description: 'Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              addr: { type: 'string', required: true, description: 'Endpoint address.' },
-              role: {
-                type: 'string',
-                enum: [...ENDPOINT_ROLES],
-                description: 'victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.',
-              },
-              because: {
-                type: 'string',
-                required: true,
-                description: 'Why this role. A cue/observation address cannot be victim.',
+          description: [
+            'Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.',
+            'A JSON array string of endpoint objects is the same list.',
+          ].join(' '),
+          oneOf: [
+            {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  addr: { type: 'string', required: true, description: 'Endpoint address.' },
+                  role: {
+                    type: 'string',
+                    enum: [...ENDPOINT_ROLES],
+                    description: 'victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.',
+                  },
+                  because: {
+                    type: 'string',
+                    required: true,
+                    description: 'Why this role. A cue/observation address cannot be victim.',
+                  },
+                },
               },
             },
-          },
+            { type: 'string' },
+          ],
         },
       },
       output: {
