@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, foldBind, formatRolesCard,
-  identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr, otherEndHuntForDeniedBind,
-  projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind, roleForIdentity,
-  UNBOUND_REASON, VICTIM_COUNT_REASON,
+  caseReportDenyReason, cueVictimUnboundReason, defaultRoleForAddr, ENDPOINTS_ARRAY_REASON,
+  foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr, normalizeEndpointAddr,
+  otherEndHuntForDeniedBind, projectCaseReport, projectVictimSlot, requireCaseReport, resolveBind,
+  roleForIdentity, UNBOUND_REASON, VICTIM_COUNT_REASON,
 } from '../src/bind.ts'
 import { formatLedger } from '../src/ledger.ts'
 import { identityOf } from '../src/harvest.ts'
@@ -197,6 +197,61 @@ describe('BindRelationship', () => {
     expect(formatLedger([], [], undefined)).toBe('')
     expect(formatLedger([identityOf('ip', LAN)!], [], undefined, bind())).toContain('[victim] IP')
     expect(formatLedger([], [], { who: { entity_id: LAN } })).toContain('case_report')
+  })
+
+  it('coerces a JSON-string endpoints list and numeric-string dport before resolveBind', () => {
+    const endpoints = [{ addr: LAN, role: 'victim' as const, because: conversationBecause }]
+    const native = resolveBind({ relationship, endpoints })
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '443' },
+      endpoints: JSON.stringify(endpoints),
+    })).toEqual(native)
+    expect(native).toEqual({
+      ok: true,
+      bind: {
+        relationship,
+        endpoints: [
+          { addr: LAN, role: 'victim', because: conversationBecause },
+          { addr: C2, role: 'c2', because: 'cue/observation address' },
+        ],
+      },
+    })
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '443' },
+      endpoints: JSON.stringify([{ addr: C2, role: 'victim', because: 'the alert named this IP' }]),
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    expect(otherEndHuntForDeniedBind({
+      relationship: { ...relationship, dport: '443' },
+      endpoints: JSON.stringify([{ addr: C2, role: 'victim', because: conversationBecause }]),
+    })).toEqual({ kind: 'other-end', subjectKind: 'ip', subject: C2 })
+    expect(resolveBind({
+      relationship,
+      endpoints: JSON.stringify({ addr: LAN, role: 'victim', because: conversationBecause }),
+    })).toEqual({ ok: false, reason: ENDPOINTS_ARRAY_REASON })
+    expect(resolveBind({
+      relationship,
+      endpoints: 'not-a-json-array',
+    })).toEqual({ ok: false, reason: ENDPOINTS_ARRAY_REASON })
+    expect(otherEndHuntForDeniedBind({
+      relationship,
+      endpoints: 'not-a-json-array',
+    })).toBeUndefined()
+    expect(resolveBind({
+      relationship: { src: LAN, dst: C2, t: relationship.t, evidence_id: relationship.evidence_id },
+      endpoints,
+    }).ok).toBe(false)
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '0' },
+      endpoints,
+    }).ok).toBe(false)
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '65536' },
+      endpoints,
+    }).ok).toBe(false)
+    expect(resolveBind({
+      relationship: { ...relationship, dport: '443.5' },
+      endpoints,
+    }).ok).toBe(false)
   })
 
   it('rejects incomplete relationship fields and a duplicated endpoint', () => {

@@ -35,7 +35,9 @@ export function cueVictimUnboundReason(cue: string): string {
  * @returns the hunt for the first cue assigned victim, or undefined.
  */
 export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefined {
-  for (const input of request.endpoints) {
+  const coerced = coerceBindRequest(request)
+  if (typeof coerced === 'string') return undefined
+  for (const input of coerced.endpoints) {
     const addr = normalizeEndpointAddr(input.addr)
     if (addr !== undefined && input.role === 'victim' && isCueObservationAddr(addr)) {
       return otherEndHunt(addr)
@@ -47,14 +49,47 @@ export function otherEndHuntForDeniedBind(request: BindRequest): Hunt | undefine
 /** Deny text when bind_relationship does not have exactly one victim. */
 export const VICTIM_COUNT_REASON = 'bind_relationship requires exactly one victim'
 
+/** Deny text when endpoints is not an array after JSON-string coerce. */
+export const ENDPOINTS_ARRAY_REASON = 'bind_relationship endpoints must be an array'
+
 const ROLE_SET = new Set<string>(ENDPOINT_ROLES)
 const HANDLE_KINDS = ['ip', 'mac', 'hostname', 'user', 'full_name'] as const satisfies readonly IdentityKind[]
+const INTEGER_STRING = /^-?\d+$/
+
+/** Cited conversation as submitted to bind_relationship. */
+export interface BindRelationshipInput {
+  /** Conversation source address. */
+  src: string
+  /** Conversation destination address. */
+  dst: string
+  /**
+   * Destination port. A numeric string that is an integer is coerced before
+   * the 1-65535 check. Omitted dport is not invented.
+   */
+  dport?: number | string
+  /** Conversation time as submitted. */
+  t: string
+  /** Id of the cited conversation evidence. */
+  evidence_id: string
+}
 
 /** Model or fold input before defaults and role checks. */
 export interface BindRequest {
   /** Cited conversation. */
-  relationship: Relationship
-  /** Endpoints the model assigned. Missing src/dst are completed with defaults. */
+  relationship: BindRelationshipInput
+  /**
+   * Endpoints the model assigned. A JSON array string of endpoint objects is
+   * coerced to that array before role checks. Missing src/dst are completed
+   * with defaults.
+   */
+  endpoints: readonly BindEndpointInput[] | string
+}
+
+/** BindRequest after endpoints and dport coerce. */
+export interface CoercedBindRequest {
+  /** Cited conversation; dport is an integer when the input was a numeric string. */
+  relationship: BindRelationshipInput
+  /** Endpoint objects. */
   endpoints: readonly BindEndpointInput[]
 }
 
@@ -138,21 +173,46 @@ export function victimOf(bind: RelationshipBind): BoundEndpoint | undefined {
 }
 
 /**
+ * Coerce Hermes-stringified bind_relationship arguments before resolveBind.
+ * A JSON array string of endpoint objects becomes that array. A numeric
+ * string dport that is an integer becomes that integer. A string that is
+ * not a JSON array stays rejected. A missing dport is not invented.
+ * @param request - relationship plus submitted endpoints, possibly stringified.
+ * @returns the coerced request with an endpoint array, or a deny reason.
+ */
+export function coerceBindRequest(request: BindRequest): CoercedBindRequest | string {
+  const endpoints = coerceBindEndpoints(request.endpoints)
+  if (endpoints === undefined) return ENDPOINTS_ARRAY_REASON
+  const dport = coerceBindDport(request.relationship.dport)
+  const relationship: BindRelationshipInput = {
+    src: request.relationship.src,
+    dst: request.relationship.dst,
+    t: request.relationship.t,
+    evidence_id: request.relationship.evidence_id,
+  }
+  if (dport !== undefined) relationship.dport = dport
+  return { relationship, endpoints }
+}
+
+/**
  * Resolve and validate a BindRelationship request.
  * Missing src/dst endpoints are completed with default roles. Cue/observation
  * addresses default to `c2`. Assigning `victim` to a cue/observation address
  * is always unbound and names the other-end hunt for that cue. Zero or two
- * victims fail.
+ * victims fail. A JSON array string of endpoint objects and a numeric-string
+ * dport are coerced first; a missing dport is not invented.
  * @param request - relationship plus submitted endpoints.
  * @returns the bind, or a deny reason.
  */
 export function resolveBind(request: BindRequest): BindResolution {
-  const relationship = normalizeRelationship(request.relationship)
+  const coerced = coerceBindRequest(request)
+  if (typeof coerced === 'string') return { ok: false, reason: coerced }
+  const relationship = normalizeRelationship(coerced.relationship)
   if (typeof relationship === 'string') return { ok: false, reason: relationship }
 
   const seen = new Set<string>()
   const endpoints: BoundEndpoint[] = []
-  for (const input of request.endpoints) {
+  for (const input of coerced.endpoints) {
     const resolved = resolveEndpoint(input, seen)
     if (typeof resolved === 'string') return { ok: false, reason: resolved }
     endpoints.push(resolved)
@@ -441,7 +501,7 @@ export function roleForIdentity(
   return bind.endpoints.find(endpoint => endpoint.addr === entityId)?.role
 }
 
-function normalizeRelationship(raw: Relationship): Relationship | string {
+function normalizeRelationship(raw: BindRelationshipInput): Relationship | string {
   const src = normalizeEndpointAddr(raw.src)
   const dst = normalizeEndpointAddr(raw.dst)
   const evidenceId = raw.evidence_id.trim()
@@ -451,10 +511,45 @@ function normalizeRelationship(raw: Relationship): Relationship | string {
   }
   if (evidenceId === '') return 'bind_relationship relationship evidence_id must be a non-empty string'
   if (time === '') return 'bind_relationship relationship t must be a non-empty string'
-  if (!Number.isInteger(raw.dport) || raw.dport < 1 || raw.dport > 65535) {
+  const dport = raw.dport
+  if (typeof dport !== 'number' || !Number.isInteger(dport) || dport < 1 || dport > 65535) {
     return 'bind_relationship relationship dport must be an integer 1-65535'
   }
-  return { src, dst, dport: raw.dport, t: time, evidence_id: evidenceId }
+  return { src, dst, dport, t: time, evidence_id: evidenceId }
+}
+
+/**
+ * Coerce `endpoints` from a JSON array string into that array.
+ * A native array is used as given. A string that is not a JSON array stays
+ * rejected so resolveBind does not invent endpoints.
+ * @param value - schema-accepted array or string.
+ * @returns endpoint objects, or undefined when the value is not an array.
+ */
+function coerceBindEndpoints(
+  value: readonly BindEndpointInput[] | string,
+): readonly BindEndpointInput[] | undefined {
+  if (typeof value !== 'string') return value
+  try {
+    const parsed: unknown = JSON.parse(value.trim())
+    if (Array.isArray(parsed)) return parsed as BindEndpointInput[]
+  } catch {
+    // JSON.parse SyntaxError: not a JSON array. Keep rejecting.
+  }
+  return undefined
+}
+
+/**
+ * Coerce `dport` from a numeric integer string into that integer.
+ * A number is used as given. A missing or non-integer string is left so
+ * normalizeRelationship can deny it. A port is not invented.
+ * @param value - schema-accepted integer or string, or omitted.
+ * @returns the integer, or the original value.
+ */
+function coerceBindDport(value: number | string | undefined): number | string | undefined {
+  if (typeof value !== 'string') return value
+  const text = value.trim()
+  if (!INTEGER_STRING.test(text)) return value
+  return Number(text)
 }
 
 function resolveEndpoint(

@@ -858,6 +858,98 @@ describe('investigation service', () => {
     )
   })
 
+  it('coerces stringified endpoints and dport through bind_relationship execute', async () => {
+    const { ctx, owner } = await setup()
+    const endpoints = [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }]
+    const native = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-native'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints,
+      },
+      agent: owner,
+    })
+    expect(native.isError).toBe(false)
+    const expected = ctx.investigation.bind(owner.session)
+    const other = await setup()
+    const coerced = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-stringified'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: '443', t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: JSON.stringify(endpoints),
+      },
+      agent: other.owner,
+    })
+    expect(coerced.isError).toBe(false)
+    expect(coerced.content.map(block => 'text' in block ? block.text : '').join('')).not.toContain('INVALID_ARGS')
+    expect(other.ctx.investigation.bind(other.owner.session)).toEqual(expected)
+    const cue = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-stringified-cue'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: '443', t: 't', evidence_id: 'conv-1',
+        endpoints: JSON.stringify([{ addr: '198.51.100.80', role: 'victim', because: 'the alert named this IP' }]),
+      },
+      agent: other.owner,
+    })
+    expect(cue.isError).toBe(true)
+    expect(cue.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: hunt LAN ip.src talking to 198.51.100.80 (ip.dst == 198.51.100.80).',
+    )
+    const notArray = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-not-array'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: 'not-a-json-array',
+      },
+      agent: other.owner,
+    })
+    expect(notArray.isError).toBe(true)
+    expect(notArray.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'bind_relationship endpoints must be an array',
+    )
+    const missing = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-missing-dport'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', t: 't', evidence_id: 'conv-1',
+        endpoints,
+      },
+      agent: other.owner,
+    })
+    expect(missing.isError).toBe(true)
+    const zero = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-dport-zero'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: '0', t: 't', evidence_id: 'conv-1',
+        endpoints,
+      },
+      agent: other.owner,
+    })
+    expect(zero.isError).toBe(true)
+    const high = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-dport-high'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: '65536', t: 't', evidence_id: 'conv-1',
+        endpoints,
+      },
+      agent: other.owner,
+    })
+    expect(high.isError).toBe(true)
+  })
+
   it('auto-runs other-end after a cue-as-victim deny and harvests the LAN peer', async () => {
     const { ctx, caseDir, owner } = await setup()
     await mkdir(join(caseDir, 'evidence'), { recursive: true })

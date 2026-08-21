@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-bind-relationship-stringified-args.md
+2026-08-21-bind-relationship-stringified-args.md: 277abfe9c2da24e1656effc038a186bd5f0589cf
+2026-08-21-bind-relationship-stringified-args.zh.md: 8e9d1f3691bb9b0ecf68c4481bcc4dcdeb15c122
