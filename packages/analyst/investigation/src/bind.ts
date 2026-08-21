@@ -173,14 +173,17 @@ export function resolveBind(request: BindRequest): BindResolution {
 
 /**
  * Entity id an identity may donate for. IPs donate as themselves. An explicit
- * `entity_id` wins. A MAC or hostname evidenced on an IPv4 (hunt-subject
- * `evidence_id`, or a tool-result line scoped to that IP) affiliates to that
- * IP. Whole-ledger uniqueness does not block a victim-IP-scoped MAC or
- * hostname. A MAC sourced from the C2-talking LAN IP donates to that IP when
- * it matches the bound victim. After a live bind, an unaffiliated identity
- * (no `entity_id`, `evidence_id` does not point at a non-victim) donates to the
- * bound victim when it is the only identity of that kind that is not affiliated
- * with a different entity. Distractors never donate.
+ * `entity_id` wins. A MAC sourced from the bound victim IP on a tool-result
+ * line (`ip.src`, outbound `ip → peer`, or ARP `is at`) affiliates to that
+ * victim; a hunt-subject `evidence_id` does not veto that. A hostname
+ * evidenced on an IPv4 (hunt-subject `evidence_id`, or a name-service line
+ * scoped to that IP) affiliates to that IP. Whole-ledger uniqueness does not
+ * block a victim-IP-scoped MAC or hostname. A MAC sourced from the C2-talking
+ * LAN IP donates to that IP when it matches the bound victim. After a live
+ * bind, an unaffiliated identity (no `entity_id`, `evidence_id` does not point
+ * at a non-victim) donates to the bound victim when it is the only identity of
+ * that kind that is not affiliated with a different entity. Distractors never
+ * donate.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger, used to resolve a sourced MAC and uniqueness.
@@ -196,6 +199,9 @@ export function entityIdForIdentity(
   if (identity.entity_id !== undefined && identity.entity_id !== '') return identity.entity_id
   if (identity.kind === 'ip') return identity.value
   const victim = victimOf(bind)
+  if (identity.kind === 'mac' && victim !== undefined && macSourcedFromVictim(identity, victim.addr, evidenceText)) {
+    return victim.addr
+  }
   const scoped = scopedIpForIdentity(identity, evidenceText)
   if (scoped !== undefined) return scoped
   if (identity.kind === 'mac') {
@@ -221,10 +227,12 @@ export function entityIdForIdentity(
 /**
  * Whether an identity may donate a who/where slot for the bound victim.
  * Distractors and other non-victim entities cannot donate. An `evidence_id`
- * that names a non-victim entity also blocks donation. A MAC or hostname
- * evidenced on the bound victim IP donates even when other values of that
- * kind exist on the ledger. After a live bind, a unique unaffiliated identity
- * of a kind donates; two unaffiliated values of that kind donate neither.
+ * that names a non-victim entity also blocks donation, except a MAC sourced
+ * from the bound victim IP on a tool-result line: hunt-subject `evidence_id`
+ * does not veto that. A MAC or hostname evidenced on the bound victim IP
+ * donates even when other values of that kind exist on the ledger. After a
+ * live bind, a unique unaffiliated identity of a kind donates; two
+ * unaffiliated values of that kind donate neither.
  * @param identity - ledger identity.
  * @param bind - live bind.
  * @param identities - full ledger.
@@ -237,8 +245,11 @@ export function identityDonatesToVictim(
   identities: readonly Identity[],
   evidenceText = '',
 ): boolean {
-  if (pointsAtNonVictim(identity.evidence_id, bind)) return false
   const victim = victimOf(bind)
+  if (identity.kind === 'mac' && victim !== undefined && macSourcedFromVictim(identity, victim.addr, evidenceText)) {
+    return identity.entity_id === undefined || identity.entity_id === '' || identity.entity_id === victim.addr
+  }
+  if (pointsAtNonVictim(identity.evidence_id, bind)) return false
   if (victim === undefined) return false
   return entityIdForIdentity(identity, bind, identities, evidenceText) === victim.addr
 }
@@ -488,8 +499,10 @@ function uniqueUnaffiliatedOfKind(
 
 /**
  * Whether an identity already belongs to an entity other than the bound victim.
- * Explicit `entity_id` wins. A MAC or hostname evidenced on another IPv4 belongs
- * to that IP. A MAC sourced from a C2-talking LAN IP belongs to that IP.
+ * Explicit `entity_id` wins. A MAC sourced from the bound victim IP on a
+ * tool-result line belongs to that victim; hunt-subject `evidence_id` does not
+ * affiliate it elsewhere. A hostname evidenced on another IPv4 belongs to that
+ * IP. A MAC sourced from a C2-talking LAN IP belongs to that IP.
  * @param identity - ledger identity.
  * @param victimAddr - bound victim address.
  * @param identities - full ledger.
@@ -505,6 +518,7 @@ function affiliatedWithDifferentEntity(
   if (identity.entity_id !== undefined && identity.entity_id !== '') {
     return identity.entity_id !== victimAddr
   }
+  if (identity.kind === 'mac' && macSourcedFromVictim(identity, victimAddr, evidenceText)) return false
   const scoped = scopedIpForIdentity(identity, evidenceText)
   if (scoped !== undefined) return scoped !== victimAddr
   if (identity.kind === 'mac') {
@@ -517,19 +531,35 @@ function affiliatedWithDifferentEntity(
 }
 
 /**
- * IPv4 a MAC or hostname is evidenced on. Hunt-subject `evidence_id` wins.
- * Otherwise a unique tool-result line scoped to one IPv4 (`eth.src` with
- * `ip.src`, `name-service` with `ip.addr` / `ip.src`).
+ * IPv4 a MAC or hostname is evidenced on. A MAC uses the unique talking IP
+ * from tool-result frames (`ip.src`, outbound `ip → peer`, or ARP `is at`);
+ * hunt-subject `evidence_id` does not win over that. A hostname still uses
+ * hunt-subject `evidence_id`, then a unique name-service line.
  * @param identity - ledger identity.
  * @param evidenceText - tool-result text.
  * @returns the scoped IPv4, or undefined when none is unique.
  */
 function scopedIpForIdentity(identity: Identity, evidenceText: string): string | undefined {
   if (identity.kind !== 'mac' && identity.kind !== 'hostname') return undefined
+  const ips = ipsEvidencingIdentity(identity, evidenceText)
+  if (identity.kind === 'mac') {
+    if (ips.length === 1) return ips[0]
+    return ipv4EvidenceId(identity.evidence_id)
+  }
   const fromId = ipv4EvidenceId(identity.evidence_id)
   if (fromId !== undefined) return fromId
-  const ips = ipsEvidencingIdentity(identity, evidenceText)
   return ips.length === 1 ? ips[0] : undefined
+}
+
+/**
+ * Whether tool-result frames source this MAC from `victimAddr`.
+ * @param identity - ledger MAC.
+ * @param victimAddr - bound victim IPv4.
+ * @param evidenceText - tool-result text.
+ * @returns true when a line sources this eth.src from that IP.
+ */
+function macSourcedFromVictim(identity: Identity, victimAddr: string, evidenceText: string): boolean {
+  return ipsEvidencingIdentity(identity, evidenceText).includes(victimAddr)
 }
 
 /**

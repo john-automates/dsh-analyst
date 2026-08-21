@@ -22,9 +22,11 @@ export interface Identity {
    */
   entity_id?: string
   /**
-   * Conversation or entity this identity was taken from. A hunt-subject IPv4
-   * (`eth-src` / `name-service`) scopes a MAC or hostname to that IP. A slot
-   * whose `evidence_id` points at a non-victim entity cannot donate who/where.
+   * Conversation or entity this identity was taken from. A MAC stamps the
+   * talking IPv4 that sources that eth.src. A `name-service` hunt-subject IPv4
+   * scopes a hostname. A slot whose `evidence_id` points at a non-victim entity
+   * cannot donate who/where, except a MAC later sourced from the bound victim
+   * IP on a tool-result line.
    */
   evidence_id?: string
 }

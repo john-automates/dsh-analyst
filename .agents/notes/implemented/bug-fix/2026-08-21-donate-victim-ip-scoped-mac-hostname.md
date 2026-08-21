@@ -16,7 +16,7 @@ Live lumma-r10 (`34b5b26`) bound the cited conversation correctly (LAN victim / 
 
 After a live bind, donate MAC and hostname evidenced on the bound victim IP.
 
-A hunt subject persisted as `evidence_id`, or a tool-result line scoped to that IP (`eth.src` with `ip.src ==` the victim, `name-service` with `ip.addr ==` the victim), affiliates that mac/hostname to the victim. Harvest stamps `evidence_id` with the hunt-subject IPv4 when recording MAC or hostname from an `eth-src` or `name-service` dump. Whole-ledger uniqueness does not block a victim-IP-scoped identity. The persisted who/where carry that mac and hostname.
+A hunt subject persisted as `evidence_id`, or a tool-result line scoped to that IP (`eth.src` with `ip.src ==` the victim, `name-service` with `ip.addr ==` the victim), affiliates that mac/hostname to the victim. Harvest stamps hunt-subject `evidence_id` on hostname from a `name-service` dump. A MAC stamps the talking IP on the line, not the hunt subject; hunt-subject `evidence_id` does not veto donate when later frames source that MAC from the victim ([talking-IP MAC stamp](2026-08-21-stamp-mac-evidence-from-talking-ip.md)). Whole-ledger uniqueness does not block a victim-IP-scoped identity. The persisted who/where carry that mac and hostname.
 
 A distractor evidenced on another IP or carrying another `entity_id` stays out. Slots are not invented. Unique unaffiliated user and full_name still donate. Cue-as-victim stays refused and still issues [other-end](2026-08-21-other-end-hunt-on-cue-victim.md). [BindRelationship](../feature/2026-08-21-bind-relationship.md) still owns bind-before-close. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET peer, and idle LAN row.
 
