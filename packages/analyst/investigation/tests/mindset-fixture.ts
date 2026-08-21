@@ -4,23 +4,23 @@
  */
 import type { Session } from '@deepseek-ai/dsh-session'
 import type Investigation from '../src/index.ts'
+import { chassisMission } from '../src/mindset.ts'
 
 const LAN = '10.0.10.2'
 const C2 = '198.51.100.80'
 const CDN_DEST = '203.0.113.80'
 
 /**
- * Stamp a ready Mission and append-only Plan on a session.
- * Cue is valid. Inventory names the case pcap. Hypotheses are one C2 and
- * one CDN alternative. Mission does not unlock hunts by itself.
+ * Stamp a chassis Mission (cue validated) and append-only Plan.
+ * Inventory names the case pcap. Hypotheses are one C2 and one CDN
+ * alternative. Bind still needs this Plan. Identity hunts do not.
  * @param investigation - live investigation service.
  * @param session - session to append to.
  */
 export function stampReadyMindset(investigation: Investigation, session: Session): void {
   investigation.recordMission(session, {
-    purpose: 'Identify the LAN victim talking to the cue and leftover C2 extras',
+    ...chassisMission(),
     slots: { '0a': { value: 'valid' } },
-    closedMeans: ['identity+c2'],
     cue: { addr: C2, evidence_id: 'conv-1' },
     cueValidation: 'valid',
   })

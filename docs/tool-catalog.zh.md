@@ -2432,7 +2432,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `investigation_mission`
 
-持久化 Mission：目的、线索指针、槽位 0a 校验线索、计分槽位和已关闭手段。Mission 给案件定范围。它不解锁自动 hunt，也不跳过 Observation、Question、Hypothesis。
+更新底盘 Mission 的线索指针和槽位 0a 校验线索。目的在会话开始时盖成受害端身份 + C2 调查，不能被覆盖。
 
 ```json
 {
@@ -2440,7 +2440,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
   "properties": {
     "purpose": {
       "type": "string",
-      "description": "Why this case is being investigated."
+      "description": "Must remain the chassis purpose: This is a victim-identity + C2 investigation."
     },
     "cue_addr": {
       "type": "string",
@@ -2461,7 +2461,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
     },
     "closed_means": {
       "type": "array",
-      "description": "Closed investigative means. identity+c2 scopes an Easy-as-123 case; no origin or family hunt.",
+      "description": "Ignored. Chassis closed-means stay who/where on the victim, C2 is not CDN/DC/update, extras only if proven.",
       "items": {
         "type": "string"
       }
@@ -2480,7 +2480,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `investigation_plan`
 
-追加到现场 Plan：来源清单、缺口和假设。每条假设是 I believe X because Y 加上一条证伪测试。候选标签是 victim、c2、dc、cdn、update、distractor。答案会生成更多问题。这次调用是追加，不是替换。
+追加到现场 Plan：来源清单、缺口和假设。每条假设是 I believe X because Y 加上一条证伪测试。候选标签是 victim、c2、dc、cdn、update、distractor。在点名 C2 假设且 Plan 上有 CDN／DC 替代之前，绑定会被拒绝。答案会生成更多问题。这次调用是追加，不是替换。
 
 ```json
 {

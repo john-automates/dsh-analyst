@@ -202,12 +202,12 @@ describe('auto-issued hunts', () => {
     })
     expect(formatLedger([], [], undefined)).toBe('')
     expect(formatLedger([], [], undefined, undefined, '', {
-      purpose: 'Scope an identity+C2 case',
+      purpose: 'This is a victim-identity + C2 investigation.',
       slots: { '0a': { value: 'valid' } },
-      closedMeans: ['identity+c2'],
+      closedMeans: ['who/where proven on the victim'],
       cue: { addr: C2, evidence_id: 'conv-1' },
       cueValidation: 'valid',
-    })).toContain('Mission: Scope an identity+C2 case')
+    })).toContain('Mission: This is a victim-identity + C2 investigation.')
     expect(formatLedger([], [], undefined, undefined, '', undefined, {
       inventory: ['evidence/a.pcap'],
       gaps: [],

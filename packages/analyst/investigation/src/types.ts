@@ -58,12 +58,12 @@ export interface ThesisRevise {
 
 /** Mission persist: purpose, cue, slot 0a, scored slots, closed-means. */
 export interface InvestigationMission {
-  /** Why this case is being investigated. */
+  /** Why this case is being investigated. Chassis stamps a victim-identity + C2 purpose. */
   purpose: string
   /**
    * Scored or named slots, including `0a` for validate-the-cue.
-   * Chassis may stamp Mission to scope the case (no origin/family hunt
-   * on an identity+C2 closed-means case). Mission does not unlock hunts.
+   * The plugin stamps Mission at session start. Identity hunts may run
+   * after that Mission. The model cannot overwrite purpose.
    */
   slots: Record<string, { score?: number; value?: string }>
   /** Closed investigative means for this case. */
@@ -303,9 +303,10 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'investigation/report': CaseReport
     /**
-     * Mission persist. The last `investigation/mission` wins. Chassis may
-     * stamp Mission to scope the case. Mission does not unlock auto-hunts
-     * and does not skip Observation → Question → Hypothesis.
+     * Mission persist. The last `investigation/mission` wins. The plugin
+     * stamps Mission at session start as a victim-identity + C2
+     * investigation. Identity hunts may run after that Mission. Bind
+     * still needs a named C2 hypothesis on the Plan.
      */
     'investigation/mission': InvestigationMission
     /**

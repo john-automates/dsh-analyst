@@ -2,7 +2,8 @@
  * Analyst Mindset chassis: Mission / Plan / Action / Report wrap DINQ
  * (Observation → Question → Hypothesis → Answer → Bind → Who/Where).
  * Thesis-revise is a scenario object, not a fourth IR phase.
- * Mission may scope the case. Mission does not unlock auto-hunts.
+ * The plugin stamps Mission at session start. Identity hunts may run
+ * after that Mission. Bind is the gate that needs a named C2 hypothesis.
  *
  * @module @deepseek-ai/dsh-investigation/mindset
  */
@@ -15,9 +16,41 @@ import type {
   InvestigationPlanEntry, RelationshipBind, ThesisRevise,
 } from './types.ts'
 
-/** Deny text when bind succeeds resolveBind but Plan is not ready. */
-export const PLAN_NOT_READY_REASON =
-  'unbound: name a C2 hypothesis and check CDN/DC/update alternatives on the Plan before bind_relationship.'
+/** Chassis Mission purpose. The model cannot overwrite this into a different purpose. */
+export const CHASSIS_MISSION_PURPOSE = 'This is a victim-identity + C2 investigation.'
+
+/** Chassis closed-means. Who/where stay victim-only. C2 is not CDN/DC/update. Extras only if proven. */
+export const CHASSIS_CLOSED_MEANS = [
+  'who/where proven on the victim',
+  'C2 is not CDN/DC/update',
+  'extras only if proven',
+] as const
+
+/** Pending cue pointer until slot 0a names a real observation. */
+export const CHASSIS_CUE_PENDING = { addr: 'cue-pending', evidence_id: 'chassis' } as const
+
+/** Deny text when bind has no named C2 hypothesis on the Plan. */
+export const PLAN_C2_HYPOTHESIS_REASON =
+  'unbound: name a C2 hypothesis on the Plan before bind_relationship.'
+
+/** Deny text when bind has no CDN/DC/update alternative on the Plan. */
+export const PLAN_ALTERNATIVE_REASON =
+  'unbound: check CDN/DC alternatives on the Plan before bind_relationship.'
+
+/** Deny text when bind has no source inventory on the Plan. */
+export const PLAN_INVENTORY_REASON =
+  'unbound: inventory what can attest on the Plan before bind_relationship.'
+
+/** Deny text when slot 0a marked the cue invalid. */
+export const CUE_INVALID_REASON =
+  'unbound: slot 0a cueValidation is invalid; validate the cue before bind_relationship.'
+
+/** Deny text when the model tries to overwrite the chassis Mission purpose. */
+export const MISSION_PURPOSE_REASON =
+  'unbound: Mission purpose is a victim-identity + C2 investigation and cannot be overwritten.'
+
+/** Alias of {@link PLAN_C2_HYPOTHESIS_REASON}. */
+export const PLAN_NOT_READY_REASON = PLAN_C2_HYPOTHESIS_REASON
 
 /** Labels that count as a CDN / DC / update alternative hypothesis. */
 const ALTERNATIVE_LABELS = new Set(['dc', 'cdn', 'update'])
@@ -155,36 +188,54 @@ export function sameHuntExtras(
 }
 
 /**
+ * Chassis Mission stamped at session start. Identity hunts may run after
+ * this exists. Bind still needs a named C2 hypothesis on the Plan.
+ * @returns the chassis Mission (cue pending, slot 0a open).
+ */
+export function chassisMission(): InvestigationMission {
+  return {
+    purpose: CHASSIS_MISSION_PURPOSE,
+    slots: { '0a': { value: 'open' } },
+    closedMeans: [...CHASSIS_CLOSED_MEANS],
+    cue: { addr: CHASSIS_CUE_PENDING.addr, evidence_id: CHASSIS_CUE_PENDING.evidence_id },
+    cueValidation: 'open',
+  }
+}
+
+/**
  * Whether Plan is ready for extra-wan / c2-domain auto-run and for a
- * successful bind. Requires Mission cue `valid` or `open`, at least one
- * C2 hypothesis, at least one CDN/DC/update alternative, and an inventory
- * of what can attest. Mission alone is never enough.
+ * successful bind. Requires at least one C2 hypothesis, at least one
+ * CDN/DC/update alternative, and an inventory of what can attest.
+ * Cue `invalid` blocks. Mission alone is never enough. A missing Mission
+ * does not block when Plan is ready (chassis stamps Mission before hunts).
  * @param mission - last Mission, or undefined.
  * @param plan - folded Plan.
- * @returns true when auto-hunts and bind success may proceed.
+ * @returns true when leftover hunts and bind success may proceed.
  */
 export function planReady(
   mission: InvestigationMission | undefined,
   plan: InvestigationPlan,
 ): boolean {
-  if (mission === undefined) return false
-  if (mission.cueValidation !== 'valid' && mission.cueValidation !== 'open') return false
-  const hasC2 = plan.hypotheses.some(item => item.label === 'c2')
-  const hasAlternative = plan.hypotheses.some(item => ALTERNATIVE_LABELS.has(item.label))
-  return hasC2 && hasAlternative && plan.inventory.length > 0
+  return planReadyDenyReason(mission, plan) === undefined
 }
 
 /**
  * Deny reason when a resolved bind may not be recorded.
  * @param mission - last Mission, or undefined.
  * @param plan - folded Plan.
- * @returns {@link PLAN_NOT_READY_REASON}, or undefined when bind may proceed.
+ * @returns a bind deny reason, or undefined when bind may proceed.
  */
 export function planReadyDenyReason(
   mission: InvestigationMission | undefined,
   plan: InvestigationPlan,
 ): string | undefined {
-  return planReady(mission, plan) ? undefined : PLAN_NOT_READY_REASON
+  if (mission?.cueValidation === 'invalid') return CUE_INVALID_REASON
+  if (!plan.hypotheses.some(item => item.label === 'c2')) return PLAN_C2_HYPOTHESIS_REASON
+  if (!plan.hypotheses.some(item => ALTERNATIVE_LABELS.has(item.label))) {
+    return PLAN_ALTERNATIVE_REASON
+  }
+  if (plan.inventory.length === 0) return PLAN_INVENTORY_REASON
+  return undefined
 }
 
 /**

@@ -12,7 +12,8 @@
  * deny write/edit of case-root close files, persist leftover extras from
  * the Report hook even when prose case_report stays unbound, and persist a
  * 5W1H close packet whose who/where project from the bound victim entity row.
- * Mission does not unlock auto-hunts.
+ * The plugin stamps Mission at session start so identity hunts are not
+ * blocked on a model essay. Bind still needs a named C2 hypothesis.
  *
  * State is folded from the session log. There is no live mirror.
  *
@@ -44,9 +45,10 @@ import {
 } from './hunts.ts'
 import { formatLedger } from './ledger.ts'
 import {
-  actionForHunt, applyHuntExtras, foldActions, foldExtras, foldMission, foldPlan,
-  killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras,
-  requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+  actionForHunt, applyHuntExtras, chassisMission, CHASSIS_CLOSED_MEANS, CHASSIS_MISSION_PURPOSE,
+  foldActions, foldExtras, foldMission, foldPlan, killedHypothesisIds, MISSION_PURPOSE_REASON,
+  planEntryDenyReason, planReady, planReadyDenyReason, projectHuntExtras, requireC2HypothesisId,
+  sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
@@ -70,9 +72,12 @@ export {
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
 export {
-  actionForHunt, applyHuntExtras, c2HypothesisId, foldActions, foldExtras, foldMission, foldPlan,
-  isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason,
-  PLAN_NOT_READY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+  actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_CLOSED_MEANS,
+  CHASSIS_MISSION_PURPOSE, foldActions, foldExtras, foldMission, foldPlan,
+  isBelieveBecauseClaim, killedHypothesisIds, MISSION_PURPOSE_REASON, planEntryDenyReason,
+  planReady, planReadyDenyReason, PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON,
+  PLAN_INVENTORY_REASON, CUE_INVALID_REASON, PLAN_NOT_READY_REASON, projectHuntExtras,
+  requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
 } from './mindset.ts'
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
@@ -102,7 +107,7 @@ export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
   'Mission, Plan, Action, and Report wrap Observation, then Question, then Hypothesis, then Answer, then Bind, then Who/Where.',
-  'Do not skip Observation or Question or Hypothesis. Mission scopes the case and validates the cue; it does not unlock hunts.',
+  'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Identity hunts run after that Mission. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
   'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
   'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
@@ -134,13 +139,14 @@ export interface Config {
    * victim and unique non-LAN C2 that is not a well-known CDN or update
    * destination issues `extra-wan` for that victim and
    * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras)
-   * only when Plan is ready (cue valid or open, a C2 hypothesis, a
-   * CDN/DC/update alternative, and an inventory). Outstanding
-   * issued hunts then run through `pcap_filter` with the scoped
-   * display_filter and fields; results harvest into the ledger. Non-LAN /
-   * C2 IP subjects do not auto-run, except `other-end` and `c2-domain`.
-   * `extra-wan` auto-runs for the LAN victim even when a C2-talking focus
-   * IP exists. Mission does not unlock those leftover hunts. Defaults to true.
+   * after a live bind whose Plan named a C2 hypothesis and a CDN/DC/update
+   * alternative and inventoried what can attest. Outstanding issued hunts
+   * then run through `pcap_filter` with the scoped display_filter and
+   * fields; results harvest into the ledger. Non-LAN / C2 IP subjects do
+   * not auto-run, except `other-end` and `c2-domain`. `extra-wan` auto-runs
+   * for the LAN victim even when a C2-talking focus IP exists. The chassis
+   * stamps Mission at start so identity hunts are not blocked on a model
+   * essay. Bind is the leftover-hunt gate. Defaults to true.
    */
   autoHunt?: boolean
 }
@@ -323,6 +329,10 @@ export class Investigation extends Service {
     this.evidenceReadOnly = resolved.evidenceReadOnly
     this.autoHunt = resolved.autoHunt
 
+    ctx.on('session/created', (session) => {
+      this.ensureChassisMission(session)
+    }, { global: true })
+
     ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
       const reason = denyReason(exec, this.caseDir, this.evidenceReadOnly)
       if (reason !== undefined) return Promise.resolve({ kind: 'deny', reason })
@@ -424,6 +434,7 @@ export class Investigation extends Service {
       },
       execute: async (args, exec) => {
         if (exec.agent === undefined) throw new Error('bind_relationship requires an owning agent session')
+        this.ensureChassisMission(exec.agent.session)
         const request = {
           relationship: {
             src: args.src, dst: args.dst, dport: args.dport, t: args.t, evidence_id: args.evidence_id,
@@ -470,11 +481,15 @@ export class Investigation extends Service {
     ctx.tools.register(defineTool({
       name: 'investigation_mission',
       description: [
-        'Persist the Mission: purpose, cue pointer, slot 0a validate-the-cue, scored slots, and closed-means.',
-        'Mission scopes the case. It does not unlock auto-hunts and does not skip Observation then Question then Hypothesis.',
+        'Update the chassis Mission cue pointer and slot 0a validate-the-cue.',
+        'Purpose is stamped at session start as a victim-identity + C2 investigation and cannot be overwritten.',
       ].join(' '),
       parameters: {
-        purpose: { type: 'string', required: true, description: 'Why this case is being investigated.' },
+        purpose: {
+          type: 'string',
+          required: true,
+          description: 'Must remain the chassis purpose: This is a victim-identity + C2 investigation.',
+        },
         cue_addr: { type: 'string', required: true, description: 'Cue or observation address.' },
         cue_evidence_id: { type: 'string', required: true, description: 'Id of the cited cue evidence.' },
         cue_validation: {
@@ -486,7 +501,7 @@ export class Investigation extends Service {
         closed_means: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Closed investigative means. identity+c2 scopes an Easy-as-123 case; no origin or family hunt.',
+          description: 'Ignored. Chassis closed-means stay who/where on the victim, C2 is not CDN/DC/update, extras only if proven.',
         },
       },
       output: {
@@ -510,13 +525,15 @@ export class Investigation extends Service {
         const purpose = args.purpose.trim()
         const cueAddr = args.cue_addr.trim()
         const cueEvidence = args.cue_evidence_id.trim()
-        if (purpose === '' || cueAddr === '' || cueEvidence === '') {
-          throw new Error('investigation_mission purpose, cue_addr, and cue_evidence_id must be non-empty')
+        if (cueAddr === '' || cueEvidence === '') {
+          throw new Error('investigation_mission cue_addr and cue_evidence_id must be non-empty')
         }
+        if (purpose !== CHASSIS_MISSION_PURPOSE) throw new Error(MISSION_PURPOSE_REASON)
+        const existing = foldMission(exec.agent.session.events) ?? chassisMission()
         const mission: InvestigationMission = {
-          purpose,
-          slots: { '0a': { value: args.cue_validation } },
-          closedMeans: (args.closed_means ?? []).map(item => item.trim()).filter(item => item !== ''),
+          purpose: CHASSIS_MISSION_PURPOSE,
+          slots: { ...existing.slots, '0a': { value: args.cue_validation } },
+          closedMeans: [...CHASSIS_CLOSED_MEANS],
           cue: { addr: cueAddr, evidence_id: cueEvidence },
           cueValidation: args.cue_validation,
         }
@@ -537,6 +554,7 @@ export class Investigation extends Service {
         'Append to the live Plan: source inventory, gaps, and hypotheses.',
         'Each hypothesis is I believe X because Y plus a disconfirm test.',
         'Candidate labels are victim, c2, dc, cdn, update, distractor.',
+        'Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan.',
         'Answers generate more questions. This call appends; it does not replace.',
       ].join(' '),
       parameters: {
@@ -717,6 +735,7 @@ export class Investigation extends Service {
    * @returns true when a new event was appended.
    */
   recordHunt(session: Session, hunt: Hunt): boolean {
+    this.ensureChassisMission(session)
     if (foldHunts(session.events).some(existing => huntKey(existing) === huntKey(hunt))) return false
     session.append('investigation/hunt', hunt)
     return true
@@ -742,13 +761,30 @@ export class Investigation extends Service {
   }
 
   /**
-   * Append a whole-value Mission. The last Mission is live. Does not issue
-   * or auto-run hunts.
+   * Append a whole-value Mission. The last Mission is live. Purpose and
+   * closed-means stay the chassis values. Does not issue or auto-run hunts.
    * @param session - session to append to.
-   * @param mission - Mission fields.
+   * @param mission - Mission fields (cue and slot 0a may update).
    */
   recordMission(session: Session, mission: InvestigationMission): void {
-    session.append('investigation/mission', mission)
+    session.append('investigation/mission', {
+      ...mission,
+      purpose: CHASSIS_MISSION_PURPOSE,
+      closedMeans: [...CHASSIS_CLOSED_MEANS],
+    })
+  }
+
+  /**
+   * Stamp the chassis Mission when the session has none. Identity hunts
+   * may then run. Does not stamp Plan. Bind still needs a named C2
+   * hypothesis on the Plan.
+   * @param session - session to stamp.
+   * @returns true when a Mission event was appended.
+   */
+  ensureChassisMission(session: Session): boolean {
+    if (foldMission(session.events) !== undefined) return false
+    session.append('investigation/mission', chassisMission())
+    return true
   }
 
   /**
@@ -863,6 +899,7 @@ export class Investigation extends Service {
   ): Promise<{ added: Identity[]; issued: Hunt[] }> {
     const added: Identity[] = []
     const issued: Hunt[] = []
+    this.ensureChassisMission(session)
     const evidence = (): string => evidenceTextForHunts(session.events, current)
     const harvestFrom = (text: string, evidenceText: string, scopeIp?: string): void => {
       for (const identity of harvestIdentities(text, evidenceText, scopeIp)) {

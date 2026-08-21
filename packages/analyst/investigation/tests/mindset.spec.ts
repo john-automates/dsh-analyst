@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
-  actionForHunt, applyHuntExtras, c2HypothesisId, foldActions, foldExtras, foldMission, foldPlan,
+  actionForHunt, applyHuntExtras, c2HypothesisId, chassisMission, CHASSIS_MISSION_PURPOSE,
+  CUE_INVALID_REASON, foldActions, foldExtras, foldMission, foldPlan,
   isBelieveBecauseClaim, killedHypothesisIds, planEntryDenyReason, planReady, planReadyDenyReason,
-  PLAN_NOT_READY_REASON, projectHuntExtras, requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
+  PLAN_ALTERNATIVE_REASON, PLAN_C2_HYPOTHESIS_REASON, PLAN_INVENTORY_REASON,
+  projectHuntExtras, requireC2HypothesisId, sameHuntExtras, thesisForHuntDump,
 } from '../src/mindset.ts'
 import type {
   CaseReport, Hunt, Identity, InvestigationAction, InvestigationMission, InvestigationPlanEntry,
@@ -156,18 +158,29 @@ describe('analyst mindset chassis', () => {
   })
 
   it('requires a ready Plan and does not treat Mission as enough', () => {
-    expect(planReady(undefined, readyPlan)).toBe(false)
+    expect(chassisMission().purpose).toBe(CHASSIS_MISSION_PURPOSE)
+    expect(planReady(undefined, readyPlan)).toBe(true)
     expect(planReady(mission({ cueValidation: 'invalid' }), readyPlan)).toBe(false)
+    expect(planReadyDenyReason(mission({ cueValidation: 'invalid' }), readyPlan)).toBe(CUE_INVALID_REASON)
     expect(planReady(mission(), { inventory: [], gaps: [], hypotheses: readyPlan.hypotheses }))
       .toBe(false)
+    expect(planReadyDenyReason(mission(), { inventory: [], gaps: [], hypotheses: readyPlan.hypotheses }))
+      .toBe(PLAN_INVENTORY_REASON)
     expect(planReady(mission(), { ...readyPlan, hypotheses: [readyPlan.hypotheses[0]!] })).toBe(false)
+    expect(planReadyDenyReason(mission(), { ...readyPlan, hypotheses: [readyPlan.hypotheses[0]!] }))
+      .toBe(PLAN_ALTERNATIVE_REASON)
     expect(planReady(mission(), {
       ...readyPlan,
       hypotheses: [{ ...readyPlan.hypotheses[0]!, label: 'victim' }, readyPlan.hypotheses[1]!],
     })).toBe(false)
+    expect(planReadyDenyReason(mission(), {
+      ...readyPlan,
+      hypotheses: [{ ...readyPlan.hypotheses[0]!, label: 'victim' }, readyPlan.hypotheses[1]!],
+    })).toBe(PLAN_C2_HYPOTHESIS_REASON)
     expect(planReady(mission({ cueValidation: 'open' }), readyPlan)).toBe(true)
     expect(planReady(mission(), readyPlan)).toBe(true)
-    expect(planReadyDenyReason(undefined, readyPlan)).toBe(PLAN_NOT_READY_REASON)
+    expect(planReadyDenyReason(undefined, { inventory: [], gaps: [], hypotheses: [] }))
+      .toBe(PLAN_C2_HYPOTHESIS_REASON)
     expect(planReadyDenyReason(mission(), readyPlan)).toBeUndefined()
     expect(c2HypothesisId({ inventory: [], gaps: [], hypotheses: [] })).toBeUndefined()
     expect(c2HypothesisId(readyPlan)).toBe('h-c2')

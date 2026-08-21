@@ -68,7 +68,7 @@ describe('analyst pcap-case snapshot', () => {
         const calls = records.filter(record => record.type === 'tool/call')
           .map(record => (record.data as JsonObject | undefined)?.name)
         expect(calls).toEqual([
-          'pcap_filter', 'investigation_mission', 'investigation_plan', 'bind_relationship', 'case_report',
+          'pcap_filter', 'investigation_plan', 'bind_relationship', 'case_report',
         ])
         expect(records.some(record => record.type === 'investigation/identity')).toBe(true)
         expect(records.some(record => record.type === 'investigation/hunt')).toBe(true)

@@ -2428,7 +2428,7 @@ Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/anal
 
 ### `investigation_mission`
 
-Persist the Mission: purpose, cue pointer, slot 0a validate-the-cue, scored slots, and closed-means. Mission scopes the case. It does not unlock auto-hunts and does not skip Observation then Question then Hypothesis.
+Update the chassis Mission cue pointer and slot 0a validate-the-cue. Purpose is stamped at session start as a victim-identity + C2 investigation and cannot be overwritten.
 
 ```json
 {
@@ -2436,7 +2436,7 @@ Persist the Mission: purpose, cue pointer, slot 0a validate-the-cue, scored slot
   "properties": {
     "purpose": {
       "type": "string",
-      "description": "Why this case is being investigated."
+      "description": "Must remain the chassis purpose: This is a victim-identity + C2 investigation."
     },
     "cue_addr": {
       "type": "string",
@@ -2457,7 +2457,7 @@ Persist the Mission: purpose, cue pointer, slot 0a validate-the-cue, scored slot
     },
     "closed_means": {
       "type": "array",
-      "description": "Closed investigative means. identity+c2 scopes an Easy-as-123 case; no origin or family hunt.",
+      "description": "Ignored. Chassis closed-means stay who/where on the victim, C2 is not CDN/DC/update, extras only if proven.",
       "items": {
         "type": "string"
       }
@@ -2476,7 +2476,7 @@ Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/anal
 
 ### `investigation_plan`
 
-Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis is I believe X because Y plus a disconfirm test. Candidate labels are victim, c2, dc, cdn, update, distractor. Answers generate more questions. This call appends; it does not replace.
+Append to the live Plan: source inventory, gaps, and hypotheses. Each hypothesis is I believe X because Y plus a disconfirm test. Candidate labels are victim, c2, dc, cdn, update, distractor. Bind is denied until a C2 hypothesis is named and CDN/DC alternatives are on the Plan. Answers generate more questions. This call appends; it does not replace.
 
 ```json
 {

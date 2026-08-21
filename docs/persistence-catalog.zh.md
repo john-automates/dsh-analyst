@@ -490,7 +490,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/action': InvestigationAction
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:320`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:321`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationbind--log-only"></a>
 
@@ -520,7 +520,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/extras': CaseReportExtras
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:327`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:328`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationhunt--log-only"></a>
 
@@ -572,14 +572,15 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Mission persist. The last `investigation/mission` wins. Chassis may
- * stamp Mission to scope the case. Mission does not unlock auto-hunts
- * and does not skip Observation → Question → Hypothesis.
+ * Mission persist. The last `investigation/mission` wins. The plugin
+ * stamps Mission at session start as a victim-identity + C2
+ * investigation. Identity hunts may run after that Mission. Bind
+ * still needs a named C2 hypothesis on the Plan.
  */
 'investigation/mission': InvestigationMission
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:310`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:311`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationplan--log-only"></a>
 
@@ -593,7 +594,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'investigation/plan': InvestigationPlanEntry
 ```
 
-来源：[`packages/analyst/investigation/src/types.ts:315`](../packages/analyst/investigation/src/types.ts)
+来源：[`packages/analyst/investigation/src/types.ts:316`](../packages/analyst/investigation/src/types.ts)
 
 <a id="investigationreport--log-only"></a>
 
