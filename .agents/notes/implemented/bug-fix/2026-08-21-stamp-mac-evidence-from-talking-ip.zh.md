@@ -22,7 +22,7 @@ Status: implemented
 
 **继续把 hunt 主体 `evidence_id` 戳在 MAC 上，只让捐出忽略它。** 对收割否决：第一次写入是持久的。戳通信 IP 记录的是谁送出了该帧。捐出仍会在后来的帧把该 MAC 从来自 victim 的方向送出时，忽略错误的第一次戳记。
 
-**在已经有通信 IP 或其他 IPv4 戳记的后来受害端 IP 转储上改戳 `evidence_id`。** 此处否决：行上仍是通信 IP 胜出，捐出已经读取后来的受害端 IP 帧。给第一次收割缺少的 `evidence_id` 补上限定在受害端 IP 的仅字段转储，见[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)。
+**在已经有通信 IP 或其他 IPv4 戳记的后来受害端 IP 转储上改戳 `evidence_id`。** 此处否决：行上仍是通信 IP 胜出，捐出已经读取后来的受害端 IP 帧。给第一次收割缺少的 `evidence_id` 补上限定在受害端 IP 的仅字段转储，见[受害端 IP 范围改戳](2026-08-21-restamp-victim-ip-scoped-eth-src.md)。覆盖已有的域控／对等体戳记见[覆盖域控 MAC 戳记](2026-08-21-overwrite-dc-mac-stamp-on-victim-ip-hunt.md)。
 
 **捐出与 victim IP 出现在同一行的每一个 MAC（`ip.addr`）。** 否决：入站帧会带上对端或域控网卡。来源是指 `ip.src`、出站 `ip → peer` 或 ARP `is at`。
 

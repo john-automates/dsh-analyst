@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-stamp-mac-evidence-from-talking-ip.md
-2026-08-21-stamp-mac-evidence-from-talking-ip.md: 82e748052f0bf68e919fe0a4af8f5098289cb4fc
-2026-08-21-stamp-mac-evidence-from-talking-ip.zh.md: ed8a3ca4a40d788f4f1497bde0ef6dca47245ae1
+2026-08-21-stamp-mac-evidence-from-talking-ip.md: 5be77a3c430750dc41356a2a27c3a6b92e9ab3c6
+2026-08-21-stamp-mac-evidence-from-talking-ip.zh.md: f2dcc7abe1c80602e5c04b7bd65c198178f63865

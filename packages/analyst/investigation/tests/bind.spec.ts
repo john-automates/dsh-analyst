@@ -973,5 +973,28 @@ describe('BindRelationship', () => {
       [identityOf('ip', LAN)!, talking, dcScoped!],
       sameLine,
     )).toBe(true)
+    const dcFirst = { ...identityOf('mac', CLIENT_MAC)!, evidence_id: DISTRACTOR }
+    const restampedFromDc = { ...dcFirst, evidence_id: LAN }
+    const fromDcIdentities = [
+      identityOf('ip', LAN)!,
+      restampedFromDc,
+      dcScoped!,
+      victimHost,
+      victimUser,
+      victimName,
+    ]
+    expect(identityDonatesToVictim(restampedFromDc, live, fromDcIdentities, fieldOnlyDumps)).toBe(true)
+    expect(identityDonatesToVictim(dcScoped!, live, fromDcIdentities, fieldOnlyDumps)).toBe(false)
+    const fromDc = requireCaseReport(live, fromDcIdentities, claims, fieldOnlyDumps, {
+      who: omittedMac,
+      where: omittedMac,
+    })
+    expect(fromDc.who).toEqual(projected)
+    expect(fromDc.where).toEqual(projected)
+    expect(fromDc.who.mac).not.toBe(DISTRACTOR_MAC)
+    expect(fromDc.where.mac).not.toBe(DISTRACTOR_MAC)
+    expect(fromDc.who).toMatchObject({
+      ip: LAN, hostname: HOST, user: USER, full_name: FULL_NAME,
+    })
   })
 })
