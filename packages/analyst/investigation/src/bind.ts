@@ -393,7 +393,7 @@ export function projectVictimSlot(
  */
 export function completeAcceptedSlot(
   projected: CaseIdentitySlot,
-  submitted: unknown = undefined,
+  submitted?: unknown,
 ): CaseIdentitySlot {
   const accepted: CaseIdentitySlot = { entity_id: projected.entity_id }
   const model = submittedSlotRecord(submitted)
