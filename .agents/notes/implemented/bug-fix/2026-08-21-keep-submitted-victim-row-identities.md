@@ -14,9 +14,9 @@ Live fake-software r1 (`mta-2025-01-22`) bound the cited conversation correctly 
 
 When projecting or remapping who/where onto the bound victim entity, keep a submitted user, hostname, or `full_name` if the model offered that key and the projected row has no donated value. Persist that user on accepted who/where. Do not invent a user the model never submitted.
 
-A model-offered MAC or IP the row did not donate stays off. A submitted user, hostname, or `full_name` that donates to a different (non-victim) entity is not persisted. Donated ip/mac/hostname/`full_name` already on the row stay.
+A model-offered IP the row did not donate stays off. Submitted mac keep is [keep submitted victim MAC unless DC-only](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md). A submitted user, hostname, or `full_name` that donates to a different (non-victim) entity is not persisted. Donated ip/mac/hostname/`full_name` already on the row stay.
 
-The hole is the empty-`projected[key]` branch in `completeAcceptedSlot`. MAC is not copied from the model.
+The hole is the empty-`projected[key]` branch in `completeAcceptedSlot`.
 
 [Persist omitted victim-row keys](2026-08-21-persist-projected-victim-slot.md) still fills omitted keys from the row. [User/full_name conversation-client stamp](2026-08-21-stamp-user-fullname-from-conversation-client.md) still owns donate. Cue-as-victim stays refused. Scout, leftover-report bans, and new evals stay out of this change. Tests use a synthetic LAN client, TEST-NET C2, and idle or DC LAN row.
 

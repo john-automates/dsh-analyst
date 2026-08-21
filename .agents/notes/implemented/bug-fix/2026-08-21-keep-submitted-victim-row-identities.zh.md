@@ -14,9 +14,9 @@ Status: implemented
 
 把 who/where 投影或重映射到被绑定受害端实体时，若模型提供了 user、hostname 或 `full_name`，且投影行没有已捐出的值，则保留该提交值。在已接受的 who/where 上持久化该 user。不编造模型从未提交的 user。
 
-该行未捐出的模型提供 MAC 或 IP 保持不在。捐给其他（非 victim）实体的提交 user、hostname 或 `full_name` 不持久化。行上已有的已捐出 ip／mac／hostname／`full_name` 保留。
+该行未捐出的模型提供 IP 保持不在。提交的 mac 保留见[除非仅出现在域控／网关帧上，否则保留提交的受害端 MAC](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md)。捐给其他（非 victim）实体的提交 user、hostname 或 `full_name` 不持久化。行上已有的已捐出 ip／mac／hostname／`full_name` 保留。
 
-漏洞在 `completeAcceptedSlot` 中 `projected[key]` 为空的分支。不会从模型复制 MAC。
+漏洞在 `completeAcceptedSlot` 中 `projected[key]` 为空的分支。
 
 [持久化省略的受害端行键](2026-08-21-persist-projected-victim-slot.md) 仍从该行补全省略的键。[用户／全名会话客户端戳记](2026-08-21-stamp-user-fullname-from-conversation-client.md) 仍拥有捐出。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2 和空闲或域控 LAN 行。
 

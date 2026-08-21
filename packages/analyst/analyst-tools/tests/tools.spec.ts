@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { CallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -1055,6 +1055,197 @@ describe('analyst tools', () => {
     })
     expect(omittedReport.isError).toBe(false)
     expect(omitted.ctx.investigation.report(omitted.owner.session)?.who.user).toBeUndefined()
+    await omitted.ctx.fiber.dispose()
+  })
+
+  it('persists a submitted victim MAC when case_report who/where donate that MAC to the DC', async () => {
+    const { ctx, owner } = await setup()
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', evidence_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'full_name', value: 'Lan User', label: 'full name',
+    })
+    const frames = [
+      'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2',
+      'eth.src: 02:00:00:00:00:0b\tip.src: 10.0.10.3',
+    ].join('\n')
+    // Prior tool-result text without harvest, so the sticky DC donate stays.
+    owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-submitted-mac'),
+        content: [{ type: 'text', text: frames }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    const claims = {
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      why: 'c2',
+      how: 'https',
+    }
+    const submitted = {
+      entity_id: '10.0.10.2',
+      ip: '203.0.113.1',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-submitted-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    const result = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-submitted-mac'),
+      name: 'case_report',
+      arguments: { ...claims, who: submitted, where: submitted },
+      agent: owner,
+    })
+    expect(result.isError).toBe(false)
+    const projected = {
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+      mac: '02:00:00:00:00:0a',
+      hostname: 'lan-host',
+      user: 'lan-user',
+      full_name: 'Lan User',
+    }
+    expect(ctx.investigation.report(owner.session)).toEqual({
+      who: projected,
+      what: 'beacon to 198.51.100.80',
+      when: '2026-08-21',
+      where: projected,
+      why: 'c2',
+      how: 'https',
+    })
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host lan-user Lan User')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    expect(text(result)).not.toContain('203.0.113.1')
+    const distractor = await setup()
+    distractor.ctx.investigation.recordIdentity(distractor.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    distractor.ctx.investigation.recordIdentity(distractor.owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    distractor.ctx.investigation.recordIdentity(distractor.owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', evidence_id: '10.0.10.3',
+    })
+    distractor.owner.session.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: createToolResultMessage({
+        callId: CallId('frames-dc-mac'),
+        content: [{ type: 'text', text: frames }],
+        isError: false,
+      }),
+    }, { surfaceOp: 'append' })
+    const distractorBind = await distractor.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-dc-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: distractor.owner,
+    })
+    expect(distractorBind.isError).toBe(false)
+    const distractorReport = await distractor.ctx.tools.execute({
+      signal,
+      callId: CallId('report-dc-mac'),
+      name: 'case_report',
+      arguments: {
+        ...claims,
+        who: { entity_id: '10.0.10.2', ip: '10.0.10.2', mac: '02:00:00:00:00:0b' },
+      },
+      agent: distractor.owner,
+    })
+    expect(distractorReport.isError).toBe(false)
+    expect(distractor.ctx.investigation.report(distractor.owner.session)?.who).toEqual({
+      entity_id: '10.0.10.2',
+      ip: '10.0.10.2',
+    })
+    expect(distractor.ctx.investigation.report(distractor.owner.session)?.who.mac).toBeUndefined()
+    await distractor.ctx.fiber.dispose()
+    const omitted = await setup()
+    omitted.ctx.investigation.recordIdentity(omitted.owner.session, {
+      kind: 'ip', value: '10.0.10.2', label: 'IP',
+    })
+    omitted.ctx.investigation.recordIdentity(omitted.owner.session, {
+      kind: 'mac',
+      value: '02:00:00:00:00:0a',
+      label: 'MAC',
+      evidence_id: '10.0.10.3',
+      entity_id: '10.0.10.3',
+    })
+    const omittedBind = await omitted.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-omitted-mac'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle or DC' },
+        ],
+      },
+      agent: omitted.owner,
+    })
+    expect(omittedBind.isError).toBe(false)
+    const omittedReport = await omitted.ctx.tools.execute({
+      signal,
+      callId: CallId('report-omitted-mac'),
+      name: 'case_report',
+      arguments: { ...claims, who: { entity_id: '10.0.10.2', ip: '10.0.10.2' } },
+      agent: omitted.owner,
+    })
+    expect(omittedReport.isError).toBe(false)
+    expect(omitted.ctx.investigation.report(omitted.owner.session)?.who.mac).toBeUndefined()
     await omitted.ctx.fiber.dispose()
   })
 

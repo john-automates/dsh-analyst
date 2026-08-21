@@ -81,6 +81,7 @@ const CASE_REPORT_SLOT_DESCRIPTION = [
   'A JSON object string with entity_id is the same handle.',
   'Omitted keys are filled from the projected victim row after a live bind.',
   'A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity.',
+  'A submitted mac is kept unless that MAC only appears on DC/gateway frames.',
   'Unmatched free-text who or where is denied.',
 ].join(' ')
 
