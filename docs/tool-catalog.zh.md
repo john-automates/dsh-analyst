@@ -2480,7 +2480,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `investigation_plan`
 
-追加到现场 Plan：来源清单、缺口和假设。每条假设是 I believe X because Y 加上一条证伪测试。候选标签是 victim、c2、dc、cdn、update、distractor。在点名 C2 假设且 Plan 上有 CDN／DC 替代之前，绑定会被拒绝。已点名现场线索之后，省略的清单在存在案件捕获时默认成该捕获。空清单不是完成的 Plan。答案会生成更多问题。这次调用是追加，不是替换。
+追加到现场 Plan：来源清单、缺口和假设。每条假设是 I believe X because Y 加上一条证伪测试。候选标签是 victim、c2、dc、cdn、update、distractor。在点名 C2 假设且 Plan 上有 CDN／DC 替代之前，绑定会被拒绝。已点名现场线索之后，省略的清单在存在案件捕获时默认成该捕获。空清单不是完成的 Plan。已点名现场线索之后，省略的 CDN／DC／更新替代会默认成一条仍开放的 CDN 或更新假设。答案会生成更多问题。这次调用是追加，不是替换。
 
 ```json
 {
@@ -2502,7 +2502,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
     },
     "hypotheses": {
       "type": "array",
-      "description": "Hypotheses to append.",
+      "description": "Hypotheses to append. After a named live cue, an omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.",
       "items": {
         "type": "object",
         "additionalProperties": false,

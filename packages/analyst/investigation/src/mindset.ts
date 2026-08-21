@@ -55,6 +55,32 @@ export const PLAN_NOT_READY_REASON = PLAN_C2_HYPOTHESIS_REASON
 /** Labels that count as a CDN / DC / update alternative hypothesis. */
 const ALTERNATIVE_LABELS = new Set(['dc', 'cdn', 'update'])
 
+/**
+ * Open CDN-or-update alternative persisted when Plan omits one after a
+ * named live cue. A submitted alternative is kept.
+ * @returns a claim in the required `I believe X because Y` form.
+ */
+export function defaultOpenAlternative(): InvestigationHypothesis {
+  return {
+    id: 'h-alt',
+    claim:
+      'I believe a CDN or update alternative is still open because a well-known CDN or update dest has not been ruled out',
+    disconfirm: 'a non-CDN dotted name is evidenced on that dest',
+    label: 'cdn',
+  }
+}
+
+/**
+ * Whether any hypothesis is a CDN / DC / update alternative.
+ * @param hypotheses - Plan hypotheses or one entry's list.
+ * @returns true when at least one label is `dc`, `cdn`, or `update`.
+ */
+export function hasAlternativeHypothesis(
+  hypotheses: readonly InvestigationHypothesis[],
+): boolean {
+  return hypotheses.some(item => ALTERNATIVE_LABELS.has(item.label))
+}
+
 /** Claim form required on every Plan hypothesis. */
 const BELIEVE_BECAUSE = /^I believe .+ because .+/
 
@@ -234,9 +260,7 @@ export function planReadyDenyReason(
   const cueDeny = cueSlotDenyReason(mission)
   if (cueDeny !== undefined) return cueDeny
   if (!plan.hypotheses.some(item => item.label === 'c2')) return PLAN_C2_HYPOTHESIS_REASON
-  if (!plan.hypotheses.some(item => ALTERNATIVE_LABELS.has(item.label))) {
-    return PLAN_ALTERNATIVE_REASON
-  }
+  if (!hasAlternativeHypothesis(plan.hypotheses)) return PLAN_ALTERNATIVE_REASON
   if (plan.inventory.length === 0) return PLAN_INVENTORY_REASON
   return undefined
 }
