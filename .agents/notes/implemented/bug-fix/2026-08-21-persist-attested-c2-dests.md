@@ -14,7 +14,7 @@ Shrinking persist to the bound C2 first would drop the dest that evidences the a
 
 `acceptedC2Domain` still chooses the first dotted `isC2DomainName` that is not CDN/update, evidenced on an attested extra: the bound C2 plus victim-stamped WAN dests that are not a published Cloudflare dest and have no well-known CDN or update hostname. extra-wan and `c2-domain` still hunt that attested set.
 
-Persist `acceptedC2Ips` is the bound C2 when it is not CDN/CF, plus dests that evidence that accepted domain. A leftover victim-stamped WAN dest with no such attestation does not persist. Who/where stay the victim row. A second bind is not invented.
+Persist of dests that evidence that accepted domain stays. Persist of unnamed extra-wan dests that survive CDN/CF omit is owned by [persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md). Who/where stay the victim row. A second bind is not invented.
 
 Identity leftover, how the accepted C2-domain dest is chosen, Cloudflare prefixes, the CDN/update suffix list, Mission/Plan gates, auto-close, and extra-wan clip stay out of this change ([unique-collapse extra-wan before clip](2026-08-21-unique-collapse-extra-wan-before-clip.md)). Tests use a synthetic LAN client, TEST-NET C2 `198.51.100.80`, extra WAN `203.0.113.50` with `payload.example.test` or `c2.example.test`, unnamed extra `203.0.113.60`, CDN dest `203.0.113.80`, and Cloudflare-range fixture `104.16.1.1`. Live-case gold names and IPs are not listed.
 
@@ -36,8 +36,8 @@ Identity leftover, how the accepted C2-domain dest is chosen, Cloudflare prefixe
 
 ## Testing
 
-`packages/analyst/investigation/tests/bind.spec.ts` persists bound C2 `198.51.100.80` plus extra WAN `203.0.113.50` when `payload.example.test` or `c2.example.test` is evidenced on that dest, drops unnamed extra `203.0.113.60`, and still omits microsoft / msn / bing / sfx / akamai / Cloudflare dests. `acceptedC2Domain` still prefers `payload.example.test` over a CDN name. Who/where hostname stays `lan-host`. extra-wan and `c2-domain` hunts still issue for attested extras, including an unnamed dest that does not persist.
+`packages/analyst/investigation/tests/bind.spec.ts` persists bound C2 `198.51.100.80` plus extra WAN `203.0.113.50` when `payload.example.test` or `c2.example.test` is evidenced on that dest, and still omits microsoft / msn / bing / sfx / akamai / Cloudflare dests. `acceptedC2Domain` still prefers `payload.example.test` over a CDN name. Who/where hostname stays `lan-host`. extra-wan and `c2-domain` hunts still issue for attested extras. Unnamed extra persist is [persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md).
 
 ## Consequences
 
-`c2_ips` holds the bound C2 and dests that evidence the accepted non-CDN domain. Unnamed leftover extras drop. A dotted name evidenced on an attested dest still wins `c2_domain`. Who/where stay the victim row.
+`c2_ips` still holds dests that evidence the accepted non-CDN domain. Unnamed extra-wan persist is [persist unnamed extra-wan dests](2026-08-21-persist-unnamed-extra-wan-c2-dests.md). A dotted name evidenced on an attested dest still wins `c2_domain`. Who/where stay the victim row.

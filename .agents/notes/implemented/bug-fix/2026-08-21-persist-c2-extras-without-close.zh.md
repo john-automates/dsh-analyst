@@ -20,7 +20,7 @@ Mission、Plan、Action 和 Report 包裹 DINQ（Observation → Question → Hy
 
 2. **Action — 针对性 hunt。** 每一次自动运行 hunt 都等待 `planReady`：eth-src、name-service、kerberos-cname、samr-userinfo、other-end、extra-wan 和 c2-domain。`huntsToAutoRun` 只接收那一个就绪标志。每次自动运行都追加带 `hypothesis_id` 的 `investigation/action`（身份 hunt 在有受害端假设时引用第一条受害端 H，否则引用第一条 C2 H）。extra-wan／c2-domain 仍是成功的非 CDN 绑定之后针对 WAN 目的地址的 Action。绑定仍先跑 `resolveBind`（两端都在 LAN、CDN／更新 C2、线索当 victim）。只有 `ok` 的绑定随后才要求就绪的 Plan。
 
-3. **Report — 无结案持久化。** 在 who/where 得到证明之前，`case_report` 仍被拒绝（现有的未绑定／强制转换路径）。已证明的 extra-wan／c2-domain 遗留项写入 `investigation/extras`（`c2_ips` 是已绑定 C2 加上证据落在已接受非 CDN `c2_domain` 上的目的地址，省略 CDN／更新和未点名的遗留附加项；`c2_domain` 是已证明目的地址上第一个非 CDN 带点名；`killed` 列出被杀死的假设 id），即使一份凌乱的 `case_report` 保持未绑定（[只持久化已证明 C2 目的地址](2026-08-21-persist-attested-c2-dests.md)）。该事件不是已接受的结案，也不编造 who/where/what/when/why/how。若已有 5W1H 包，钩子还会追加一份折叠后的 `investigation/report`，保留那些槽位并写入附加项。后来被接受的 `case_report` 会重新合并已折叠的附加项。who/where 仍只属于受害端。
+3. **Report — 无结案持久化。** 在 who/where 得到证明之前，`case_report` 仍被拒绝（现有的未绑定／强制转换路径）。已证明的 extra-wan／c2-domain 遗留项写入 `investigation/extras`（`c2_ips` 是已绑定 C2 加上躲过 CDN／CF 省略的、盖上受害端戳的 extra-wan 目的地址，包括未点名目的地址；`c2_domain` 是已证明目的地址上第一个非 CDN 带点名；`killed` 列出被杀死的假设 id），即使一份凌乱的 `case_report` 保持未绑定（[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)）。该事件不是已接受的结案，也不编造 who/where/what/when/why/how。若已有 5W1H 包，钩子还会追加一份折叠后的 `investigation/report`，保留那些槽位并写入附加项。后来被接受的 `case_report` 会重新合并已折叠的附加项。who/where 仍只属于受害端。
 
 测试只使用合成夹具（LAN `10.0.10.2`、C2 `198.51.100.80`、额外 WAN `203.0.113.50` + `payload.example.test`、CDN `203.0.113.80` + `update.microsoft.com`、DC `10.0.10.3`）。不列出线上案件的黄金 IP 与域名。
 

@@ -14,7 +14,7 @@ Status: implemented
 
 `acceptedC2Domain` 仍选择证据落在已证明附加项上、且不是 CDN／更新的第一个带点 `isC2DomainName`。已证明附加项是已绑定 C2，加上盖上受害端戳、不是已公布 Cloudflare 目的地址、也没有知名 CDN 或更新主机名的 WAN 目的地址。extra-wan 和 `c2-domain` 仍在该已证明集合上 hunt。
 
-持久化 `acceptedC2Ips` 是已绑定 C2（当它不是 CDN／CF 时），加上证据落在该已接受域名上的目的地址。没有这种证明的遗留、盖上受害端戳的 WAN 目的地址不持久化。who/where 仍是受害端行。不会发明第二次绑定。
+证据落在该已接受域名上的目的地址仍持久化。躲过 CDN／CF 省略的未点名 extra-wan 目的地址的持久化由[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)拥有。who/where 仍是受害端行。不会发明第二次绑定。
 
 身份遗留、已接受 C2 域名目的地址的选择方式、Cloudflare 前缀、CDN／更新后缀列表、Mission／Plan 门、自动结案和 extra-wan 裁切不在本次变更内（[在裁切之前对 extra-wan 目的地址按首次出现去重](2026-08-21-unique-collapse-extra-wan-before-clip.md)）。测试使用合成 LAN 客户端、TEST-NET C2 `198.51.100.80`、带 `payload.example.test` 或 `c2.example.test` 的额外 WAN `203.0.113.50`、未点名额外地址 `203.0.113.60`、CDN 目的地址 `203.0.113.80`，以及 Cloudflare 段夹具 `104.16.1.1`。不列出线上案件的黄金名和 IP。
 
@@ -36,8 +36,8 @@ Status: implemented
 
 ## 测试
 
-`packages/analyst/investigation/tests/bind.spec.ts` 在额外 WAN `203.0.113.50` 上有 `payload.example.test` 或 `c2.example.test` 证据时，持久化已绑定 C2 `198.51.100.80` 加上该额外地址，丢掉未点名额外地址 `203.0.113.60`，并仍省略 microsoft／msn／bing／sfx／akamai／Cloudflare 目的地址。`acceptedC2Domain` 仍优先选择 `payload.example.test` 而不是 CDN 名。who/where 的 hostname 仍是 `lan-host`。extra-wan 和 `c2-domain` hunt 仍对已证明附加项下发，包括一个不持久化的未点名目的地址。
+`packages/analyst/investigation/tests/bind.spec.ts` 在额外 WAN `203.0.113.50` 上有 `payload.example.test` 或 `c2.example.test` 证据时，持久化已绑定 C2 `198.51.100.80` 加上该额外地址，并仍省略 microsoft／msn／bing／sfx／akamai／Cloudflare 目的地址。`acceptedC2Domain` 仍优先选择 `payload.example.test` 而不是 CDN 名。who/where 的 hostname 仍是 `lan-host`。extra-wan 和 `c2-domain` hunt 仍对已证明附加项下发。未点名附加项的持久化见[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)。
 
 ## 后果
 
-`c2_ips` 持有已绑定 C2 和证据落在已接受非 CDN 域名上的目的地址。未点名的遗留附加项被丢掉。证据落在已证明目的地址上的带点名仍会赢下 `c2_domain`。who/where 仍是受害端行。
+`c2_ips` 仍持有证据落在已接受非 CDN 域名上的目的地址。未点名 extra-wan 的持久化见[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)。证据落在已证明目的地址上的带点名仍会赢下 `c2_domain`。who/where 仍是受害端行。

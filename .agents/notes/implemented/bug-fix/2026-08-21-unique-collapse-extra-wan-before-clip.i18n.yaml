@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-unique-collapse-extra-wan-before-clip.md
-2026-08-21-unique-collapse-extra-wan-before-clip.md: 97bd76113a8359fcbb80e0355560c7cbea10fedd
-2026-08-21-unique-collapse-extra-wan-before-clip.zh.md: 102faa089fc3ff8fd8d7988f6897a8df6b865a48
+2026-08-21-unique-collapse-extra-wan-before-clip.md: 037285ad9366795fa68268a49777ca347e7591ab
+2026-08-21-unique-collapse-extra-wan-before-clip.zh.md: 34285fba4e1e82f533d2bd604ab7c92472d82e8c

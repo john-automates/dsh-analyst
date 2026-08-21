@@ -7,12 +7,10 @@
  * After deny/coerce, omitted model keys are filled from that projected row.
  * After a live bind, attested extras (bound C2 plus victim-stamped WAN
  * dests that are not a published Cloudflare anycast dest and have no
- * well-known CDN or update hostname) choose `c2_domain`. Persist
- * `c2_ips` is that bound C2 when it is not CDN/CF plus dests that
- * evidence the accepted non-CDN domain. A leftover victim-stamped WAN
- * dest with no such attestation does not persist. A dotted name
- * evidenced on an attested dest persists as `c2_domain` when it is not
- * CDN/update.
+ * well-known CDN or update hostname) persist as `c2_ips` and choose
+ * `c2_domain`. Unnamed extra-wan dests that survive those omits persist.
+ * A dotted name evidenced on an attested dest persists as `c2_domain`
+ * when it is not CDN/update.
  * A who/where string whose leftover
  * identity tokens are victim-row handles is coerced to
  * `{ entity_id: victim }` even when labels or a sentence wrap those
@@ -112,7 +110,7 @@ export function extraWanHuntForBind(bind: RelationshipBind): Hunt | undefined {
  * C2-domain hunts for attested extras: the bound C2 plus victim-stamped
  * extra WAN IPv4s. IPs whose dest is a published Cloudflare anycast
  * prefix, or whose evidenced hostname is a well-known CDN or update
- * name, are omitted. Persist `c2_ips` is narrower than this hunt set.
+ * name, are omitted. Persist `c2_ips` uses this same attested set.
  * @param bind - accepted conversation bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
@@ -139,12 +137,11 @@ export function boundC2Ipv4(bind: RelationshipBind): string | undefined {
 }
 
 /**
- * Bound C2 IPv4 plus dests that evidence the accepted non-CDN
- * `c2_domain`. The bound C2 is omitted when it is a published
- * Cloudflare anycast dest or has a well-known CDN or update hostname.
- * A leftover victim-stamped WAN dest that does not evidence that
- * domain is omitted. Domain choice uses attested extras, not this
- * persist set, so a domain dest stays available. LAN / DC / gateway /
+ * Bound C2 IPv4 plus victim-stamped extra-wan dests that are not CDN/CF.
+ * The bound C2 is omitted when it is a published Cloudflare anycast dest
+ * or has a well-known CDN or update hostname. An unnamed extra-wan dest
+ * that survives those omits persists. Domain choice uses this same
+ * attested set, so a domain dest stays available. LAN / DC / gateway /
  * multicast / unbound WAN stay off. Who/where are not updated. A
  * second bind is not invented.
  * @param bind - live bind.
@@ -157,15 +154,7 @@ export function acceptedC2Ips(
   identities: readonly Identity[],
   evidenceText = '',
 ): string[] {
-  const bound = boundC2Ipv4(bind)
-  if (bound === undefined) return []
-  const attested = attestedC2Ips(bind, identities, evidenceText)
-  const domain = acceptedC2DomainOn(attested, identities)
-  return attested.filter(ip => (
-    ip === bound
-    || (domain !== undefined
-      && hostnamesEvidencedOnIp(ip, identities, evidenceText).includes(domain))
-  ))
+  return attestedC2Ips(bind, identities, evidenceText)
 }
 
 /**
@@ -694,13 +683,13 @@ export function completeAcceptedSlot(
  * arguments into that submitted slot. A submitted human user is kept
  * without a conversation-client stamp. A machine SAM ending in `$` is
  * not persisted as user. A submitted mac is kept unless talking-IP
- * frames source that MAC only from a non-victim. Bound C2 plus dests
- * that evidence the accepted non-CDN `c2_domain` persist as `c2_ips`,
- * omitting an IP in a published Cloudflare anycast prefix, whose
- * evidenced hostname is a well-known CDN or update name, or a leftover
- * victim-stamped WAN dest with no such attestation. A harvested C2
- * DNS/SNI name evidenced on an attested dest persists as `c2_domain`
- * when it is not CDN/update and does not fill who/where hostname.
+ * frames source that MAC only from a non-victim. Bound C2 plus
+ * victim-stamped extra-wan dests persist as `c2_ips`, omitting an IP
+ * in a published Cloudflare anycast prefix or whose evidenced
+ * hostname is a well-known CDN or update name. An unnamed extra-wan
+ * dest that survives those omits persists. A harvested C2 DNS/SNI
+ * name evidenced on an attested dest persists as `c2_domain` when it
+ * is not CDN/update and does not fill who/where hostname.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param claims - what / when / why / how.
@@ -989,8 +978,7 @@ function ipIsCdnOrUpdate(
 
 /**
  * Bound C2 plus victim-stamped extra WAN dests that are not CDN/CF.
- * Domain choice and c2-domain hunts use this set. Persist `c2_ips`
- * is narrower.
+ * Persist `c2_ips`, domain choice, and c2-domain hunts use this set.
  * @param bind - live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.

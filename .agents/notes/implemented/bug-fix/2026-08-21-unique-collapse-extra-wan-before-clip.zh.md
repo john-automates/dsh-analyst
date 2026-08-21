@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-成功绑定之后，[`extra-wan`](2026-08-21-extra-wan-c2-hunt-after-live-bind.md) 猎取受害端的其他 WAN 目的地址（`ip.src ==` 该 victim，字段 `ip.dst`）。`pcap_filter` 先按 `maxOutputChars`（默认 32000）裁切 tshark 原始 stdout，再给行加标签。受害端→WAN 转储若有数千行重复目的地址，会超过该裁切。后来首次出现的目的地址仍在 pcap 中，也匹配 extra-wan 过滤器，但不会成为会话命中。持久化仍省略未点名附加项（[只持久化已证明 C2 目的地址](2026-08-21-persist-attested-c2-dests.md)）。who/where 仍只属于受害端。这个旋钮是 hunt 可见性，不是放宽持久化。
+成功绑定之后，[`extra-wan`](2026-08-21-extra-wan-c2-hunt-after-live-bind.md) 猎取受害端的其他 WAN 目的地址（`ip.src ==` 该 victim，字段 `ip.dst`）。`pcap_filter` 先按 `maxOutputChars`（默认 32000）裁切 tshark 原始 stdout，再给行加标签。受害端→WAN 转储若有数千行重复目的地址，会超过该裁切。后来首次出现的目的地址仍在 pcap 中，也匹配 extra-wan 过滤器，但不会成为会话命中。躲过 CDN／CF 省略的未点名 extra-wan 目的地址会持久化（[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)）。who/where 仍只属于受害端。这个旋钮是 hunt 可见性，不是放宽持久化。
 
 提高 `maxOutputChars` 会把逐包重复留在历史里。裁切之后再去重无法找回裁切已经丢掉的目的地址。
 
@@ -14,7 +14,7 @@ Status: implemented
 
 `pcap_filter` 在输出裁切之前，按首次出现顺序对 extra-wan 的 `ip.dst` 去重。extra-wan 是唯一字段恰好为 `ip.dst` 的 hunt。其他 hunt（`eth-src`、`name-service`、`kerberos-cname`、`samr-userinfo`、`other-end`、`c2-domain`）仍保持逐包。extra-wan 的显示过滤器和字段不变。`maxOutputChars` 仍是 32000。当去重后的文本仍超过上限时，裁切仍作用于去重结果。
 
-未点名的 extra-wan 目的地址可以成为会话命中。除非后来的旋钮证明它们，持久化仍省略它们。who/where 仍是受害端行。不列出线上案件的黄金 IP。测试使用 TEST-NET 额外地址 `203.0.113.10` 和 `203.0.113.99`。
+未点名的 extra-wan 目的地址可以成为会话命中。那些目的地址的持久化见[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)。who/where 仍是受害端行。不列出线上案件的黄金 IP。测试使用 TEST-NET 额外地址 `203.0.113.10` 和 `203.0.113.99`。
 
 ## 备选方案
 
@@ -36,4 +36,4 @@ Status: implemented
 
 ## 后果
 
-extra-wan 会话命中包含后来首次出现的 WAN 目的地址，且不提高输出上限。持久化仍丢掉未点名附加项。who/where 仍是受害端行。超过 `maxOutputChars` 的唯一目的地址列表仍会被裁切。
+extra-wan 会话命中包含后来首次出现的 WAN 目的地址，且不提高输出上限。未点名目的地址的持久化见[持久化未点名 extra-wan 目的地址](2026-08-21-persist-unnamed-extra-wan-c2-dests.md)。who/where 仍是受害端行。超过 `maxOutputChars` 的唯一目的地址列表仍会被裁切。

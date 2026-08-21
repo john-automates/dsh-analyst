@@ -1947,9 +1947,9 @@ describe('investigation service', () => {
     })
     expect(bound.isError).toBe(false)
     const extras = foldExtras(owner.session.events)
-    expect(extras?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(extras?.c2_ips).toEqual(['198.51.100.80', EXTRA, UNNAMED])
     expect(extras?.c2_ips).not.toContain(CDN_DEST)
-    expect(extras?.c2_ips).not.toContain(UNNAMED)
+    expect(extras?.c2_ips).toContain(UNNAMED)
     expect(extras?.c2_domain).toBe(PAYLOAD)
     expect(ctx.investigation.extras(owner.session)).toEqual(extras)
     expect(foldReport(owner.session.events)).toBeUndefined()
@@ -1968,7 +1968,7 @@ describe('investigation service', () => {
       agent: owner,
     })
     expect(unbound.isError).toBe(true)
-    expect(foldExtras(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldExtras(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA, UNNAMED])
     expect(foldExtras(owner.session.events)?.c2_domain).toBe(PAYLOAD)
     expect(foldReport(owner.session.events)).toBeUndefined()
     const report = requireCaseReport(
@@ -1977,7 +1977,7 @@ describe('investigation service', () => {
       { what: 'beacon', when: 'now', why: 'c2', how: 'https' },
     )
     ctx.investigation.recordReport(owner.session, report)
-    expect(foldReport(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA])
+    expect(foldReport(owner.session.events)?.c2_ips).toEqual(['198.51.100.80', EXTRA, UNNAMED])
     expect(foldReport(owner.session.events)?.c2_domain).toBe(PAYLOAD)
     expect(foldReport(owner.session.events)?.what).toBe('beacon')
     expect(foldReport(owner.session.events)?.who.entity_id).toBe('10.0.10.2')

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-omit-cloudflare-ipv4-c2-dests.md
-2026-08-21-omit-cloudflare-ipv4-c2-dests.md: 68cb093195a03d8bcf18b398344249c471ec7721
-2026-08-21-omit-cloudflare-ipv4-c2-dests.zh.md: c803ed31194cf1ae53af7e5be9f6492b0216f658
+2026-08-21-omit-cloudflare-ipv4-c2-dests.md: 5ac60b1a59fdf605771cb46910ae81b9de2b12f4
+2026-08-21-omit-cloudflare-ipv4-c2-dests.zh.md: f34eea0c8a230ca487f6e342f30977c9d0aae1be
