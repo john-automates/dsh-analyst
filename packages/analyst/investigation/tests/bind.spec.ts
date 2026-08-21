@@ -29,6 +29,8 @@ const CDN_NAME = 'update.microsoft.com'
 const CLIENT_MAC = '02:00:00:00:00:0a'
 const DISTRACTOR_MAC = '02:00:00:00:00:0b'
 const HOST = 'lan-host'
+const WORKSTATION = 'desktop-test01'
+const AD_SRV = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
 const DISTRACTOR_HOST = 'idle-host'
 const USER = 'lan-user'
 const FULL_NAME = 'Lan User'
@@ -2594,5 +2596,128 @@ describe('BindRelationship', () => {
       .toEqual({ entity_id: LAN, ip: LAN })
     expect(completeAcceptedSlot({ entity_id: LAN, ip: LAN }, { user: USER }))
       .toEqual({ entity_id: LAN, ip: LAN, user: USER })
+  })
+
+  it('persists a workstation hostname instead of an AD SRV / DC locator after a live bind', () => {
+    expect(resolveBind({
+      relationship,
+      endpoints: [{ addr: C2, role: 'victim', because: conversationBecause }],
+    })).toEqual({ ok: false, reason: cueVictimUnboundReason(C2) })
+    const live = bind({
+      endpoints: [
+        { addr: LAN, role: 'victim', because: conversationBecause },
+        { addr: C2, role: 'c2', because: 'cue/observation address' },
+        { addr: DISTRACTOR, role: 'distractor', because: 'idle or DC' },
+      ],
+    })
+    const srv = { ...identityOf('hostname', AD_SRV)!, evidence_id: LAN }
+    const workstation = { ...identityOf('hostname', WORKSTATION)!, evidence_id: LAN }
+    const identities = [identityOf('ip', LAN)!, srv, workstation]
+    const claims = { what: 'a', when: 'b', why: 'c', how: 'd' }
+    const slot = projectVictimSlot(live, identities)
+    expect(slot).toEqual({ entity_id: LAN, ip: LAN, hostname: WORKSTATION })
+    expect(slot?.hostname).not.toBe(AD_SRV)
+    const submitted = requireCaseReport(live, identities, claims, '', {
+      who: { entity_id: LAN, ip: LAN },
+      where: { entity_id: LAN, ip: LAN, hostname: WORKSTATION },
+    })
+    expect(submitted.who.hostname).toBe(WORKSTATION)
+    expect(submitted.where.hostname).toBe(WORKSTATION)
+    expect(submitted.who.hostname).not.toBe(AD_SRV)
+    expect(submitted.where.hostname).not.toBe(AD_SRV)
+    const locatorOnly = [identityOf('ip', LAN)!, srv]
+    expect(projectVictimSlot(live, locatorOnly)).toEqual({ entity_id: LAN, ip: LAN })
+    const omittedLocator = requireCaseReport(live, locatorOnly, claims, '', {
+      who: { entity_id: LAN, ip: LAN },
+      where: { entity_id: LAN, ip: LAN },
+    })
+    expect(omittedLocator.who.hostname).toBeUndefined()
+    expect(omittedLocator.where.hostname).toBeUndefined()
+    expect(omittedLocator.who.hostname).not.toBe(AD_SRV)
+    expect(omittedLocator.where.hostname).not.toBe(AD_SRV)
+    const kept = requireCaseReport(live, locatorOnly, claims, '', {
+      who: { entity_id: LAN, ip: LAN, hostname: WORKSTATION },
+      where: { entity_id: LAN, ip: LAN, hostname: WORKSTATION },
+    })
+    expect(kept.who.hostname).toBe(WORKSTATION)
+    expect(kept.where.hostname).toBe(WORKSTATION)
+    const submittedLocator = requireCaseReport(live, locatorOnly, claims, '', {
+      who: { entity_id: LAN, ip: LAN, hostname: AD_SRV },
+      where: { entity_id: LAN, ip: LAN, hostname: AD_SRV },
+    })
+    expect(submittedLocator.who.hostname).toBeUndefined()
+    expect(submittedLocator.where.hostname).toBeUndefined()
+    const unaffiliated = [
+      identityOf('ip', LAN)!,
+      identityOf('hostname', AD_SRV)!,
+      identityOf('hostname', WORKSTATION)!,
+    ]
+    expect(projectVictimSlot(live, unaffiliated)).toEqual({ entity_id: LAN, ip: LAN })
+    const omittedHarvest = requireCaseReport(live, unaffiliated, claims, '', {
+      who: { entity_id: LAN, ip: LAN },
+      where: { entity_id: LAN, ip: LAN, hostname: WORKSTATION },
+    })
+    expect(omittedHarvest.who.hostname).toBe(WORKSTATION)
+    expect(omittedHarvest.where.hostname).toBe(WORKSTATION)
+    expect(omittedHarvest.who.hostname).not.toBe(AD_SRV)
+    const twoHosts = [...unaffiliated, identityOf('hostname', DISTRACTOR_HOST)!]
+    const ambiguous = requireCaseReport(live, twoHosts, claims, '', {
+      who: { entity_id: LAN, ip: LAN },
+      where: { entity_id: LAN, ip: LAN },
+    })
+    expect(ambiguous.who.hostname).toBeUndefined()
+    expect(ambiguous.where.hostname).toBeUndefined()
+    const distractor = {
+      ...identityOf('hostname', DISTRACTOR_HOST)!,
+      entity_id: DISTRACTOR,
+      evidence_id: DISTRACTOR,
+    }
+    expect(requireCaseReport(live, [identityOf('ip', LAN)!, srv, distractor], claims, '', {
+      who: { entity_id: LAN, ip: LAN },
+    }).who.hostname).toBeUndefined()
+    const nameService = `hostname: ${WORKSTATION}\tip.addr: ${LAN}`
+    expect(completeAcceptedSlot(
+      { entity_id: LAN, ip: LAN },
+      { entity_id: LAN, ip: LAN },
+      live,
+      [identityOf('ip', LAN)!, identityOf('hostname', AD_SRV)!, identityOf('hostname', WORKSTATION)!],
+      nameService,
+    )).toEqual({ entity_id: LAN, ip: LAN, hostname: WORKSTATION })
+    expect(completeAcceptedSlot(
+      { entity_id: LAN, ip: LAN, hostname: AD_SRV },
+      { hostname: WORKSTATION },
+      live,
+      locatorOnly,
+    )).toEqual({ entity_id: LAN, ip: LAN, hostname: WORKSTATION })
+    expect(completeAcceptedSlot(
+      { entity_id: LAN, ip: LAN },
+      { entity_id: LAN },
+      { relationship, endpoints: [] },
+      [identityOf('hostname', WORKSTATION)!],
+    )).toEqual({ entity_id: LAN, ip: LAN })
+    for (const locator of [
+      AD_SRV,
+      `${AD_SRV}.`,
+      '_msdcs.ad.example.lan',
+      'foo._msdcs.ad.example.lan',
+      'foo._msdcs',
+      '_sites.dc.ad.example.lan',
+      'x._sites.dc.ad.example.lan',
+      '_kerberos._tcp.ad.example.lan',
+      '_ldap._udp',
+    ]) {
+      expect(projectVictimSlot(live, [
+        identityOf('ip', LAN)!,
+        { ...identityOf('hostname', locator)!, evidence_id: LAN },
+      ])?.hostname).toBeUndefined()
+    }
+    expect(projectVictimSlot(live, [
+      identityOf('ip', LAN)!,
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+    ])?.hostname).toBe(HOST)
+    expect(projectVictimSlot(live, [
+      identityOf('ip', LAN)!,
+      { ...identityOf('hostname', '_notaservice.example.lan')!, evidence_id: LAN },
+    ])?.hostname).toBe('_notaservice.example.lan')
   })
 })

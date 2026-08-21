@@ -85,6 +85,7 @@ const CASE_REPORT_SLOT_DESCRIPTION = [
   'A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity.',
   'A submitted human user is kept without a conversation-client stamp.',
   'A machine SAM ending in $ is not persisted as user.',
+  'An AD SRV / DC locator hostname is not persisted as who/where hostname.',
   'A submitted mac is kept unless that MAC only appears on DC/gateway frames.',
   'Unmatched free-text who or where is denied.',
 ].join(' ')

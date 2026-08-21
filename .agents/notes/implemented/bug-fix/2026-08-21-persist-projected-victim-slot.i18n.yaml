@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-persist-projected-victim-slot.md
-2026-08-21-persist-projected-victim-slot.md: a25b08d4c06eeb72c87e609b031e2b3753c66b37
-2026-08-21-persist-projected-victim-slot.zh.md: c36b81a9271e08347da076bcf04a7d4f846775ba
+2026-08-21-persist-projected-victim-slot.md: e9e87e971c5c8c590cbbef12627c7aca1b186cce
+2026-08-21-persist-projected-victim-slot.zh.md: 671c25901e24b91b75fb850fa852d01a3c140688
