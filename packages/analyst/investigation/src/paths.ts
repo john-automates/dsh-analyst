@@ -9,6 +9,14 @@ import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
 const EVIDENCE_EXTENSIONS = new Set(['.pcap', '.pcapng', '.cap', '.log'])
 
 /**
+ * Case-root close files. After a live bind, write/edit of these paths is denied;
+ * close is `case_report`. The set is closed; `report.md` is not parsed into who/where.
+ */
+export const CASE_ROOT_CLOSE_FILES = ['report.md', 'report.txt', 'case_report.md'] as const
+
+const CASE_ROOT_CLOSE_FILE_SET = new Set<string>(CASE_ROOT_CLOSE_FILES)
+
+/**
  * Whether a `path.relative` result escaped its root.
  * An absolute `rel` is the Windows different-drive case; POSIX escapes use `..`.
  * @param rel - result of `path.relative(root, resolved)`.
@@ -77,6 +85,20 @@ export function isWritablePath(caseDir: string, target: string): boolean {
   const rel = relative(resolve(caseDir), resolved)
   if (rel === 'report.md') return true
   return rel === 'notes' || rel.startsWith(`notes${sep}`)
+}
+
+/**
+ * Whether `target` is a case-root close file (`report.md` and similar names).
+ * Nested paths such as `notes/report.md` are not close files.
+ * @param caseDir - absolute case directory.
+ * @param target - absolute or case-relative path.
+ * @returns true when write/edit of this path is a close-file substitute.
+ */
+export function isCaseRootClosePath(caseDir: string, target: string): boolean {
+  const resolved = resolveInsideCase(caseDir, target)
+  const rel = relative(resolve(caseDir), resolved)
+  if (rel === '' || rel.includes(sep)) return false
+  return CASE_ROOT_CLOSE_FILE_SET.has(rel.toLowerCase())
 }
 
 /**

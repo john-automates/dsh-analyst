@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { denyCommand, denyReason, firstDefined, stringArg, tokenizeCommand } from '../src/policy.ts'
+import {
+  CLOSE_FILE_REASON, denyCommand, denyReason, firstDefined, stringArg, tokenizeCommand,
+} from '../src/policy.ts'
 
 const CASE = '/cases/alpha'
 
@@ -27,6 +29,31 @@ describe('investigation policy', () => {
     )).toContain('read-only')
     expect(denyReason(
       { name: 'write', arguments: { file_path: `${CASE}/notes/a.md` } },
+      CASE,
+      true,
+    )).toBeUndefined()
+    expect(denyReason(
+      { name: 'write', arguments: { file_path: `${CASE}/report.md` } },
+      CASE,
+      true,
+    )).toBe(CLOSE_FILE_REASON)
+    expect(denyReason(
+      { name: 'edit', arguments: { path: `${CASE}/report.md` } },
+      CASE,
+      true,
+    )).toBe(CLOSE_FILE_REASON)
+    expect(denyReason(
+      { name: 'str_replace_editor', arguments: { file_path: `${CASE}/case_report.md` } },
+      CASE,
+      false,
+    )).toBe(CLOSE_FILE_REASON)
+    expect(denyReason(
+      { name: 'write', arguments: { file_path: `${CASE}/report.txt` } },
+      CASE,
+      true,
+    )).toBe(CLOSE_FILE_REASON)
+    expect(denyReason(
+      { name: 'write', arguments: { file_path: `${CASE}/notes/report.md` } },
       CASE,
       true,
     )).toBeUndefined()

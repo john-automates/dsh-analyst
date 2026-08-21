@@ -4,7 +4,7 @@ English | [中文](analyst.zh.md)
 
 The `analyst` preset is an investigation agent, not a coding-agent skin. Standard, Minimal, Code, and Creator stay available. Select **Investigation mode** in the Web UI preset picker, or default to `analyst` from headless with the overlay below.
 
-The case directory is `DSH_CASE_DIR`, then `DSH_CWD`, then the process working directory. When `DSH_CASE_DIR` is set, the session workspace, tool cwd, and persona case directory are that path, so glob and read see `TASK.md` and captures there. Containment still denies writes outside the case and keeps evidence read-only. Put captures under `evidence/` or as `*.pcap` / `*.pcapng` / `*.cap` / `*.log` in the case. Writable paths are `notes/` and `report.md`.
+The case directory is `DSH_CASE_DIR`, then `DSH_CWD`, then the process working directory. When `DSH_CASE_DIR` is set, the session workspace, tool cwd, and persona case directory are that path, so glob and read see `TASK.md` and captures there. Containment still denies writes outside the case and keeps evidence read-only. Put captures under `evidence/` or as `*.pcap` / `*.pcapng` / `*.cap` / `*.log` in the case. Writable paths are `notes/`. `write` / `edit` of case-root `report.md` is denied; close with `case_report` after BindRelationship.
 
 ## Headless against a case directory
 
