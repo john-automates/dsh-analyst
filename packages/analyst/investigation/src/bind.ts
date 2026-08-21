@@ -303,8 +303,10 @@ export function requireCaseReport(
  * Deny reason for case_report or an attempt to set who/where.
  * Missing bind, a non-victim or other IPv4 entity_id, free-text who/where,
  * and identity slots whose evidence_id points at a non-victim all return
- * {@link UNBOUND_REASON}. A user, hostname, MAC, or full_name is a victim-row
- * handle, not an entity id; the persisted packet still uses the victim address.
+ * {@link UNBOUND_REASON}. A JSON object string with `entity_id` is coerced to
+ * that object before the free-text check. A user, hostname, MAC, or full_name
+ * is a victim-row handle, not an entity id; the persisted packet still uses
+ * the victim address.
  * @param args - tool arguments.
  * @param bind - live bind, or undefined when unbound.
  * @param identities - folded ledger identities.
@@ -320,7 +322,7 @@ export function caseReportDenyReason(
   if (typeof args !== 'object' || args === null) return undefined
   const record = args as Record<string, unknown>
   for (const field of ['who', 'where'] as const) {
-    const value = record[field]
+    const value = coerceIdentitySlotArg(record[field])
     if (value === undefined) continue
     if (typeof value === 'string') return UNBOUND_REASON
     if (typeof value !== 'object' || value === null) return UNBOUND_REASON
@@ -452,4 +454,23 @@ function pointsAtNonVictim(
 
 function isIpv4(addr: string): boolean {
   return /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(addr)
+}
+
+/**
+ * Coerce a JSON object string into that object. Hermes XML recovery stores
+ * object parameters as trimmed JSON text, so who/where can arrive as strings.
+ * A string that is not a JSON object stays a string for the free-text deny.
+ * @param value - raw who/where argument.
+ * @returns the parsed object, or the original value.
+ */
+function coerceIdentitySlotArg(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const text = value.trim()
+  if (!text.startsWith('{')) return value
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    // JSON.parse SyntaxError: not a JSON object. Keep the string for the free-text deny.
+    return value
+  }
 }
