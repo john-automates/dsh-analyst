@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`caseReportDenyReason` 在自由文本检查之前，把作为 JSON 对象字符串的 `who` / `where` 强制转换成该对象。当前绑定随后可以从受害端行用户句柄投影 `who.entity_id`。`case_report` schema 接受对象或字符串，让这些参数到达拒绝检查而不是 `INVALID_ARGS`。不是 JSON 对象的字符串随后按受害端行句柄文本检查（[句柄字符串](2026-08-21-case-report-victim-handle-strings.md)、[带标签的句柄字符串](2026-08-21-case-report-labeled-victim-handle-strings.md)）。无法匹配的自由文本仍保持未绑定。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
+`caseReportDenyReason` 在自由文本检查之前，把作为 JSON 对象字符串的 `who` / `where` 强制转换成该对象。当前绑定随后可以从受害端行用户句柄投影 `who.entity_id`。`case_report` schema 接受对象或字符串，让这些参数到达拒绝检查而不是 `INVALID_ARGS`。不是 JSON 对象的字符串随后按受害端行句柄文本检查（[句柄字符串](2026-08-21-case-report-victim-handle-strings.md)、[带标签的句柄字符串](2026-08-21-case-report-labeled-victim-handle-strings.md)、[仅域控／网关 MAC 剩余项](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md)）。无法匹配的自由文本仍保持未绑定。没有当前绑定仍会拒绝。对调的 victim／c2 会被拒绝。不会对调 token。
 
 scout、遗留报告禁令、收割归属和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET 对等体，以及该受害端行上的用户。
 

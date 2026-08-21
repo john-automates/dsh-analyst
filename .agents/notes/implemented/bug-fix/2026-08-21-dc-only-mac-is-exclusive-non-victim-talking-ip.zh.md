@@ -20,7 +20,7 @@ Status: implemented
 
 只从域控／空闲主机讲话的提交或省略域控／网关网卡保持不在。不丢掉 ip、hostname、user 或 `full_name`。不用模型提供的 IP 替换被绑定的 victim ip。收割戳记、绑定接受／拒绝和 C2-domain 持久化保持不变。
 
-`offeredMacEvidencedOnVictim`／`omittedMacEvidencedOnVictim` 使用通信 IP 排他性。`evidencedOnVictimIp` 仍拥有捐出和限定在受害端 IP 的转储归属。
+`offeredMacEvidencedOnVictim`／`omittedMacEvidencedOnVictim` 使用通信 IP 排他性。`evidencedOnVictimIp` 仍拥有捐出和限定在受害端 IP 的转储归属。[句柄字符串强制转换](2026-08-21-drop-dc-only-mac-from-handle-string-coerce.md) 对带标签或句子 who/where 里的剩余 MAC 使用同一仅域控／网关测试。
 
 [除非仅出现在域控／网关帧上，否则保留提交的受害端 MAC](2026-08-21-keep-submitted-victim-mac-unless-dc-only.md) 仍在非仅域控时保留提交的 mac；本注记拥有仅域控测试。[补全省略的受害端行 mac 与 user](2026-08-21-complete-omitted-victim-mac-user.md) 仍补全省略的 mac；未被证明的 MAC 之间的唯一性仍是散落防护。线索作为 victim 仍被拒绝。scout、遗留报告禁令和新评测不在本次变更内。测试使用合成 LAN 客户端、TEST-NET C2、空闲或域控 LAN 行，以及合成 `CLIENT_MAC` 与域控／网关 `DISTRACTOR_MAC`。
 
