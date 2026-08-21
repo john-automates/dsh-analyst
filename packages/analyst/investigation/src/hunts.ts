@@ -241,14 +241,14 @@ export function huntNotice(hunt: Hunt): string {
       const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: eth-src for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
+        `Filter \`${spec.display_filter}\` field \`${spec.fields[0]}\`.`,
       ].join(' ')
     }
     case 'name-service': {
       const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: name-service for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${spec.display_filter}\`.`,
+        `Filter \`${spec.display_filter}\`.`,
         'Those filters produce DESKTOP-* names, NBNS Registration, and BROWSER Host Announcement lines.',
       ].join(' ')
     }
@@ -256,7 +256,7 @@ export function huntNotice(hunt: Hunt): string {
       const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: kerberos-cname for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${spec.display_filter}\` and field \`${spec.fields[0]}\`.`,
+        `Filter \`${spec.display_filter}\` field \`${spec.fields[0]}\`.`,
         'Do not use kerberos.username, ldap.sAMAccountName, or ldap.displayName — those fields are invalid in tshark 4.4.16.',
         'Also run SAMR QueryUserInfo for this subject now with fields samr.samr_UserInfo21.account_name and samr.samr_UserInfo21.full_name (UTF-16 SAMR, not LDAP displayName). Do not wait for a username.',
       ].join(' ')
@@ -265,38 +265,12 @@ export function huntNotice(hunt: Hunt): string {
       const spec = huntFilterSpec(hunt)
       return [
         `Hunt issued: samr-userinfo for ${hunt.subjectKind} ${hunt.subject}.`,
-        `Run pcap_filter with display_filter \`${spec.display_filter}\``,
-        `and fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`.`,
+        `Filter \`${spec.display_filter}\``,
+        `fields \`${spec.fields[0]}\`, \`${spec.fields[1]}\`.`,
         'SAMR full_name is UTF-16LE (Becka Rolf is the worked example), not ldap.displayName.',
       ].join(' ')
     }
     default:
       return assertNever(hunt.kind, 'huntNotice')
   }
-}
-
-/**
- * Render the identity ledger and open hunts for the prompt context.
- * @param identities - folded identities.
- * @param hunts - folded hunts.
- * @param report - latest 5W1H report, when present.
- * @returns ledger text, or empty when the ledger has nothing to show.
- */
-export function formatLedger(
-  identities: readonly Identity[],
-  hunts: readonly Hunt[],
-  report: { who: string } | undefined,
-): string {
-  if (identities.length === 0 && hunts.length === 0 && report === undefined) return ''
-  const lines = ['Investigation ledger']
-  if (identities.length > 0) {
-    lines.push('Identities:')
-    for (const identity of identities) lines.push(`- ${identity.label} ${identity.value}`)
-  }
-  if (hunts.length > 0) {
-    lines.push('Hunts:')
-    for (const hunt of hunts) lines.push(`- ${hunt.kind} for ${hunt.subjectKind} ${hunt.subject}`)
-  }
-  if (report !== undefined) lines.push('A case_report 5W1H packet is already on this session log.')
-  return lines.join('\n')
 }

@@ -28,4 +28,4 @@ pnpm dsh --profile headless --patch examples/analyst/headless.cordis.yml \
 
 出现主机名或 IP 后，账本会下发 Kerberos `CNameString` hunt，然后下发 SAMR `QueryUserInfo` hunt 以取显示名。有效的 tshark 4.4.16 字段包括 `kerberos.CNameString`、`samr.samr_UserInfo21.account_name` 和 `samr.samr_UserInfo21.full_name`。`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username` 和 `samr.full_name` 会被拒绝。SAMR `full_name` 是 UTF-16（Becka Rolf），不是 LDAP displayName。
 
-用 `case_report`（who / what / when / where / why / how）结案。
+只有在 `bind_relationship` 给被引用的会话指定 victim 与 c2 之后，才用 `case_report` 结案。`who` 和 `where` 从被绑定受害端投影，不是自由文本填写。

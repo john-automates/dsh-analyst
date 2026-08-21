@@ -1,6 +1,7 @@
 # Agent Note: 将 case_report 的 who/where 绑定到正在与 C2 通信的 LAN 身份
 
 Status: implemented
+Archived: 2026-08-21
 
 [English](2026-08-21-case-report-c2-talking-lan-identity.md) | 中文
 

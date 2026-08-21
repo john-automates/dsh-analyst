@@ -43,7 +43,7 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
-| `@deepseek-ai/dsh-analyst-tools` | `case_report`、`logs`、`pcap_filter`、`pcap_info` | `ctx.tools`、`ctx.investigation` | `tool/call`、`tool/result`、`investigation/report via case_report` | - | analyst 预设的 SOC/NSM 工具。pcap_filter 在启动前拒绝无效的 tshark 4.4.16 身份字段。 |
+| `@deepseek-ai/dsh-analyst-tools` | `bind_relationship`、`case_report`、`logs`、`pcap_filter`、`pcap_info` | `ctx.tools`、`ctx.investigation` | `tool/call`、`tool/result`、`investigation/bind via bind_relationship`、`investigation/report via case_report` | - | analyst 预设的 SOC/NSM 工具。pcap_filter 在启动前拒绝无效的 tshark 4.4.16 身份字段。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2229,18 +2229,89 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ## `@deepseek-ai/dsh-analyst-tools`
 
-### `case_report`
+### `bind_relationship`
 
-用 5W1H 数据包结案。只发送有证据支撑的陈述。这会替换会话日志上此前的 case_report。
+在 Who/Where 之前绑定被引用的会话。为每个端点指定 victim 与 c2（或 infra、distractor、unknown）。告警与观测地址默认角色为 c2。恰好一个 victim。把告警或观测地址翻成 victim 时，because 必须引用该会话，而不是告警字符串。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "who": {
+    "src": {
       "type": "string",
-      "description": "Who was involved."
+      "description": "Conversation source address."
     },
+    "dst": {
+      "type": "string",
+      "description": "Conversation destination address."
+    },
+    "dport": {
+      "type": "integer",
+      "description": "Destination port."
+    },
+    "t": {
+      "type": "string",
+      "description": "Conversation time."
+    },
+    "evidence_id": {
+      "type": "string",
+      "description": "Id of the cited conversation evidence."
+    },
+    "endpoints": {
+      "type": "array",
+      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "addr": {
+            "type": "string",
+            "description": "Endpoint address."
+          },
+          "role": {
+            "type": "string",
+            "description": "victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.",
+            "enum": [
+              "victim",
+              "c2",
+              "infra",
+              "distractor",
+              "unknown"
+            ]
+          },
+          "because": {
+            "type": "string",
+            "description": "Why this role. Flipping a cue address to victim must cite the conversation, not the alert."
+          }
+        },
+        "required": [
+          "addr",
+          "because"
+        ]
+      }
+    }
+  },
+  "required": [
+    "src",
+    "dst",
+    "dport",
+    "t",
+    "evidence_id",
+    "endpoints"
+  ]
+}
+```
+
+来源：[`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `case_report`
+
+在 bind_relationship 之后用 5W1H 数据包结案。who 和 where 从被绑定受害端实体行投影，不要作为自由文本填写。只发送有证据支撑的 what、when、why 和 how。这会替换会话日志上此前的 case_report。
+
+```json
+{
+  "type": "object",
+  "properties": {
     "what": {
       "type": "string",
       "description": "What happened."
@@ -2249,10 +2320,6 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
       "type": "string",
       "description": "When it happened."
     },
-    "where": {
-      "type": "string",
-      "description": "Where it happened."
-    },
     "why": {
       "type": "string",
       "description": "Why it happened, as evidenced."
@@ -2260,13 +2327,33 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
     "how": {
       "type": "string",
       "description": "How it happened, as evidenced."
+    },
+    "who": {
+      "type": "object",
+      "description": "Optional victim entity_id. Must match the bound victim. Free-text who is denied.",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Bound victim entity id."
+        }
+      }
+    },
+    "where": {
+      "type": "object",
+      "description": "Optional victim entity_id. Must match the bound victim. Free-text where is denied.",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Bound victim entity id."
+        }
+      }
     }
   },
   "required": [
-    "who",
     "what",
     "when",
-    "where",
     "why",
     "how"
   ]

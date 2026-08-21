@@ -822,8 +822,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'investigation',
-    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.',
-    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.',
+    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.',
+    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.',
     methods: [
       {
         signature: 'readonly caseDir: string',
@@ -837,7 +837,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly autoHunt: boolean',
-        description: 'Whether new IP/hostname/user identities auto-issue hunts.',
+        description: 'Whether new IP/hostname/user identities auto-issue and auto-run hunts.',
         parameters: [],
       },
       {
@@ -859,6 +859,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the last report, or undefined.',
       },
       {
+        signature: 'bind(session: Session): RelationshipBind | undefined',
+        description: 'Latest live conversation bind on a session log.',
+        parameters: [{ name: 'session', description: 'session whose log is folded.' }],
+        returns: 'the last bind, or undefined.',
+      },
+      {
         signature: 'recordIdentity(session: Session, identity: Identity): boolean',
         description: 'Append one identity when kind+value is new.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'identity', description: 'identity to record.' }],
@@ -874,6 +880,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'recordReport(session: Session, report: CaseReport): void',
         description: 'Append a whole-value 5W1H close packet.',
         parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'report', description: '5W1H fields.' }],
+      },
+      {
+        signature: 'recordBind(session: Session, bind: RelationshipBind): void',
+        description: 'Append a whole-value conversation bind. The last bind is the live bind.',
+        parameters: [{ name: 'session', description: 'session to append to.' }, { name: 'bind', description: 'resolved relationship and endpoints.' }],
       },
       {
         signature: 'resolveInsideCase(target: string): string',
@@ -2922,6 +2933,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: DshEnvironmentKey;\n}',
   },
   {
+    name: 'BoundEndpoint',
+    declaration: 'export interface BoundEndpoint {\n    addr: string;\n    role: EndpointRole;\n    because: string;\n}',
+  },
+  {
     name: 'Branded',
     declaration: 'export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};',
   },
@@ -2930,8 +2945,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
   },
   {
+    name: 'CaseIdentitySlot',
+    declaration: 'export interface CaseIdentitySlot {\n    entity_id: string;\n    ip?: string;\n    mac?: string;\n    hostname?: string;\n    user?: string;\n}',
+  },
+  {
     name: 'CaseReport',
-    declaration: 'export interface CaseReport {\n    who: string;\n    what: string;\n    when: string;\n    where: string;\n    why: string;\n    how: string;\n}',
+    declaration: 'export interface CaseReport {\n    who: CaseIdentitySlot;\n    what: string;\n    when: string;\n    where: CaseIdentitySlot;\n    why: string;\n    how: string;\n}',
   },
   {
     name: 'ClientResponse',
@@ -3230,6 +3249,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
   },
   {
+    name: 'EndpointRole',
+    declaration: 'export type EndpointRole = \'victim\' | \'c2\' | \'infra\' | \'distractor\' | \'unknown\';',
+  },
+  {
     name: 'EpochHeader',
     declaration: 'export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}',
   },
@@ -3343,7 +3366,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'HuntKind',
-    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\';',
+    declaration: 'export type HuntKind = \'kerberos-cname\' | \'samr-userinfo\' | \'eth-src\' | \'name-service\';',
   },
   {
     name: 'HuntSubjectKind',
@@ -3351,7 +3374,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Identity',
-    declaration: 'export interface Identity {\n    kind: IdentityKind;\n    value: string;\n    label: string;\n}',
+    declaration: 'export interface Identity {\n    kind: IdentityKind;\n    value: string;\n    label: string;\n    entity_id?: string;\n    evidence_id?: string;\n}',
   },
   {
     name: 'IdentityKind',
@@ -3804,6 +3827,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RedactedSecret',
     declaration: 'export interface RedactedSecret {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'Relationship',
+    declaration: 'export interface Relationship {\n    src: string;\n    dst: string;\n    dport: number;\n    t: string;\n    evidence_id: string;\n}',
+  },
+  {
+    name: 'RelationshipBind',
+    declaration: 'export interface RelationshipBind {\n    relationship: Relationship;\n    endpoints: BoundEndpoint[];\n}',
   },
   {
     name: 'ReplayEnvelope',

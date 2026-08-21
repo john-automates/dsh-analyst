@@ -2,11 +2,11 @@
 
 English | [中文](README.zh.md)
 
-SOC/NSM tools for the `analyst` preset: `pcap_info`, `pcap_filter`, `logs`, and `case_report`. They consume `ctx.investigation` for the case directory and the 5W1H close packet.
+SOC/NSM tools for the `analyst` preset: `pcap_info`, `pcap_filter`, `logs`, and `case_report`. `bind_relationship` is registered by `ctx.investigation`. They consume the case directory and the BindRelationship close check.
 
 ## Tools
 
-`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; wrapping quotes on `display_filter` are stripped before `-Y`. A string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet to the calling session. When a C2-talking LAN IP is known from the ledger or from `c2TalkingLanIps`, `who` and `where` that name a non-LAN IP or a remote MAC are rewritten to that LAN IP and its sourced `eth.src` MAC. Hostname, user, and full name are not inserted.
+`pcap_info` runs `capinfos` (or `tshark -r -q` when capinfos is missing) against a capture inside the case. `pcap_filter` runs `tshark` with an optional display filter and `-e` fields; wrapping quotes on `display_filter` are stripped before `-Y`. A string `fields` value is one name or a comma/space-separated list and is coerced to `-e` names before the invalid-field check. Invalid tshark 4.4.16 fields (`ldap.sAMAccountName`, `ldap.displayName`, `kerberos.username`, `samr.full_name`) are rejected before spawn. Recommended fields: `kerberos.CNameString`, `samr.samr_UserInfo21.account_name`, `samr.samr_UserInfo21.full_name`. Field rows are labeled so identity harvest can read them. `logs` reads a text file in the case, optionally sliced by line. `case_report` appends a 5W1H packet after `bind_relationship`. `who` and `where` project from the bound victim entity row; free-text who/where and an inverted victim/c2 close are denied. Hostname, user, and full name are not invented.
 
 Helpers spawn with `execFile` (no shell), `cwd` set to the case directory, and the tool's `signal`.
 
@@ -34,11 +34,11 @@ Design: [analyst investigation preset](../../../.agents/notes/implemented/featur
 
 #### What the model sees
 
-The model sees the generated [`pcap_info` / `pcap_filter` / `logs` / `case_report` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-analyst-tools). `pcap_filter`'s description names the valid tshark 4.4.16 fields and rejects the invalid ones.
+The model sees the generated [`pcap_info` / `pcap_filter` / `logs` / `case_report` / `bind_relationship` schemas](../../../docs/tool-catalog.md#deepseek-aidsh-analyst-tools). `pcap_filter`'s description names the valid tshark 4.4.16 fields and rejects the invalid ones. `bind_relationship` is registered by investigation and appears in the same catalog after that service mounts.
 
 #### Token effect
 
-Four stable schemas on every request where the tools are visible.
+Five stable schemas on every request where the tools are visible.
 
 #### KV Cache effect
 
@@ -62,7 +62,7 @@ Results append after the reusable request prefix.
 
 #### What the model sees
 
-`case_report` returns the six 5W1H fields and records `investigation/report` on the session. A non-agent caller is rejected. A `who` or `where` that names a non-LAN IP or a remote MAC is rewritten to the C2-talking LAN client when that identity is known.
+`case_report` returns the projected victim slots plus what/when/why/how, and records `investigation/report` on the session. A non-agent caller is rejected. Close is denied until a live bind exists; inverted `entity_id` and free-text who/where are refused. Design: [BindRelationship before Who/Where](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md).
 
 #### Token effect
 

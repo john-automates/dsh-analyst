@@ -130,7 +130,7 @@ interface SessionEventMap {
 
 `UserMessage` 是普通提示词、注入上下文、steering（中途引导）与实时收件箱事件共享的带标识且冻结的 user-role 值。事件包装层只会增加事件本地的位置或结果事实；条目待处理期间，loop 只额外附加驱动器自有的路由状态。
 
-`investigation/identity`、`investigation/hunt` 和 `investigation/report` 由 [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md) 合并进 `SessionEventMap`。它们是只记入日志的账本事件：唯一的带标签身份、自动下发的 hunt，以及最后一份 5W1H 结案包。
+`investigation/identity`、`investigation/hunt`、`investigation/bind` 和 `investigation/report` 由 [`@deepseek-ai/dsh-investigation`](../../packages/analyst/investigation/README.md) 合并进 `SessionEventMap`。它们是只记入日志的账本事件：唯一的带标签身份、自动下发的 hunt、当前会话绑定，以及最后一份 5W1H 结案包。
 
 ### `TodoItem`：一条待办项
 
@@ -624,7 +624,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.investigation` — `Investigation`
 
-`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, methodology prompt, and 5W1H report persistence.
+`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, and 5W1H report persistence.
 
 ```ts cordis-catalog
 /**
@@ -649,6 +649,13 @@ hunts(session: Session): Hunt[]
 report(session: Session): CaseReport | undefined
 
 /**
+ * Latest live conversation bind on a session log.
+ * @param session - session whose log is folded.
+ * @returns the last bind, or undefined.
+ */
+bind(session: Session): RelationshipBind | undefined
+
+/**
  * Append one identity when kind+value is new.
  * @param session - session to append to.
  * @param identity - identity to record.
@@ -670,6 +677,13 @@ recordHunt(session: Session, hunt: Hunt): boolean
  * @param report - 5W1H fields.
  */
 recordReport(session: Session, report: CaseReport): void
+
+/**
+ * Append a whole-value conversation bind. The last bind is the live bind.
+ * @param session - session to append to.
+ * @param bind - resolved relationship and endpoints.
+ */
+recordBind(session: Session, bind: RelationshipBind): void
 
 /**
  * Resolve a path and require it to stay inside the case directory.
@@ -700,7 +714,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:164`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:204`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

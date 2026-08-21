@@ -13,8 +13,18 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "call_case_report", "name": "case_report", "argumentsDelta": "{\"who\":\"brolf\",\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"where\":\"lab pcap\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_case_report", "name": "case_report", "arguments": "{\"who\":\"brolf\",\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"where\":\"lab pcap\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "call_bind_relationship", "name": "bind_relationship", "argumentsDelta": "{\"src\":\"10.0.10.2\",\"dst\":\"198.51.100.80\",\"dport\":443,\"t\":\"2026-08-21T00:00:00Z\",\"evidence_id\":\"conv-1\",\"endpoints\":[{\"addr\":\"10.0.10.2\",\"role\":\"victim\",\"because\":\"10.0.10.2 talking to 198.51.100.80 in evidence conv-1\"},{\"addr\":\"198.51.100.80\",\"because\":\"cue/observation address\"}]}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_bind_relationship", "name": "bind_relationship", "arguments": "{\"src\":\"10.0.10.2\",\"dst\":\"198.51.100.80\",\"dport\":443,\"t\":\"2026-08-21T00:00:00Z\",\"evidence_id\":\"conv-1\",\"endpoints\":[{\"addr\":\"10.0.10.2\",\"role\":\"victim\",\"because\":\"10.0.10.2 talking to 198.51.100.80 in evidence conv-1\"},{\"addr\":\"198.51.100.80\",\"because\":\"cue/observation address\"}]}" } },
+      { "type": "usage", "usage": { "inputTokens": 30, "outputTokens": 10 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_case_report", "name": "case_report", "argumentsDelta": "{\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_case_report", "name": "case_report", "arguments": "{\"what\":\"Kerberos authentication\",\"when\":\"2026-08-20\",\"why\":\"ticket request\",\"how\":\"Kerberos CNameString then SAMR QueryUserInfo\"}" } },
       { "type": "usage", "usage": { "inputTokens": 40, "outputTokens": 12 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

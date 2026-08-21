@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
-  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText, formatLedger,
+  c2TalkingLanIps, displayFilterFor, evidenceTextForHunts, foldToolResultText,
   huntFilterSpec, huntKey, huntNotice, huntsForNewIdentities, huntsToAutoRun, isLanIpv4,
   isNonLanUnicastIpv4, shouldAutoRunHunt,
 } from '../src/hunts.ts'
+import { formatLedger } from '../src/ledger.ts'
 import type { Hunt, Identity } from '../src/types.ts'
 
 const ip: Identity = { kind: 'ip', value: '10.0.0.5', label: 'IP' }

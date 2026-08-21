@@ -11,6 +11,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Investigation, {
   Config, foldHunts, foldIdentities, foldReport, METHODOLOGY_SECTION, resolveCaseDir,
+  setsWhoWhere,
 } from '../src/index.ts'
 
 const signal = new AbortController().signal
@@ -80,14 +81,31 @@ describe('investigation service', () => {
     expect(ctx.investigation.recordHunt(owner.session, hunt)).toBe(true)
     expect(ctx.investigation.recordHunt(owner.session, hunt)).toBe(false)
     ctx.investigation.recordReport(owner.session, {
-      who: 'brolf', what: 'auth', when: 'now', where: 'lab', why: 'ticket', how: 'kerberos',
+      who: { entity_id: '10.0.0.5', ip: '10.0.0.5' },
+      what: 'auth', when: 'now',
+      where: { entity_id: '10.0.0.5', ip: '10.0.0.5' },
+      why: 'ticket', how: 'kerberos',
     })
     ctx.investigation.recordReport(owner.session, {
-      who: 'becka', what: 'auth', when: 'now', where: 'lab', why: 'ticket', how: 'samr',
+      who: { entity_id: '10.0.0.5', user: 'becka' },
+      what: 'auth', when: 'now',
+      where: { entity_id: '10.0.0.5', ip: '10.0.0.5' },
+      why: 'ticket', how: 'samr',
     })
+    const relationshipBind = {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2' as const, role: 'victim' as const, because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80' as const, role: 'c2' as const, because: 'cue' },
+      ],
+    }
+    ctx.investigation.recordBind(owner.session, relationshipBind)
     expect(ctx.investigation.identities(owner.session)).toEqual([identity])
     expect(ctx.investigation.hunts(owner.session)).toEqual([hunt])
-    expect(ctx.investigation.report(owner.session)?.who).toBe('becka')
+    expect(ctx.investigation.report(owner.session)?.who.user).toBe('becka')
+    expect(ctx.investigation.bind(owner.session)).toEqual(relationshipBind)
     expect(foldIdentities(owner.session.events)).toHaveLength(1)
     expect(foldHunts(owner.session.events)).toHaveLength(1)
     expect(foldReport(owner.session.events)?.how).toBe('samr')
@@ -327,12 +345,32 @@ describe('investigation service', () => {
     const { ctx, owner } = await setup()
     const empty = await ctx.systemPrompt.assemble({ agent: owner })
     expect(empty.sections.some(section => section.name === 'investigation:policy' && section.text === METHODOLOGY_SECTION)).toBe(true)
+    expect(METHODOLOGY_SECTION).toContain('Before Who/Where, bind the conversation.')
+    expect(ctx.tools.get('bind_relationship')).toBeDefined()
+    expect(setsWhoWhere(null)).toBe(false)
+    expect(setsWhoWhere('x')).toBe(false)
+    expect(setsWhoWhere({ what: 'a' })).toBe(false)
+    expect(setsWhoWhere({ where: { entity_id: '10.0.10.2' } })).toBe(true)
     expect(empty.contexts.some(entry => entry.name === 'investigation:ledger' && entry.text === '')).toBe(true)
     const noAgent = await ctx.systemPrompt.assemble({})
     expect(noAgent.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toBe('')
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.0.5', label: 'IP' })
     const filled = await ctx.systemPrompt.assemble({ agent: owner })
     expect(filled.contexts.find(entry => entry.name === 'investigation:ledger')?.text).toContain('10.0.0.5')
+    ctx.investigation.recordBind(owner.session, {
+      relationship: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+      },
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
+    const bound = await ctx.systemPrompt.assemble({ agent: owner })
+    const ledger = bound.contexts.find(entry => entry.name === 'investigation:ledger')?.text ?? ''
+    expect(ledger).toContain('Conversation bind')
+    expect(ledger).toContain('[victim] IP 10.0.10.2')
   })
 
   it('auto-runs issued eth-src for a LAN client when the model never called pcap_filter', async () => {
@@ -365,11 +403,11 @@ describe('investigation service', () => {
         if (filter.includes('eth.src')) {
           return Promise.resolve({ text: 'eth.src: 02:00:00:00:00:0a\tip.src: 10.0.10.2' })
         }
-        if (filter.includes('llmnr')) return Promise.resolve('name-service dump')
+        if (filter.includes('llmnr')) return Promise.resolve('name-service dump' as unknown as { text: string })
         if (filter.includes('kerberos.CNameString')) {
           return Promise.reject(new Error('tshark missing'))
         }
-        return Promise.resolve({ other: true })
+        return Promise.resolve({ other: true } as unknown as { text: string })
       },
     }))
     const result = await ctx.tools.execute({
@@ -476,7 +514,7 @@ describe('investigation service', () => {
       },
       execute: (args) => {
         calls.push(args)
-        return Promise.resolve(null)
+        return Promise.resolve(null as unknown as { text: string })
       },
     }))
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
@@ -523,7 +561,7 @@ describe('investigation service', () => {
       },
       execute: (args) => {
         calls.push(args)
-        return Promise.resolve({ text: 1 })
+        return Promise.resolve({ text: 1 as unknown as string })
       },
     }))
     ctx.tools.register(defineTool({
@@ -572,6 +610,98 @@ describe('investigation service', () => {
     expect(emptyCalls).toEqual([])
   })
 
+  it('binds a conversation and denies case_report until a live victim exists', async () => {
+    const { ctx, owner } = await setup()
+    ctx.tools.register(defineTool({
+      name: 'case_report',
+      description: 'Close stand-in.',
+      parameters: {
+        what: { type: 'string', required: true },
+        when: { type: 'string', required: true },
+        why: { type: 'string', required: true },
+        how: { type: 'string', required: true },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
+        render: () => [{ type: 'text', text: 'closed' }],
+      },
+      execute: () => Promise.resolve({ ok: true }),
+    }))
+    const claims = { what: 'beacon', when: 'now', why: 'c2', how: 'https' }
+    const unbound = await ctx.tools.execute({
+      signal, callId: CallId('close-unbound'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(unbound.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: assign victim vs c2 on the cited conversation.',
+    )
+    const noAgent = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-na'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' }],
+      },
+    })
+    expect(noAgent.isError).toBe(true)
+    const flip = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-flip'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'conv-1',
+        endpoints: [{ addr: '198.51.100.80', role: 'victim', because: 'the alert named this IP' }],
+      },
+      agent: owner,
+    })
+    expect(flip.isError).toBe(true)
+    const bound = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-ok'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: '2026-08-21T00:00:00Z', evidence_id: 'conv-1',
+        endpoints: [{ addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' }],
+      },
+      agent: owner,
+    })
+    expect(bound.isError).toBe(false)
+    expect(ctx.investigation.bind(owner.session)?.endpoints.some(endpoint => endpoint.role === 'victim')).toBe(true)
+    const closed = await ctx.tools.execute({
+      signal, callId: CallId('close-ok'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(closed.isError).toBe(false)
+    const other = await setup()
+    other.ctx.tools.register(defineTool({
+      name: 'set_identity',
+      description: 'Who/where stand-in.',
+      parameters: {
+        who: {
+          type: 'object',
+          additionalProperties: false,
+          properties: { entity_id: { type: 'string' } },
+        },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false, properties: { ok: { type: 'boolean', required: true } } },
+        render: () => [{ type: 'text', text: 'set' }],
+      },
+      execute: () => Promise.resolve({ ok: true }),
+    }))
+    const unboundWho = await other.ctx.tools.execute({
+      signal,
+      callId: CallId('set-who'),
+      name: 'set_identity',
+      arguments: { who: { entity_id: '198.51.100.80' } },
+      agent: other.owner,
+    })
+    expect(unboundWho.isError).toBe(true)
+    expect(unboundWho.content.map(block => 'text' in block ? block.text : '').join('')).toContain(
+      'unbound: assign victim vs c2 on the cited conversation.',
+    )
+  })
+
   it('unregisters listeners when the contributing fiber is disposed (HMR-safety)', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-investigation-hmr-'))
     const ctx = new Context()
@@ -579,7 +709,9 @@ describe('investigation service', () => {
     await ctx.plugin(ToolRuntime)
     const fiber = await ctx.plugin(Investigation, { caseDir: root })
     expect(ctx.get('investigation')).toBeDefined()
+    expect(ctx.tools.get('bind_relationship')).toBeDefined()
     await fiber.dispose()
     expect(ctx.get('investigation')).toBeUndefined()
+    expect(ctx.tools.get('bind_relationship')).toBeUndefined()
   })
 })

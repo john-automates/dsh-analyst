@@ -41,7 +41,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
-| `@deepseek-ai/dsh-analyst-tools` | `case_report`, `logs`, `pcap_filter`, `pcap_info` | `ctx.tools`, `ctx.investigation` | `tool/call`, `tool/result`, `investigation/report via case_report` | - | SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn. |
+| `@deepseek-ai/dsh-analyst-tools` | `bind_relationship`, `case_report`, `logs`, `pcap_filter`, `pcap_info` | `ctx.tools`, `ctx.investigation` | `tool/call`, `tool/result`, `investigation/bind via bind_relationship`, `investigation/report via case_report` | - | SOC/NSM tools for the analyst preset. pcap_filter rejects invalid tshark 4.4.16 identity fields before spawn. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2225,18 +2225,89 @@ web_search and web_fetch keep provider selection behind ctx.web so model-visible
 
 ## `@deepseek-ai/dsh-analyst-tools`
 
-### `case_report`
+### `bind_relationship`
 
-Close the investigation with a 5W1H packet. Send evidenced claims only. This replaces any previous case_report on the session log.
+Bind the cited conversation before Who/Where. Assign victim vs c2 (or infra, distractor, unknown) on each endpoint. Cue and observation addresses default to c2. Exactly one victim. Flipping a cue or observation address to victim requires a because that cites the conversation, not the alert string.
 
 ```json
 {
   "type": "object",
   "properties": {
-    "who": {
+    "src": {
       "type": "string",
-      "description": "Who was involved."
+      "description": "Conversation source address."
     },
+    "dst": {
+      "type": "string",
+      "description": "Conversation destination address."
+    },
+    "dport": {
+      "type": "integer",
+      "description": "Destination port."
+    },
+    "t": {
+      "type": "string",
+      "description": "Conversation time."
+    },
+    "evidence_id": {
+      "type": "string",
+      "description": "Id of the cited conversation evidence."
+    },
+    "endpoints": {
+      "type": "array",
+      "description": "Endpoints with role and because. Cue/observation addresses default to c2. Exactly one victim.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "addr": {
+            "type": "string",
+            "description": "Endpoint address."
+          },
+          "role": {
+            "type": "string",
+            "description": "victim, c2, infra, distractor, or unknown. Omitted cue/observation addresses default to c2.",
+            "enum": [
+              "victim",
+              "c2",
+              "infra",
+              "distractor",
+              "unknown"
+            ]
+          },
+          "because": {
+            "type": "string",
+            "description": "Why this role. Flipping a cue address to victim must cite the conversation, not the alert."
+          }
+        },
+        "required": [
+          "addr",
+          "because"
+        ]
+      }
+    }
+  },
+  "required": [
+    "src",
+    "dst",
+    "dport",
+    "t",
+    "evidence_id",
+    "endpoints"
+  ]
+}
+```
+
+Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/analyst-tools/src/index.ts)
+
+### `case_report`
+
+Close the investigation with a 5W1H packet after bind_relationship. who and where are projections of the bound victim entity row; do not fill them as free text. Send evidenced what, when, why, and how. This replaces any previous case_report on the session log.
+
+```json
+{
+  "type": "object",
+  "properties": {
     "what": {
       "type": "string",
       "description": "What happened."
@@ -2245,10 +2316,6 @@ Close the investigation with a 5W1H packet. Send evidenced claims only. This rep
       "type": "string",
       "description": "When it happened."
     },
-    "where": {
-      "type": "string",
-      "description": "Where it happened."
-    },
     "why": {
       "type": "string",
       "description": "Why it happened, as evidenced."
@@ -2256,13 +2323,33 @@ Close the investigation with a 5W1H packet. Send evidenced claims only. This rep
     "how": {
       "type": "string",
       "description": "How it happened, as evidenced."
+    },
+    "who": {
+      "type": "object",
+      "description": "Optional victim entity_id. Must match the bound victim. Free-text who is denied.",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Bound victim entity id."
+        }
+      }
+    },
+    "where": {
+      "type": "object",
+      "description": "Optional victim entity_id. Must match the bound victim. Free-text where is denied.",
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Bound victim entity id."
+        }
+      }
     }
   },
   "required": [
-    "who",
     "what",
     "when",
-    "where",
     "why",
     "how"
   ]

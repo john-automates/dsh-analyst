@@ -1,6 +1,7 @@
 # Agent Note: Bind case_report who/where to the C2-talking LAN identity
 
 Status: implemented
+Archived: 2026-08-21
 
 English | [中文](2026-08-21-case-report-c2-talking-lan-identity.zh.md)
 

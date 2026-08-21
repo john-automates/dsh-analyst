@@ -1,6 +1,6 @@
 /**
- * Investigation ledger types: the one home of the identity, hunt, and 5W1H
- * report records persisted on the session log.
+ * Investigation ledger types: the one home of the identity, hunt,
+ * relationship-bind, and 5W1H report records persisted on the session log.
  *
  * @module @deepseek-ai/dsh-investigation/types
  */
@@ -16,6 +16,16 @@ export interface Identity {
   value: string
   /** Human label shown to the model (`IP`, `MAC`, `hostname`, `user`, `full name`). */
   label: string
+  /**
+   * Endpoint this identity belongs to, when known. An identity whose
+   * `entity_id` is a non-victim endpoint cannot donate who/where slots.
+   */
+  entity_id?: string
+  /**
+   * Conversation or entity this identity was taken from. A slot whose
+   * `evidence_id` points at a non-victim entity cannot donate who/where.
+   */
+  evidence_id?: string
 }
 
 /** Auto-issued or recorded hunt kinds. */
@@ -34,16 +44,65 @@ export interface Hunt {
   subject: string
 }
 
+/** Roles a bound conversation endpoint may hold. */
+export type EndpointRole = 'victim' | 'c2' | 'infra' | 'distractor' | 'unknown'
+
+/** Cited two-endpoint conversation that BindRelationship assigns roles on. */
+export interface Relationship {
+  /** Conversation source address. */
+  src: string
+  /** Conversation destination address. */
+  dst: string
+  /** Destination port. */
+  dport: number
+  /** Conversation time as submitted. */
+  t: string
+  /** Id of the cited conversation evidence. */
+  evidence_id: string
+}
+
+/** One endpoint after BindRelationship assigns a role. */
+export interface BoundEndpoint {
+  /** Endpoint address. */
+  addr: string
+  /** Assigned role. Cue/observation addresses default to `c2`. */
+  role: EndpointRole
+  /** Why this role was assigned. */
+  because: string
+}
+
+/** Live conversation bind stored on `investigation/bind`. */
+export interface RelationshipBind {
+  /** Cited conversation. */
+  relationship: Relationship
+  /** Endpoints with roles. Exactly one must be `victim`. */
+  endpoints: BoundEndpoint[]
+}
+
+/** Projected who/where slot: the victim entity row, not free text. */
+export interface CaseIdentitySlot {
+  /** Bound victim entity id (the victim endpoint address). */
+  entity_id: string
+  /** Victim IPv4, when known. */
+  ip?: string
+  /** Victim MAC, when it belongs to the victim entity. */
+  mac?: string
+  /** Victim hostname, when it belongs to the victim entity. */
+  hostname?: string
+  /** Victim user, when it belongs to the victim entity. */
+  user?: string
+}
+
 /** 5W1H case-close packet stored on `investigation/report`. */
 export interface CaseReport {
-  /** Who was involved. */
-  who: string
+  /** Victim entity row projected into who. */
+  who: CaseIdentitySlot
   /** What happened. */
   what: string
   /** When it happened. */
   when: string
-  /** Where it happened. */
-  where: string
+  /** Victim entity row projected into where. */
+  where: CaseIdentitySlot
   /** Why it happened, as evidenced. */
   why: string
   /** How it happened, as evidenced. */
@@ -68,7 +127,13 @@ declare module '@deepseek-ai/dsh-session/types' {
      */
     'investigation/hunt': Hunt
     /**
+     * Live conversation bind. The last `investigation/bind` wins. case_report
+     * is denied until this event exists with exactly one victim.
+     */
+    'investigation/bind': RelationshipBind
+    /**
      * Whole-value 5W1H case-close packet. The last `investigation/report` wins.
+     * who/where are projections of the bound victim entity row.
      */
     'investigation/report': CaseReport
   }

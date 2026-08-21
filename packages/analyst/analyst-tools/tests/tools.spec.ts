@@ -8,7 +8,7 @@ import { CallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import Investigation from '@deepseek-ai/dsh-investigation'
 import * as tools from '../src/index.ts'
 import { clipOutput, formatFieldRows, helperFailureText, runHelper } from '../src/index.ts'
@@ -169,7 +169,7 @@ describe('analyst tools', () => {
   it('spawns tshark -e when fields is the string kerberos.CNameString', async () => {
     const binDir = await mkdtemp(join(tmpdir(), 'dsh-tshark-argv-'))
     const tsharkBin = await script(binDir, 'tshark', [
-      'printf "%s\\n" "$@" > argv.log',
+      'printf "%s\\n" "$@" >> argv.log',
       'echo brolf',
     ].join('\n'))
     const { ctx, owner, caseDir } = await setup({ tsharkBin })
@@ -188,7 +188,7 @@ describe('analyst tools', () => {
     expect(text(result)).toBe('kerberos.CNameString: brolf')
     const argv = (await readFile(join(caseDir, 'argv.log'), 'utf8')).trim().split('\n')
     expect(argv).toContain('-e')
-    expect(argv[argv.indexOf('-e') + 1]).toBe('kerberos.CNameString')
+    expect(argv.filter((_, index) => argv[index - 1] === '-e')).toContain('kerberos.CNameString')
     const invalid = await ctx.tools.execute({
       signal,
       callId: CallId('cname-invalid'),
@@ -240,46 +240,139 @@ describe('analyst tools', () => {
     await rm(binDir, { recursive: true, force: true })
   })
 
-  it('rewrites case_report who/where that name the C2 onto the ledger LAN client', async () => {
+  it('requires bind_relationship before case_report and projects who/where from the victim', async () => {
     const { ctx, owner } = await setup()
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '198.51.100.80', label: 'IP' })
-    ctx.investigation.recordIdentity(owner.session, { kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC' })
-    ctx.investigation.recordIdentity(owner.session, { kind: 'hostname', value: 'lan-host', label: 'hostname' })
-    const inverted = {
-      who: '198.51.100.80',
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0a', label: 'MAC', entity_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-host', label: 'hostname', entity_id: '10.0.10.2',
+    })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'mac', value: '02:00:00:00:00:0b', label: 'MAC', entity_id: '10.0.10.3',
+    })
+    const claims = {
       what: 'beacon to 198.51.100.80',
       when: '2026-08-21',
-      where: '198.51.100.80 02:00:00:00:00:cc',
       why: 'c2',
       how: 'https',
     }
+    const unbound = await ctx.tools.execute({
+      signal, callId: CallId('report-unbound'), name: 'case_report', arguments: claims, agent: owner,
+    })
+    expect(unbound.isError).toBe(true)
+    expect(text(unbound)).toContain('unbound: assign victim vs c2 on the cited conversation.')
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+          { addr: '198.51.100.80', because: 'cue/observation address' },
+          { addr: '10.0.10.3', role: 'distractor', because: 'idle LAN workstation' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
+    expect(text(bind)).toContain('victim 10.0.10.2')
+    expect(text(bind)).toContain('c2 198.51.100.80')
+    const inverted = await ctx.tools.execute({
+      signal,
+      callId: CallId('report-c2'),
+      name: 'case_report',
+      arguments: { ...claims, who: { entity_id: '198.51.100.80' } },
+      agent: owner,
+    })
+    expect(inverted.isError).toBe(true)
+    expect(text(inverted)).toContain('unbound: assign victim vs c2 on the cited conversation.')
     const result = await ctx.tools.execute({
-      signal, callId: CallId('report-c2'), name: 'case_report', arguments: inverted, agent: owner,
+      signal, callId: CallId('report'), name: 'case_report', arguments: claims, agent: owner,
     })
     expect(result.isError).toBe(false)
     expect(ctx.investigation.report(owner.session)).toEqual({
-      who: '10.0.10.2',
+      who: { entity_id: '10.0.10.2', ip: '10.0.10.2', mac: '02:00:00:00:00:0a', hostname: 'lan-host' },
       what: 'beacon to 198.51.100.80',
       when: '2026-08-21',
-      where: '10.0.10.2 02:00:00:00:00:0a',
+      where: { entity_id: '10.0.10.2', ip: '10.0.10.2', mac: '02:00:00:00:00:0a', hostname: 'lan-host' },
       why: 'c2',
       how: 'https',
     })
-    expect(text(result)).toContain('Who: 10.0.10.2')
-    expect(text(result)).toContain('Where: 10.0.10.2 02:00:00:00:00:0a')
-    expect(text(result)).toContain('What: beacon to 198.51.100.80')
-    expect(text(result)).not.toContain('Who: 198.51.100.80')
-    expect(text(result)).not.toContain('lan-host')
+    expect(text(result)).toContain('Who: 10.0.10.2 02:00:00:00:00:0a lan-host')
+    expect(text(result)).not.toContain('02:00:00:00:00:0b')
+    expect(ctx.tools.get('bind_relationship')?.presentCall?.({
+      src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'e', endpoints: [],
+    })?.title).toBe('Bind conversation')
+    expect(ctx.tools.get('bind_relationship')?.output.render({}, {
+      src: '10.0.10.2',
+      dst: '198.51.100.80',
+      dport: 443,
+      t: '2026-08-21T00:00:00Z',
+      evidence_id: 'conv-1',
+      endpoints: [
+        { addr: '10.0.10.2', role: 'victim', because: 'conversation' },
+        { addr: '198.51.100.80', role: 'c2', because: 'cue' },
+      ],
+    })).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('Conversation bind') }),
+    ])
+    const hostOnly = await setup()
+    const hostBind = await hostOnly.ctx.tools.execute({
+      signal,
+      callId: CallId('bind-host'),
+      name: 'bind_relationship',
+      arguments: {
+        src: 'lan-host',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: 'lan-host', role: 'victim', because: 'lan-host talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: hostOnly.owner,
+    })
+    expect(hostBind.isError).toBe(false)
+    const hostReport = await hostOnly.ctx.tools.execute({
+      signal, callId: CallId('report-host'), name: 'case_report', arguments: claims, agent: hostOnly.owner,
+    })
+    expect(hostReport.isError).toBe(false)
+    expect(text(hostReport)).toContain('Who: lan-host')
+    expect(hostOnly.ctx.investigation.report(hostOnly.owner.session)?.who).toEqual({ entity_id: 'lan-host' })
+    await hostOnly.ctx.fiber.dispose()
   })
 
-  it('records a 5W1H case_report and rejects a non-agent caller or blank field', async () => {
+  it('records a 5W1H case_report after a bind and rejects a non-agent caller or blank field', async () => {
     const { ctx, owner } = await setup()
+    const bind = await ctx.tools.execute({
+      signal,
+      callId: CallId('bind-close'),
+      name: 'bind_relationship',
+      arguments: {
+        src: '10.0.10.2',
+        dst: '198.51.100.80',
+        dport: 443,
+        t: '2026-08-21T00:00:00Z',
+        evidence_id: 'conv-1',
+        endpoints: [
+          { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80 in evidence conv-1' },
+        ],
+      },
+      agent: owner,
+    })
+    expect(bind.isError).toBe(false)
     const report = {
-      who: 'Becka Rolf',
       what: 'account lookup',
       when: '2026-08-20',
-      where: 'lab pcap',
       why: 'Kerberos then SAMR',
       how: 'QueryUserInfo',
     }
@@ -287,22 +380,46 @@ describe('analyst tools', () => {
       signal, callId: CallId('report'), name: 'case_report', arguments: report, agent: owner,
     })
     expect(result.isError).toBe(false)
-    expect(ctx.investigation.report(owner.session)).toEqual(report)
-    expect(text(result)).toContain('Who: Becka Rolf')
+    expect(ctx.investigation.report(owner.session)?.who.entity_id).toBe('10.0.10.2')
+    expect(ctx.investigation.report(owner.session)?.what).toBe('account lookup')
+    expect(text(result)).toContain('Who: 10.0.10.2')
     const noAgent = await ctx.tools.execute({
       signal, callId: CallId('report2'), name: 'case_report', arguments: report,
     })
     expect(noAgent.isError).toBe(true)
-    expect(text(noAgent)).toContain('owning agent session')
+    expect(text(noAgent)).toMatch(/owning agent session|unbound/)
+    const tool = ctx.tools.get('case_report')
+    if (tool === undefined) throw new Error('expected case_report')
+    await expect(tool.execute(report, {
+      signal,
+      callId: CallId('report-direct'),
+      rootCallId: CallId('report-direct'),
+      token: Symbol('report-direct') as ToolExecutionToken,
+      name: 'case_report',
+      arguments: report,
+      deferContext() {},
+      concludeTurn() {},
+    })).rejects.toThrow('owning agent session')
+    await expect(tool.execute(report, {
+      signal,
+      callId: CallId('report-unbound-direct'),
+      rootCallId: CallId('report-unbound-direct'),
+      token: Symbol('report-unbound-direct') as ToolExecutionToken,
+      name: 'case_report',
+      arguments: report,
+      agent: agent('unbound-direct'),
+      deferContext() {},
+      concludeTurn() {},
+    })).rejects.toThrow('unbound: assign victim vs c2 on the cited conversation.')
     const blank = await ctx.tools.execute({
       signal,
       callId: CallId('report3'),
       name: 'case_report',
-      arguments: { ...report, who: '   ' },
+      arguments: { ...report, what: '   ' },
       agent: owner,
     })
     expect(blank.isError).toBe(true)
-    expect(text(blank)).toContain('who must be a non-empty string')
+    expect(text(blank)).toContain('what must be a non-empty string')
   })
 
   it('presents calls and unregisters tools on fiber dispose (HMR-safety)', async () => {
@@ -311,8 +428,12 @@ describe('analyst tools', () => {
     expect(ctx.tools.get('pcap_filter')?.presentCall?.({ path: 'a.pcap' })?.title).toBe('pcap filter')
     expect(ctx.tools.get('logs')?.presentCall?.({ path: 'a.log' })?.title).toBe('logs')
     expect(ctx.tools.get('case_report')?.presentCall?.({
-      who: 'a', what: 'b', when: 'c', where: 'd', why: 'e', how: 'f',
+      what: 'b', when: 'c', why: 'e', how: 'f',
     })?.title).toBe('Case report')
+    expect(ctx.tools.get('bind_relationship')?.presentCall?.({
+      src: '10.0.10.2', dst: '198.51.100.80', dport: 443, t: 't', evidence_id: 'e',
+      endpoints: [{ addr: '10.0.10.2', role: 'victim', because: 'conversation' }],
+    })?.title).toBe('Bind conversation')
     expect(ctx.tools.get('pcap_info')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
     expect(ctx.tools.get('pcap_filter')?.isConcurrencySafe?.({ path: 'a.pcap' })).toBe(true)
     expect(ctx.tools.get('logs')?.isConcurrencySafe?.({ path: 'a.log' })).toBe(true)
@@ -326,7 +447,9 @@ describe('analyst tools', () => {
       { type: 'text', text: 'log' },
     ])
     const names = ctx.tools.schemas().map(schema => schema.name)
-    expect(names).toEqual(expect.arrayContaining(['pcap_info', 'pcap_filter', 'logs', 'case_report']))
+    expect(names).toEqual(expect.arrayContaining([
+      'pcap_info', 'pcap_filter', 'logs', 'case_report', 'bind_relationship',
+    ]))
     await toolsFiber.dispose()
     expect(ctx.tools.schemas().some(schema => schema.name === 'pcap_filter')).toBe(false)
   })

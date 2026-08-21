@@ -2,11 +2,11 @@
 
 [English](README.md) | 中文
 
-`analyst` 预设的 SOC/NSM 工具：`pcap_info`、`pcap_filter`、`logs` 和 `case_report`。它们通过 `ctx.investigation` 使用案件目录和 5W1H 结案包。
+`analyst` 预设的 SOC/NSM 工具：`pcap_info`、`pcap_filter`、`logs` 和 `case_report`。`bind_relationship` 由 `ctx.investigation` 注册。它们使用案件目录和 BindRelationship 结案检查。
 
 ## 工具
 
-`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 向调用会话追加 5W1H 结案包。当账本或 `c2TalkingLanIps` 已知正在与 C2 通信的 LAN IP 时，点名非 LAN IP 或对端 MAC 的 `who` / `where` 会被改写为该 LAN IP 及其来源 `eth.src` MAC。不会插入主机名、用户或全名。
+`pcap_info` 对案件内的捕获文件运行 `capinfos`（若 capinfos 缺失则运行 `tshark -r -q`）。`pcap_filter` 运行带可选显示过滤器与 `-e` 字段的 `tshark`；`display_filter` 上的包裹引号会在 `-Y` 之前被去掉。字符串形式的 `fields` 是单个字段名或逗号／空白分隔的列表，会在无效字段检查之前被强制转换为 `-e` 名称。无效的 tshark 4.4.16 字段（`ldap.sAMAccountName`、`ldap.displayName`、`kerberos.username`、`samr.full_name`）在启动进程前被拒绝。推荐字段：`kerberos.CNameString`、`samr.samr_UserInfo21.account_name`、`samr.samr_UserInfo21.full_name`。字段行带标签，以便身份收割读取。`logs` 读取案件内的文本文件，可按行切片。`case_report` 在 `bind_relationship` 之后追加 5W1H 结案包。`who` 和 `where` 从被绑定受害端实体行投影；自由文本 who/where 和对调的 victim／c2 结案会被拒绝。不会编造主机名、用户或全名。
 
 辅助进程用 `execFile` 启动（不经过 shell），`cwd` 为案件目录，并遵守工具的 `signal`。
 
@@ -34,11 +34,11 @@
 
 #### 模型看到什么
 
-模型看到生成的 [`pcap_info` / `pcap_filter` / `logs` / `case_report` schema](../../../docs/tool-catalog.md#deepseek-aidsh-analyst-tools)。`pcap_filter` 的描述点名有效的 tshark 4.4.16 字段，并拒绝无效字段。
+模型看到生成的 [`pcap_info` / `pcap_filter` / `logs` / `case_report` / `bind_relationship` schema](../../../docs/tool-catalog.md#deepseek-aidsh-analyst-tools)。`pcap_filter` 的描述点名有效的 tshark 4.4.16 字段，并拒绝无效字段。`bind_relationship` 由 investigation 注册，并在该服务挂载后出现在同一目录中。
 
 #### Token 影响
 
-工具可见时，每个请求都带四份稳定 schema。
+工具可见时，每个请求都带五份稳定 schema。
 
 #### KV Cache 影响
 
@@ -62,7 +62,7 @@
 
 #### 模型看到什么
 
-`case_report` 返回六个 5W1H 字段，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。当已知正在与 C2 通信的 LAN 身份时，点名非 LAN IP 或对端 MAC 的 `who` / `where` 会被改写到该 LAN 客户端。
+`case_report` 返回投影后的受害端槽位以及 what/when/why/how，并在会话上记录 `investigation/report`。非 agent 调用者会被拒绝。在没有当前绑定之前结案会被拒绝；对调的 `entity_id` 和自由文本 who/where 会被拒绝。设计见[结案前的 BindRelationship](../../../.agents/notes/implemented/feature/2026-08-21-bind-relationship.md)。
 
 #### Token 影响
 

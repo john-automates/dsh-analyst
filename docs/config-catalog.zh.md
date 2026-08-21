@@ -340,7 +340,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/analyst/analyst-tools/src/index.ts:24`](../packages/analyst/analyst-tools/src/index.ts)
+来源：[`packages/analyst/analyst-tools/src/index.ts:26`](../packages/analyst/analyst-tools/src/index.ts)
 
 <a id="deepseek-aidsh-attachment-local"></a>
 
@@ -938,7 +938,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/analyst/investigation/src/index.ts:67`](../packages/analyst/investigation/src/index.ts)
+来源：[`packages/analyst/investigation/src/index.ts:87`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 

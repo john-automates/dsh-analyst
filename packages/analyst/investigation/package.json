@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-investigation",
-  "description": "Case-scoped investigation ledger: identity harvest, auto-issued hunts, evidence policy, and 5W1H report state",
+  "description": "Case-scoped investigation ledger: identity harvest, auto-issued hunts, BindRelationship, evidence policy, and 5W1H report state",
   "version": "0.1.0-rc.8",
   "publishConfig": {
     "access": "public"
