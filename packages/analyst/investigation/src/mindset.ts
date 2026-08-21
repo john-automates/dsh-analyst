@@ -242,6 +242,16 @@ export function planReadyDenyReason(
 }
 
 /**
+ * Whether slot 0a names a real cue that is `valid` or explicitly `open`.
+ * Chassis cue-pending and cueValidation `invalid` are not live.
+ * @param mission - last Mission, or undefined.
+ * @returns true when a named live cue is on the Mission.
+ */
+export function namedLiveCue(mission: InvestigationMission | undefined): boolean {
+  return cueSlotDenyReason(mission) === undefined
+}
+
+/**
  * Deny reason when slot 0a is not a named, valid-or-open cue.
  * @param mission - last Mission, or undefined.
  * @returns a cue deny reason, or undefined when the cue slot is ready.
