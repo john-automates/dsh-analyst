@@ -476,6 +476,86 @@ describe('BindRelationship', () => {
     expect(report.where.ip).toBe(LAN)
   })
 
+  it('omits www.bing.com dests and prefers a later non-CDN dotted name', () => {
+    const BING_NAME = 'www.bing.com'
+    const BING_DEST = '203.0.113.84'
+    const MSO_NAME = 'login.microsoftonline.com'
+    const MSO_DEST = '203.0.113.85'
+    const SFX_NAME = 'sfx.ms'
+    const SFX_DEST = '203.0.113.86'
+    const MSN_NAME = 'windows.msn.com'
+    const MSN_DEST = '203.0.113.81'
+    const MICROSOFT_DEST = '203.0.113.82'
+    const AKAMAI_DEST = '203.0.113.83'
+    const live = bind()
+    const bingHost = { ...identityOf('hostname', BING_NAME)!, evidence_id: BING_DEST }
+    const payloadOnC2 = { ...identityOf('hostname', PAYLOAD)!, evidence_id: C2 }
+    const victimHost = { ...identityOf('hostname', HOST)!, entity_id: LAN, evidence_id: LAN }
+    const msoHost = { ...identityOf('hostname', MSO_NAME)!, evidence_id: MSO_DEST }
+    const sfxHost = { ...identityOf('hostname', SFX_NAME)!, evidence_id: SFX_DEST }
+    const msnHost = { ...identityOf('hostname', MSN_NAME)!, evidence_id: MSN_DEST }
+    const microsoftHost = { ...identityOf('hostname', CDN_NAME)!, evidence_id: MICROSOFT_DEST }
+    const akamaiHost = { ...identityOf('hostname', 'a1.akamai.net')!, evidence_id: AKAMAI_DEST }
+    const identities = [
+      identityOf('ip', LAN)!,
+      identityOf('ip', C2)!,
+      { ...identityOf('ip', BING_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', MSO_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', SFX_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', MSN_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', MICROSOFT_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', AKAMAI_DEST)!, evidence_id: LAN },
+      { ...identityOf('ip', EXTRA_WAN)!, evidence_id: LAN },
+      victimHost,
+      bingHost,
+      msoHost,
+      sfxHost,
+      msnHost,
+      microsoftHost,
+      akamaiHost,
+      payloadOnC2,
+    ]
+    expect(resolveBind({
+      relationship: { ...relationship, dst: BING_DEST, evidence_id: 'conv-bing' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${BING_DEST}` }],
+    }, [bingHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: { ...relationship, dst: MSO_DEST, evidence_id: 'conv-mso' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${MSO_DEST}` }],
+    }, [msoHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(resolveBind({
+      relationship: { ...relationship, dst: SFX_DEST, evidence_id: 'conv-sfx' },
+      endpoints: [{ addr: LAN, role: 'victim', because: `${LAN} talking to ${SFX_DEST}` }],
+    }, [sfxHost])).toEqual({ ok: false, reason: CDN_C2_REASON })
+    expect(acceptedC2Ips(live, identities)).toEqual([C2, EXTRA_WAN])
+    expect(acceptedC2Ips(live, identities)).toContain(C2)
+    expect(acceptedC2Ips(live, identities)).not.toContain(BING_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(MSO_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(SFX_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(MSN_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(MICROSOFT_DEST)
+    expect(acceptedC2Ips(live, identities)).not.toContain(AKAMAI_DEST)
+    expect(acceptedC2Ips(live, [
+      { ...identityOf('ip', BING_DEST)!, evidence_id: LAN },
+    ], `ip.addr: ${BING_DEST}\thttp.host: ${BING_NAME}`)).toEqual([C2])
+    expect(acceptedC2Domain(live, identities)).toBe(PAYLOAD)
+    expect(acceptedC2Domain(live, identities)).not.toBe(BING_NAME)
+    expect(acceptedC2Domain(live, identities)).not.toBe(MSO_NAME)
+    expect(acceptedC2Domain(live, identities)).not.toBe(SFX_NAME)
+    const report = requireCaseReport(live, identities, {
+      what: 'beacon', when: '2026-08-21', why: 'c2', how: 'https',
+    })
+    expect(report.c2_ips).toEqual([C2, EXTRA_WAN])
+    expect(report.c2_ips).not.toContain(BING_DEST)
+    expect(report.c2_domain).toBe(PAYLOAD)
+    expect(report.who.hostname).toBe(HOST)
+    expect(report.where.hostname).toBe(HOST)
+    expect(report.who.hostname).not.toBe(BING_NAME)
+    expect(report.where.hostname).not.toBe(BING_NAME)
+    expect(report.who.ip).toBe(LAN)
+    expect(report.where.ip).toBe(LAN)
+  })
+
   it('denies case_report when unbound, inverted, or given free-text who/where', () => {
     const live = bind()
     expect(caseReportDenyReason({ what: 'x' }, undefined)).toBe(UNBOUND_REASON)
