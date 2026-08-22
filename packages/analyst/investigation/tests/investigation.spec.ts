@@ -2903,10 +2903,15 @@ describe('investigation service', () => {
     })
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.3', label: 'IP' })
     ctx.investigation.recordIdentity(owner.session, {
-      kind: 'hostname',
-      value: '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan',
-      label: 'hostname',
-      evidence_id: '10.0.10.3',
+      kind: 'hostname', value: 'lan-dc', label: 'hostname', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.4', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-fileserver', label: 'hostname', evidence_id: '10.0.10.4',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.1', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'gateway', label: 'hostname', evidence_id: '10.0.10.1',
     })
     ctx.investigation.recordBind(owner.session, {
       relationship: {
@@ -2924,6 +2929,10 @@ describe('investigation service', () => {
       { ip: '10.0.10.8', hostname: 'lan-host-b' },
     ])
     expect(reason).toContain(COMPLETE_UNBOUND_WORKSTATION_PREFIX)
+    expect(reason).toContain('10.0.10.8 (lan-host-b)')
+    expect(reason).not.toContain('lan-dc')
+    expect(reason).not.toContain('lan-fileserver')
+    expect(reason).not.toContain('10.0.10.3')
     expect(steered).toHaveLength(1)
     expect(steered[0]?.content).toEqual([{ type: 'text', text: reason }])
     expect(foldReport(owner.session.events)).toBeUndefined()
@@ -2948,10 +2957,15 @@ describe('investigation service', () => {
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.2', label: 'IP' })
     ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.3', label: 'IP' })
     ctx.investigation.recordIdentity(owner.session, {
-      kind: 'hostname',
-      value: '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan',
-      label: 'hostname',
-      evidence_id: '10.0.10.3',
+      kind: 'hostname', value: 'lan-dc', label: 'hostname', evidence_id: '10.0.10.3',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.4', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'lan-fileserver', label: 'hostname', evidence_id: '10.0.10.4',
+    })
+    ctx.investigation.recordIdentity(owner.session, { kind: 'ip', value: '10.0.10.1', label: 'IP' })
+    ctx.investigation.recordIdentity(owner.session, {
+      kind: 'hostname', value: 'gateway', label: 'hostname', evidence_id: '10.0.10.1',
     })
     ctx.investigation.recordBind(owner.session, {
       relationship: {
@@ -2961,7 +2975,6 @@ describe('investigation service', () => {
       endpoints: [
         { addr: '10.0.10.2', role: 'victim', because: '10.0.10.2 talking to 198.51.100.80' },
         { addr: '198.51.100.80', role: 'c2', because: 'cue' },
-        { addr: '10.0.10.3', role: 'infra', because: 'dc' },
       ],
     })
     const steered = attachSteer(owner)

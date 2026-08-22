@@ -36,6 +36,11 @@ const DISTRACTOR_MAC = '02:00:00:00:00:0b'
 const HOST = 'lan-host'
 const HOST2 = 'lan-host-b'
 const WORKSTATION = 'desktop-test01'
+const DC_HOST = 'lan-dc'
+const DC_HOST_ALT = 'TEST-DC'
+const FILESERVER_HOST = 'lan-fileserver'
+const FILE_SERVER_HOST = 'lan-file-server'
+const GATEWAY_HOST = 'gateway'
 const AD_SRV = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
 const DISTRACTOR_HOST = 'idle-host'
 const USER = 'lan-user'
@@ -2834,6 +2839,43 @@ describe('BindRelationship', () => {
       { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
       { ...identityOf('hostname', AD_SRV)!, evidence_id: DISTRACTOR },
     ], leftoverFrames)).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
+      { ...identityOf('hostname', DC_HOST)!, evidence_id: DISTRACTOR },
+      identityOf('ip', INFRA)!,
+      { ...identityOf('hostname', FILESERVER_HOST)!, evidence_id: INFRA },
+      identityOf('ip', GATEWAY)!,
+      { ...identityOf('hostname', GATEWAY_HOST)!, evidence_id: GATEWAY },
+    ], leftoverFrames)).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('hostname', DC_HOST_ALT)!, evidence_id: DISTRACTOR },
+      identityOf('ip', INFRA)!,
+      { ...identityOf('hostname', FILE_SERVER_HOST)!, evidence_id: INFRA },
+    ])).toEqual([])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      { ...identityOf('hostname', HOST)!, evidence_id: LAN },
+      identityOf('ip', LAN2)!,
+      { ...identityOf('hostname', HOST2)!, evidence_id: LAN2 },
+      identityOf('ip', DISTRACTOR)!,
+      { ...identityOf('mac', DISTRACTOR_MAC)!, evidence_id: DISTRACTOR },
+      { ...identityOf('hostname', DC_HOST)!, evidence_id: DISTRACTOR },
+      identityOf('ip', INFRA)!,
+      { ...identityOf('hostname', FILESERVER_HOST)!, evidence_id: INFRA },
+      identityOf('ip', GATEWAY)!,
+      { ...identityOf('hostname', GATEWAY_HOST)!, evidence_id: GATEWAY },
+    ], leftoverFrames)).toEqual([
+      { ip: LAN2, hostname: HOST2 },
+    ])
+    expect(unboundHarvestedLanWorkstations([bind()], [
+      identityOf('ip', LAN)!,
+      identityOf('ip', GATEWAY)!,
+      { ...identityOf('hostname', WORKSTATION)!, evidence_id: GATEWAY },
+    ])).toEqual([{ ip: GATEWAY, hostname: WORKSTATION }])
     expect(unboundHarvestedLanWorkstations([bind({
       endpoints: [
         { addr: LAN, role: 'victim', because: conversationBecause },
