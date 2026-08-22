@@ -14,7 +14,7 @@ Headless 可以把仅有文本的模型停止（`finish` kind=`stop`）当成 `t
 
 `completeDenyReason` 仍先点名 cue-pending 或 Plan 未就绪。在 `planReady` 且至少有一次当前绑定之后，若另一台已收割的 LAN 工作站仍未绑定，它也拒绝仅有文本的停止。拒绝文本点名该剩余项。`agent/turn-stopping` 把该文本做 steering（中途引导）。不会追加 `turn/end` `completed`。Headless 不会因那次仅有文本的停止以 0 退出。
 
-已收割的 LAN 工作站是账本上已有工作站身份的非基础设施 LAN IPv4：非 AD SRV 主机名、人类 user／`full_name`，和／或通信 IP 帧或戳记并非只从已知基础设施来源的 MAC。所有已记录绑定上的 victim IPv4 都被排除。绑定角色 `infra`，以及该 IP 上的 AD SRV／DC 定位器主机名，属于基础设施／域控／网关／文件服务器剩余项，不是工作站。每一个这样的剩余项都已绑定为 victim，或不存在这样的剩余项时，此检查再次允许 complete。
+已收割的 LAN 工作站是账本上已有工作站身份的非基础设施 LAN IPv4：非基础设施主机名、人类 user／`full_name`，和／或通信 IP 帧或戳记并非只从已知基础设施来源的 MAC。所有已记录绑定上的 victim IPv4 都被排除。绑定角色 `infra`、该 IP 上的 AD SRV／DC 定位器主机名，以及该 IP 上的 LAN 域控／文件服务器／网关角色主机名，属于基础设施剩余项，不是工作站（[从剩余已收割工作站中省略 LAN 基础设施角色主机名](2026-08-22-omit-lan-infra-role-hostnames-from-leftover.md)）。每一个这样的剩余项都已绑定为 victim，或不存在这样的剩余项时，此检查再次允许 complete。
 
 此检查不编造绑定，不编造 5W1H，也不把未绑定主机持久化到 who/where／`victims`。Who/Where 之前先绑定保持不变。[cue-pending／Plan 未就绪](2026-08-21-refuse-complete-while-cue-pending.md) 仍优先。多 victim 持久化、LAN／DC 剩余项强制转换、AD SRV 主机名省略、`acceptedC2Ips`／`c2_domain`／extra-wan／CDN 前缀，以及家族持久化保持不变。
 
@@ -26,7 +26,7 @@ Headless 可以把仅有文本的模型停止（`finish` kind=`stop`）当成 `t
 
 **自动绑定剩余项或编造 who/where。** 否决：Who/Where 之前先绑定保持不变。由模型绑定剩余项；只有该绑定之后，持久化才写入受害端行。
 
-**把每一个未绑定 LAN IPv4 都当成剩余工作站。** 否决：仅有 IP 的收割，以及域控／网关／文件服务器剩余项（绑定角色 `infra` 或 AD SRV 定位器）不得挡住单 victim 结案。
+**把每一个未绑定 LAN IPv4 都当成剩余工作站。** 否决：仅有 IP 的收割，以及域控／网关／文件服务器剩余项（绑定角色 `infra`、AD SRV 定位器或 LAN 角色主机名）不得挡住单 victim 结案。
 
 **重调持久化每一个已绑定受害端行、LAN／DC 强制转换或 AD SRV 主机名省略。** 否决：那些旋钮此处未经测试，且在第二个 victim 被绑定之前保持空闲。
 
@@ -38,7 +38,7 @@ Headless 可以把仅有文本的模型停止（`finish` kind=`stop`）当成 `t
 
 ## 测试
 
-`packages/analyst/investigation/tests/mindset.spec.ts` 钉住 `completeDenyReason`：一次绑定之后剩余的 `10.0.10.8`（`lan-host-b`）会点名该未绑定工作站；cue-pending 与 Plan 未就绪在那些项仍开放时仍然优先；绑定该剩余项，或只留下域控／基础设施 `10.0.10.3`，则允许 complete。`packages/analyst/investigation/tests/bind.spec.ts` 钉住 `unboundHarvestedLanWorkstations`：主机名、人类 user 和非基础设施 MAC 剩余项，AD SRV／绑定角色 infra／网关／文件服务器的空剩余项，以及 `requireCaseReport` 的 who/where 仍落在已绑定 victim `10.0.10.2` 上、不发布 `10.0.10.8`。`packages/analyst/investigation/tests/investigation.spec.ts` 触发 `agent/turn-stopping`：一次绑定加上剩余 `lan-host-b` 会 steering 点名拒绝且不写结案；绑定该剩余项，或一次绑定且只剩域控／基础设施剩余项，则不做 steering。
+`packages/analyst/investigation/tests/mindset.spec.ts` 钉住 `completeDenyReason`：一次绑定之后剩余的 `10.0.10.8`（`lan-host-b`）会点名该未绑定工作站；cue-pending 与 Plan 未就绪在那些项仍开放时仍然优先；绑定该剩余项，或只留下域控／基础设施 `10.0.10.3`（AD SRV 或 LAN 角色主机名），则允许 complete。`packages/analyst/investigation/tests/bind.spec.ts` 钉住 `unboundHarvestedLanWorkstations`：主机名、人类 user 和非基础设施 MAC 剩余项，AD SRV／绑定角色 infra／LAN 域控／文件服务器／网关角色主机名的空剩余项，以及 `requireCaseReport` 的 who/where 仍落在已绑定 victim `10.0.10.2` 上、不发布 `10.0.10.8`。`packages/analyst/investigation/tests/investigation.spec.ts` 触发 `agent/turn-stopping`：一次绑定加上剩余 `lan-host-b` 会 steering 点名拒绝且不写结案；绑定该剩余项，或一次绑定且只剩域控／基础设施剩余项，则不做 steering。
 
 ## 后果
 

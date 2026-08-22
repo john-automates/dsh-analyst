@@ -424,7 +424,7 @@ export function foldBinds(
 export interface HarvestedLanWorkstation {
   /** LAN IPv4 on the ledger. */
   ip: string
-  /** Non-AD-SRV hostname evidenced on that IP, when one exists. */
+  /** Non-infra workstation hostname evidenced on that IP, when one exists. */
   hostname?: string
   /** Human user or full_name evidenced on that IP, when one exists. */
   user?: string
@@ -433,10 +433,12 @@ export interface HarvestedLanWorkstation {
 /**
  * Harvested LAN workstations that remain unbound after at least one
  * live bind. A leftover is a non-infra LAN IPv4 that already has
- * workstation identity (a non-AD-SRV hostname, a human user / full_name,
+ * workstation identity (a non-infra hostname, a human user / full_name,
  * and/or a MAC that is not sourced only from known infra) and is not a
- * bound victim. Bind role `infra` and an AD SRV / DC locator hostname
- * on that IP are infra. Does not invent a bind or a who/where row.
+ * bound victim. Bind role `infra`, an AD SRV / DC locator hostname on
+ * that IP, and a LAN DC / file-server / gateway role hostname on that
+ * IP are infra. A `.1` LAN IPv4 is infra only when it is already known
+ * as gateway or infra. Does not invent a bind or a who/where row.
  * @param binds - every recorded bind, not only the last-wins live bind.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for affiliation.
@@ -458,7 +460,7 @@ export function unboundHarvestedLanWorkstations(
     }
   }
   for (const identity of identities) {
-    if (identity.kind !== 'hostname' || !isAdSrvLocatorName(identity.value)) continue
+    if (identity.kind !== 'hostname' || !isHarvestedLanInfraHostname(identity.value)) continue
     for (const ip of ipsAffiliatedWithIdentity(identity, evidenceText)) infra.add(ip)
   }
   const leftovers: HarvestedLanWorkstation[] = []
@@ -477,12 +479,14 @@ export function unboundHarvestedLanWorkstations(
 
 /**
  * Workstation identity evidenced on one LAN IPv4.
- * AD SRV locators and machine SAMs are not workstation identity.
- * A MAC sourced only from known infra is not workstation identity.
+ * AD SRV locators, LAN DC / file-server / gateway role hostnames, and
+ * machine SAMs are not workstation identity. A MAC sourced only from
+ * known infra is not workstation identity.
  * @param ip - candidate LAN IPv4.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text.
- * @param infra - IPv4s already known as bind-role infra or AD SRV hosts.
+ * @param infra - IPv4s already known as bind-role infra, AD SRV hosts,
+ * or LAN DC / file-server / gateway role-name hosts.
  * @returns the leftover row, or undefined when that IP has no
  * workstation identity.
  */
@@ -497,7 +501,7 @@ function workstationIdentityOn(
   let hasWorkstationMac = false
   for (const identity of identities) {
     if (!identityAffiliatedWithIp(identity, ip, evidenceText)) continue
-    if (identity.kind === 'hostname' && !isAdSrvLocatorName(identity.value)) {
+    if (identity.kind === 'hostname' && !isHarvestedLanInfraHostname(identity.value)) {
       hostname ??= identity.value
       continue
     }
@@ -564,7 +568,8 @@ function identityAffiliatedWithIp(
  * stamp IPv4 is already known infra.
  * @param identity - ledger MAC.
  * @param evidenceText - tool-result text.
- * @param infra - IPv4s already known as bind-role infra or AD SRV hosts.
+ * @param infra - IPv4s already known as bind-role infra, AD SRV hosts,
+ * or LAN DC / file-server / gateway role-name hosts.
  * @returns true when this MAC is not workstation identity.
  */
 function macSourcedOnlyFromInfra(
@@ -1663,6 +1668,34 @@ function isAdSrvLocatorName(value: string): boolean {
   }
   if (host.startsWith('_sites.') || host.includes('._sites.')) return true
   return /^_[a-z0-9-]+\._(tcp|udp)(?:\.|$)/i.test(host)
+}
+
+/**
+ * Whether a hostname marks leftover harvested-LAN infra.
+ * AD SRV / DC locators and LAN DC / file-server / gateway role names
+ * both qualify. Who/where persist still uses only {@link isAdSrvLocatorName}.
+ * @param value - raw or normalized hostname.
+ * @returns true when IPv4s affiliated with this name are leftover infra.
+ */
+function isHarvestedLanInfraHostname(value: string): boolean {
+  return isAdSrvLocatorName(value) || isLanInfraRoleHostname(value)
+}
+
+/**
+ * Whether a LAN hostname is a DC / file-server / gateway role name.
+ * The first NetBIOS/DNS label matches `*-dc`, `dc`, `*fileserver*`,
+ * `*file-server*`, or `gateway`. A workstation `desktop-*` does not.
+ * A `.1` IPv4 is not inferred here.
+ * @param value - raw or normalized hostname.
+ * @returns true when the name is leftover infra, not a workstation.
+ */
+function isLanInfraRoleHostname(value: string): boolean {
+  const host = value.toLowerCase().replace(/\.+$/, '')
+  const netbios = host.split('.')[0] ?? host
+  if (netbios.startsWith('desktop-')) return false
+  if (netbios === 'gateway') return true
+  if (netbios === 'dc' || netbios.endsWith('-dc')) return true
+  return netbios.includes('fileserver') || netbios.includes('file-server')
 }
 
 /**

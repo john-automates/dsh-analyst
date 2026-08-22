@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-refuse-complete-while-unbound-workstation.md
-2026-08-21-refuse-complete-while-unbound-workstation.md: ce581308d1b1780d69e7035de926aeb8b9dd0179
-2026-08-21-refuse-complete-while-unbound-workstation.zh.md: 91211a3f63d6574d07b4a381e0dfffc2479dd7b0
+2026-08-21-refuse-complete-while-unbound-workstation.md: 0abc1b2c5a5386069b5d0bfb9316619e67523198
+2026-08-21-refuse-complete-while-unbound-workstation.zh.md: a292aca850e2f0543845b0459a41e79837d84a2f

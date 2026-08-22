@@ -14,7 +14,7 @@ Headless can treat a text-only model stop (`finish` kind=`stop`) as `turn/end` r
 
 `completeDenyReason` still names cue-pending or Plan-not-ready first. After `planReady` and at least one live bind, it also denies a text-only stop while another harvested LAN workstation remains unbound. The denial names that leftover. `agent/turn-stopping` steers that text. `turn/end` `completed` is not appended. Headless does not exit 0 from that text-only stop.
 
-A harvested LAN workstation is a non-infra LAN IPv4 that already has workstation identity on the ledger: a non-AD-SRV hostname, a human user / `full_name`, and/or a MAC that talking-IP frames or a stamp do not source only from known infra. Bound victim IPv4s across every recorded bind are excluded. Bind role `infra` and an AD SRV / DC locator hostname on that IP are infra / DC / gateway / file-server leftovers, not workstations. Once every such leftover is bound as victim, or none exists, this check allows complete again.
+A harvested LAN workstation is a non-infra LAN IPv4 that already has workstation identity on the ledger: a non-infra hostname, a human user / `full_name`, and/or a MAC that talking-IP frames or a stamp do not source only from known infra. Bound victim IPv4s across every recorded bind are excluded. Bind role `infra`, an AD SRV / DC locator hostname on that IP, and a LAN DC / file-server / gateway role hostname on that IP are infra leftovers, not workstations ([omit LAN infra role hostnames](2026-08-22-omit-lan-infra-role-hostnames-from-leftover.md)). Once every such leftover is bound as victim, or none exists, this check allows complete again.
 
 This check does not invent a bind, does not invent 5W1H, and does not persist an unbound host onto who/where/`victims`. Bind-before-who/where stays. [Cue-pending / Plan-not-ready](2026-08-21-refuse-complete-while-cue-pending.md) stays first. Multi-victim persist, LAN/DC leftover coerce, AD SRV hostname omit, `acceptedC2Ips` / `c2_domain` / extra-wan / CDN prefixes, and family persist stay.
 
@@ -26,7 +26,7 @@ Tests use synthetic RFC1918 / TEST-NET stand-ins.
 
 **Auto-bind the leftover or invent who/where.** Rejected: bind-before-who/where stays. The model binds the leftover; persist writes a victim row only after that bind.
 
-**Treat every unbound LAN IPv4 as a leftover workstation.** Rejected: IP-only harvest and DC / gateway / file-server leftovers (bind role `infra` or AD SRV locator) must not block a single-victim close.
+**Treat every unbound LAN IPv4 as a leftover workstation.** Rejected: IP-only harvest and DC / gateway / file-server leftovers (bind role `infra`, AD SRV locator, or LAN role hostname) must not block a single-victim close.
 
 **Retune persist-every-bound-victim-row, LAN/DC coerce, or AD SRV hostname omit.** Rejected: those knobs are untested here and stay idle until a second victim is bound.
 
@@ -38,7 +38,7 @@ Tests use synthetic RFC1918 / TEST-NET stand-ins.
 
 ## Testing
 
-`packages/analyst/investigation/tests/mindset.spec.ts` pins `completeDenyReason`: leftover `10.0.10.8` (`lan-host-b`) after one bind names that unbound workstation; cue-pending and Plan-not-ready still win when those are open; binding the leftover, or leaving only DC/infra `10.0.10.3`, allows complete. `packages/analyst/investigation/tests/bind.spec.ts` pins `unboundHarvestedLanWorkstations` for hostname, human user, and non-infra MAC leftovers, empty leftovers for AD SRV / bind-role infra / gateway / file-server, and `requireCaseReport` who/where staying on bound victim `10.0.10.2` without publishing `10.0.10.8`. `packages/analyst/investigation/tests/investigation.spec.ts` fires `agent/turn-stopping`: one bind plus leftover `lan-host-b` steers the named denial and writes no report; binding that leftover, or one bind with only DC/infra leftover, does not steer.
+`packages/analyst/investigation/tests/mindset.spec.ts` pins `completeDenyReason`: leftover `10.0.10.8` (`lan-host-b`) after one bind names that unbound workstation; cue-pending and Plan-not-ready still win when those are open; binding the leftover, or leaving only DC/infra `10.0.10.3` (AD SRV or LAN role hostname), allows complete. `packages/analyst/investigation/tests/bind.spec.ts` pins `unboundHarvestedLanWorkstations` for hostname, human user, and non-infra MAC leftovers, empty leftovers for AD SRV / bind-role infra / LAN DC / file-server / gateway role hostnames, and `requireCaseReport` who/where staying on bound victim `10.0.10.2` without publishing `10.0.10.8`. `packages/analyst/investigation/tests/investigation.spec.ts` fires `agent/turn-stopping`: one bind plus leftover `lan-host-b` steers the named denial and writes no report; binding that leftover, or one bind with only DC/infra leftover, does not steer.
 
 ## Consequences
 

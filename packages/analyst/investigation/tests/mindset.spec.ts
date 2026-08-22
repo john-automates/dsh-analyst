@@ -19,7 +19,12 @@ import type {
 const LAN = '10.0.10.2'
 const LAN2 = '10.0.10.8'
 const DC = '10.0.10.3'
+const FILESERVER = '10.0.10.4'
+const GATEWAY = '10.0.10.1'
 const HOST2 = 'lan-host-b'
+const DC_HOST = 'lan-dc'
+const FILESERVER_HOST = 'lan-fileserver'
+const GATEWAY_HOST = 'gateway'
 const AD_SRV = '_ldap._tcp.default-first-site-name._sites.dc._msdcs.ad.example.lan'
 const C2 = '198.51.100.80'
 const EXTRA = '203.0.113.50'
@@ -234,6 +239,20 @@ describe('analyst mindset chassis', () => {
     expect(leftoverReason).toContain(`${LAN2} (${HOST2})`)
     expect(leftoverReason).toContain('unbound')
     expect(completeDenyReason(mission(), readyPlan, leftoverLedger)).toBe(leftoverReason)
+    expect(completeDenyReason(mission(), readyPlan, {
+      binds: [bind()],
+      identities: [
+        { kind: 'ip', value: LAN, label: 'IP' },
+        { kind: 'ip', value: LAN2, label: 'IP' },
+        { kind: 'hostname', value: HOST2, label: 'hostname', evidence_id: LAN2 },
+        { kind: 'ip', value: DC, label: 'IP' },
+        { kind: 'hostname', value: DC_HOST, label: 'hostname', evidence_id: DC },
+        { kind: 'ip', value: FILESERVER, label: 'IP' },
+        { kind: 'hostname', value: FILESERVER_HOST, label: 'hostname', evidence_id: FILESERVER },
+        { kind: 'ip', value: GATEWAY, label: 'IP' },
+        { kind: 'hostname', value: GATEWAY_HOST, label: 'hostname', evidence_id: GATEWAY },
+      ],
+    })).toBe(leftoverReason)
     expect(completeUnboundWorkstationReason([
       { ip: LAN2, hostname: HOST2 },
       { ip: '10.0.10.9', hostname: 'lan-host-c' },
@@ -260,6 +279,18 @@ describe('analyst mindset chassis', () => {
         { kind: 'ip', value: LAN, label: 'IP' },
         { kind: 'ip', value: DC, label: 'IP' },
         { kind: 'hostname', value: AD_SRV, label: 'hostname', evidence_id: DC },
+      ],
+    })).toBeUndefined()
+    expect(completeDenyReason(mission(), readyPlan, {
+      binds: [bind()],
+      identities: [
+        { kind: 'ip', value: LAN, label: 'IP' },
+        { kind: 'ip', value: DC, label: 'IP' },
+        { kind: 'hostname', value: DC_HOST, label: 'hostname', evidence_id: DC },
+        { kind: 'ip', value: FILESERVER, label: 'IP' },
+        { kind: 'hostname', value: FILESERVER_HOST, label: 'hostname', evidence_id: FILESERVER },
+        { kind: 'ip', value: GATEWAY, label: 'IP' },
+        { kind: 'hostname', value: GATEWAY_HOST, label: 'hostname', evidence_id: GATEWAY },
       ],
     })).toBeUndefined()
     expect(c2HypothesisId({ inventory: [], gaps: [], hypotheses: [] })).toBeUndefined()
