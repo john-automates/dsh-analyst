@@ -158,6 +158,11 @@ export function methodologySection(verified: boolean): string {
     : METHODOLOGY_SECTION
 }
 
+/**
+ * The investigation methodology stated to the model, as one prompt section.
+ * The unverified form; {@link methodologySection} selects between this and the
+ * verifier-aware wording at assembly time.
+ */
 export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
