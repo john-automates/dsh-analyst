@@ -79,6 +79,24 @@ export const IDENTITY_LABELS: Readonly<Record<IdentityKind, string>> = {
 }
 
 /**
+ * Single words that appear in tshark output and in `because` prose but never
+ * name a host. A real workstation name survives this set; `only` — harvested
+ * from "only LAN host in either capture" — does not. Exact single-token
+ * matches only, so `only-dc-01` is untouched.
+ */
+const PROSE_WORDS = new Set([
+  'only', 'the', 'and', 'with', 'from', 'this', 'that', 'all', 'none',
+  'true', 'false', 'null', 'name', 'host', 'hostname', 'address', 'client',
+  'server', 'source', 'destination', 'unknown', 'other', 'same', 'both',
+  // tshark protocol names. A name-service probe that dumps a protocol column
+  // otherwise harvests the protocol itself (`browser`) as a hostname, and the
+  // report tool then refuses to overwrite the donated value.
+  'browser', 'nbns', 'llmnr', 'mdns', 'dns', 'smb', 'smb2', 'kerberos',
+  'samr', 'ldap', 'http', 'https', 'tls', 'ssl', 'tcp', 'udp', 'ip', 'ipv4',
+  'ipv6', 'eth', 'arp', 'dhcp', 'icmp', 'ntp', 'quic', 'data',
+])
+
+/**
  * Normalize one identity value for uniqueness.
  * @param kind - identity kind.
  * @param value - raw harvested value.
@@ -87,8 +105,16 @@ export const IDENTITY_LABELS: Readonly<Record<IdentityKind, string>> = {
 export function normalizeIdentityValue(kind: IdentityKind, value: string): string | undefined {
   const trimmed = value.trim()
   if (trimmed === '') return undefined
+  // An operator or bare punctuation is never an identity. A display filter
+  // (`ip.src == 10.9.10.26`) otherwise harvests `==` as a user, and it then
+  // persists on every later revision of the victim row.
+  if (!/[a-z0-9]/i.test(trimmed)) return undefined
   if (kind === 'mac') return trimmed.toLowerCase().replace(/-/g, ':')
-  if (kind === 'hostname' || kind === 'ip') return trimmed.toLowerCase()
+  if (kind === 'hostname') {
+    const host = trimmed.toLowerCase()
+    return PROSE_WORDS.has(host) ? undefined : host
+  }
+  if (kind === 'ip') return trimmed.toLowerCase()
   if (isNonIdentityAccountValue(trimmed)) return undefined
   if (kind === 'full_name') return trimmed.replace(/\s+/g, ' ')
   return trimmed

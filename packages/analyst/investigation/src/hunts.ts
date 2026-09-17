@@ -146,6 +146,33 @@ export function c2TalkingLanIps(text: string): string[] {
 }
 
 /**
+ * Non-LAN unicast peers that share a tool-output line with `victim`.
+ *
+ * The inverse of {@link c2TalkingLanIps}, and the enumeration the close gate
+ * needs: one line is one conversation, so this is every off-LAN destination the
+ * bound victim was evidenced talking to. Coverage of the report is measured
+ * against this set, so it must come from the packets the agent already read
+ * rather than from what it chose to write about.
+ * @param text - rendered tool output or concatenated prior tool-result text.
+ * @param victim - bound victim IPv4.
+ * @returns unique non-LAN peers in first-seen order.
+ */
+export function wanPeersOfVictim(text: string, victim: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const ips: readonly string[] = line.match(IPV4) ?? []
+    if (!ips.includes(victim)) continue
+    for (const ip of ips) {
+      if (!isNonLanUnicastIpv4(ip) || seen.has(ip)) continue
+      seen.add(ip)
+      out.push(ip)
+    }
+  }
+  return out
+}
+
+/**
  * Concatenate text blocks from logged `tool/result` events.
  * @param events - session log or any prefix of it.
  * @returns joined tool-result text, or empty when none is present.

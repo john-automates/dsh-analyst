@@ -46,6 +46,7 @@ import {
 } from './harvest.ts'
 import {
   c2DomainHunt, extraWanHunt, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter, otherEndHunt,
+  wanPeersOfVictim,
 } from './hunts.ts'
 import { c2TalkingLanVictim } from './report.ts'
 import type {
@@ -798,8 +799,24 @@ export function identityDonatesToVictim(
 }
 
 /**
+ * Whether a harvested hostname names an external destination rather than the
+ * host itself. A name the victim merely resolved (`beeflex.online`) is a
+ * public DNS name evidenced on the non-LAN address it resolved to; a
+ * workstation name (`DESKTOP-6XHCAG4`) is not. Dottedness alone cannot decide
+ * this, because an AD-joined victim legitimately carries a dotted FQDN.
+ * @param identity - candidate hostname identity.
+ * @param evidenceText - tool-result text the hostname was evidenced in.
+ * @returns true when the name belongs to a non-LAN destination.
+ */
+function isResolvedDestinationName(identity: Identity, evidenceText: string): boolean {
+  if (!isC2DomainName(identity.value)) return false
+  return ipsEvidencingIdentity(identity, evidenceText).some(isNonLanUnicastIpv4)
+}
+
+/**
  * Project the victim entity row (IP / MAC / hostname / user / full_name).
- * First donated hostname skips an AD SRV / DC locator name.
+ * First donated hostname skips an AD SRV / DC locator name and a public DNS
+ * name the victim merely resolved.
  * @param bind - live bind with exactly one victim.
  * @param identities - folded ledger identities.
  * @param evidenceText - tool-result text for victim-IP scope and sourced-MAC affiliation.
@@ -820,7 +837,10 @@ export function projectVictimSlot(
     donated.find(identity => (
       identity.kind === kind
       && (kind !== 'user' || !isMachineSam(identity.value))
-      && (kind !== 'hostname' || !isAdSrvLocatorName(identity.value))
+      && (kind !== 'hostname' || (
+        !isAdSrvLocatorName(identity.value)
+        && !isResolvedDestinationName(identity, evidenceText)
+      ))
     ))?.value
   )
   const ip = first('ip') ?? (isIpv4(victim.addr) ? victim.addr : undefined)
@@ -1187,6 +1207,70 @@ export function caseReportDenyReason(
     }
   }
   return undefined
+}
+
+/** Deny prefix when the close leaves an evidenced destination unaccounted for. */
+export const UNDISPOSED_REASON =
+  'unbound: the report does not account for every destination the victim contacted.'
+
+/**
+ * Destinations the victim was evidenced talking to that the close never names.
+ *
+ * Coverage of the published IOC list varied 29%-100% across identical runs
+ * because nothing required a disposition per destination — both runs found the
+ * same hosts, one wrote them up and one did not. Enumerating here makes that
+ * decision explicit rather than incidental.
+ *
+ * A destination counts as accounted for when the close text or any bind
+ * endpoint names it, by address or by a hostname the capture evidenced on it.
+ * `droppable` carries the addresses a verifier scored below the drop band, so
+ * an ordinary CDN tail never has to be written about.
+ * @param args - submitted `case_report` arguments.
+ * @param bind - live bind with exactly one victim.
+ * @param evidenceText - tool-result text the peers and names are evidenced in.
+ * @param identities - folded ledger identities.
+ * @param droppable - addresses a verifier cleared as ordinary background.
+ * @returns unaccounted destinations in first-seen order.
+ */
+export function undisposedDestinations(
+  args: unknown,
+  bind: RelationshipBind | undefined,
+  evidenceText: string,
+  identities: readonly Identity[] = [],
+  droppable: ReadonlySet<string> = new Set(),
+): string[] {
+  const victim = bind === undefined ? undefined : victimOf(bind)
+  if (bind === undefined || victim === undefined) return []
+  const written = `${JSON.stringify(args ?? {})} ${JSON.stringify(bind.endpoints)}`.toLowerCase()
+  const out: string[] = []
+  for (const peer of wanPeersOfVictim(evidenceText, victim.addr)) {
+    if (droppable.has(peer)) continue
+    if (written.includes(peer)) continue
+    const names = hostnamesEvidencedOnIp(peer, identities, evidenceText)
+    if (names.some(name => written.includes(name.toLowerCase()))) continue
+    out.push(peer)
+  }
+  return out
+}
+
+/**
+ * Render the undisposed-destination denial, naming each address and what the
+ * capture called it so the close can be corrected in one turn.
+ * @param addrs - unaccounted destinations.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text for evidenced hostnames.
+ * @returns the deny reason.
+ */
+export function undisposedDenyReason(
+  addrs: readonly string[], identities: readonly Identity[], evidenceText: string,
+): string {
+  const listed = addrs.map((addr) => {
+    const names = hostnamesEvidencedOnIp(addr, identities, evidenceText)
+    return names.length === 0 ? addr : `${addr} (${names.slice(0, 2).join(', ')})`
+  })
+  return `${UNDISPOSED_REASON} Unaccounted: ${listed.join('; ')}.`
+    + ' Name each in what/why — as delivery, abused service, or benign background'
+    + ' — or bind it with a role. Say what the packets show; do not guess.'
 }
 
 /**

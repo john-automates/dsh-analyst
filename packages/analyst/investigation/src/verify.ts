@@ -102,3 +102,61 @@ export async function judgeCdnOrUpdate(
     return undefined
   }
 }
+
+/**
+ * Probability below which a destination needs no write-up.
+ *
+ * Swept on the seven-capture corpus in `bench/typesafe-triage/`: no published
+ * IOC scored below 0.06, so anything under it is the ordinary CDN and telemetry
+ * tail. The band exists so enumerating every destination stays cheap for the
+ * model to answer, not so the verifier can decide the case.
+ */
+export const DEFAULT_DROP_GATE = 0.06
+
+/** Asked per destination; a low answer means it need not be written up. */
+export const DEST_IS_INFECTION_RELATED =
+  'This destination is part of the infection: attacker-controlled infrastructure, '
+  + 'the server that delivered the payload or script, an exfiltration endpoint, or a '
+  + 'legitimate public service that the malware itself called to fingerprint the host '
+  + 'or move data. Ordinary background traffic — a content delivery network, an '
+  + 'operating-system or browser update or telemetry endpoint, an ad or analytics '
+  + 'beacon, a font or asset host, or a certificate revocation check — is not.'
+
+/**
+ * Destinations a verifier clears as ordinary background.
+ *
+ * One call per destination, all issued together: the state differs per address,
+ * so this cannot batch into a single request, but each call is a single forward
+ * pass and the whole set costs a fraction of one model round trip. With no
+ * provider mounted every destination stays in, which makes the close gate
+ * stricter rather than weaker — silence never clears anything.
+ * @param ctx - context that may carry the judgment seam.
+ * @param addrs - candidate destinations.
+ * @param identities - folded ledger identities.
+ * @param evidenceText - tool-result text.
+ * @param gate - probability below which a destination is droppable.
+ * @returns the addresses that need no disposition.
+ */
+export async function droppableDestinations(
+  ctx: Context,
+  addrs: readonly string[],
+  identities: readonly Identity[],
+  evidenceText: string,
+  gate: number = DEFAULT_DROP_GATE,
+): Promise<ReadonlySet<string>> {
+  const judgment = ctx.get('judgment')
+  if (judgment === undefined || addrs.length === 0) return new Set()
+  const scored = await Promise.all(addrs.map(async (addr) => {
+    try {
+      const answer = await judgment.noul(
+        verifyState(addr, identities, evidenceText),
+        DEST_IS_INFECTION_RELATED,
+      )
+      return answer.noul < gate ? addr : undefined
+    } catch {
+      // An outage must not silently excuse a destination from the report.
+      return undefined
+    }
+  }))
+  return new Set(scored.filter((addr): addr is string => addr !== undefined))
+}
