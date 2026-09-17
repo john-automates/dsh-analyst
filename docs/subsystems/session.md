@@ -769,7 +769,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:424`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:466`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

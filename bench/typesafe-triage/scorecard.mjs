@@ -43,7 +43,69 @@ const RATES = {
   output: Number(process.env.DSH_RATE_OUTPUT ?? 0.42) * RATE_SCALE,
 }
 
+/**
+ * Filesystem paths named in a tool call's arguments.
+ *
+ * `workspaceEscapes` below reports the ones outside the run directory. They are
+ * ATTEMPTS, not successes: the sandbox refuses a path outside the case
+ * directory (`remcos-n2` tried `cd /home/.../dsal-analyst` and got
+ * `Error: refusing shell: ... is outside the case directory`), so this measures
+ * reach, and would measure a regression in containment if one ever landed.
+ *
+ * It is worth measuring because containment is only as good as the case
+ * directory being right. A sweep run whose workspace was the repo rather than
+ * the run dir read `cases/` with the original MTA filenames, found the notes,
+ * and reasoned "the four IPs match the handoff" — every one of those reads was
+ * *inside* its workspace, so nothing refused them and nothing scored them.
+ */
+const PATH_ARGUMENT = /(?:\.\.\/[^\s"'\\]*|\/(?:home|mnt|Users)\/[^\s"'\\]*|(?:cases|bench|packages|apps|docs)\/[^\s"'\\]*)/g
+
+/**
+ * A network-reaching program named anywhere in a shell command.
+ *
+ * `externalSearches` counts `web_search` calls and nothing else, so it read
+ * zero on every graded run while the agent was querying DNS from `bash`: 23 of
+ * 25 runs reached the network, and one published four hosting-provider rDNS
+ * names the capture never carried. A metric that reports a comfortable zero
+ * while the thing it names is happening is worse than no metric.
+ *
+ * Word-boundary rather than head-anchored, because the reachback seen in
+ * practice was `cd <case> && (timeout 6 getent hosts <ip>)`.
+ */
+const NETWORK_NAMES =
+  /^(?:curl|wget|dig|drill|nslookup|host|getent|whois|ping6?|traceroute|nc|ncat|netcat|telnet|ssh|scp|sftp|ftp|socat|rsync)$/i
+const WRAPPERS = /^(?:timeout|env|sudo|nohup|command|exec|time|xargs|stdbuf|nice|ionice|doas)$/i
+
+/**
+ * The first network-reaching program in command position, mirroring
+ * `policy.ts`'s own test.
+ *
+ * Command position matters and a bare word match is not good enough: `grep -i
+ * host file` names no program called `host`, and a metric that reports
+ * reachback where there is none would discredit the cases where there is.
+ */
+function networkProgramIn(command) {
+  const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? []
+  const bare = (t) => (t ?? '').replace(/^[;&|(){}]+/, '').replace(/[;&|(){}]+$/, '')
+    .replace(/^.*\//, '').replace(/^["']|["']$/g, '')
+  let atCommand = true
+  for (const [i, token] of tokens.entries()) {
+    const program = bare(token)
+    if (program === '') { atCommand = true; continue }
+    if (atCommand) {
+      if (WRAPPERS.test(program) || /^\d+[smhd]?$/.test(program) || program.startsWith('-')) continue
+      if (NETWORK_NAMES.test(program)) return program.toLowerCase()
+      if (program.toLowerCase() === 'openssl' && bare(tokens[i + 1]) === 's_client') return 'openssl s_client'
+      atCommand = false
+      continue
+    }
+    if (/[;&|]/.test(token)) atCommand = true
+  }
+  return undefined
+}
+
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
+const IPV4_EXACT = /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/
 const DOMAIN = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}\b/gi
 /**
  * Public suffixes a report's network indicators actually use.
@@ -105,6 +167,7 @@ function fold(jsonl) {
     t0: undefined, tLast: undefined, tFirstBind: undefined, tReport: undefined,
     llmCalls: 0, tokens: { input: 0, output: 0, cacheRead: 0, reasoning: 0 },
     toolCalls: 0, byTool: {}, refusals: 0, searches: 0, searchQueries: [],
+    toolPaths: new Set(), networkCommands: [],
     submittedReport: undefined, lastReport: undefined, bind: undefined,
     binds: [], models: new Set(), softenedRule: false, hardRule: false,
   }
@@ -128,6 +191,13 @@ function fold(jsonl) {
       s.toolCalls += 1
       s.byTool[d.name] = (s.byTool[d.name] ?? 0) + 1
       pend.set(d.callId, d.name)
+      for (const m of String(d.arguments ?? '').matchAll(PATH_ARGUMENT)) s.toolPaths.add(m[0])
+      if (d.name === 'bash' || d.name === 'pwsh') {
+        let command = ''
+        try { command = JSON.parse(d.arguments ?? '{}').command ?? '' } catch { command = String(d.arguments ?? '') }
+        const hit = networkProgramIn(command)
+        if (hit !== undefined) s.networkCommands.push(hit)
+      }
       if (d.name === 'web_search') {
         s.searches += 1
         try { s.searchQueries.push(...JSON.parse(d.arguments).queries ?? []) } catch { /* chunked */ }
@@ -213,8 +283,59 @@ async function captureAtoms(pcaps) {
       const name = token.trim().toLowerCase().replace(/\.+$/, '')
       if (name !== '' && name.includes('.')) names.add(name)
     }
+    // Payload, not just headers. The three atoms this metric first called
+    // fabrications were `173.166.146.112` and `66.234.159.108` — each the
+    // VICTIM'S OWN PUBLIC IP, returned in an HTTP/JSON body by `ip-api.com`,
+    // `checkip.dyndns.org`, and in Lumma's case by the C2 itself. They never
+    // appear in an IP header, so a header-only scan calls the single most
+    // interesting indicator in the capture a hallucination.
+    //
+    // A literal string present in the capture file is, by definition, something
+    // the capture carried. That is exactly the groundedness question, so it is
+    // answered against the bytes rather than against a field list that can
+    // never be complete: C2 protocol fields, exfil bodies and IP-check
+    // responses all live in payload.
+    for (const atom of printableAtoms(await fs.readFile(pcap))) {
+      if (IPV4_EXACT.test(atom)) ips.add(atom)
+      else names.add(atom.toLowerCase())
+    }
   }
   return { ips, names }
+}
+
+/**
+ * Word boundaries do not survive binary adjacency, so payload scanning drops
+ * them.
+ *
+ * In a real capture `arc.msn.com` sits in a run reading `arc.msn.com0` — the
+ * next byte of an ASN.1 structure happens to be a printable digit. `\b` after
+ * `com` then never matches, and the bench called a name the packets plainly
+ * carried a hallucination. Leniency is the right direction here: this set is
+ * the evidence a claim is checked AGAINST, so over-collecting only makes the
+ * check less eager to cry wolf, and the bytes really are in the file.
+ */
+const PAYLOAD_DOMAIN = /(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}/gi
+const PAYLOAD_IPV4 = /(?:\d{1,3}\.){3}\d{1,3}/g
+
+/** IPv4 and DNS-shaped tokens in a buffer's printable ASCII runs. */
+function printableAtoms(buf) {
+  const out = new Set()
+  let run = ''
+  const flush = () => {
+    if (run.length >= 7) {
+      for (const m of run.matchAll(PAYLOAD_IPV4)) {
+        if (m[0].split('.').every((octet) => Number(octet) <= 255)) out.add(m[0])
+      }
+      for (const m of run.matchAll(PAYLOAD_DOMAIN)) out.add(m[0].replace(/\.+$/, ''))
+    }
+    run = ''
+  }
+  for (const byte of buf) {
+    if (byte >= 0x20 && byte < 0x7F) run += String.fromCharCode(byte)
+    else flush()
+  }
+  flush()
+  return out
 }
 
 const round = (n, p = 2) => Math.round(n * 10 ** p) / 10 ** p
@@ -228,6 +349,13 @@ const build = process.argv.find((a) => a.startsWith('--build='))?.slice(8) ?? 'u
 const caseId = process.argv.find((a) => a.startsWith('--case='))?.slice(7)
   ?? path.basename(runDir).match(/\d{4}-\d{2}-\d{2}/)?.[0]
 
+const REPO_ROOT = path.resolve(import.meta.dirname, '../..')
+/** The run directory as a tool call could spell it: absolute, or repo-relative. */
+const insideRun = [
+  path.resolve(runDir),
+  path.relative(REPO_ROOT, path.resolve(runDir)),
+  path.basename(path.resolve(runDir)),
+]
 const s = fold(decode(await fs.readFile(await sessionLog(runDir))))
 const pcaps = (await fs.readdir(runDir))
   .filter((f) => f.endsWith('.pcap') || f.endsWith('.pcapng'))
@@ -282,6 +410,17 @@ const record = {
     citedEndpointsPct: endpoints.length === 0 ? undefined : Math.round((100 * cited.length) / endpoints.length),
     verifierConsultations: s.binds.length,
     externalSearches: s.searches,
+    // Reachback from any tool, not just `web_search`. Non-empty does not mean
+    // the answer key was fetched — audited across 25 runs, none referenced this
+    // corpus's source site — but it does mean the report may carry data the
+    // capture does not, which groundedness will then flag correctly.
+    networkCommands: [...new Set(s.networkCommands)].slice(0, 8),
+    // The local equivalent of an external search: on this corpus the answer key
+    // is one `cat` away. Non-empty is not automatically a contaminated run —
+    // see PATH_ARGUMENT — but it is always worth reading the log.
+    workspaceEscapes: [...s.toolPaths]
+      .filter((p) => !insideRun.some((prefix) => p.startsWith(prefix)))
+      .slice(0, 8),
     harnessLostFields: lostFields,
   },
   bench: undefined,
@@ -309,6 +448,11 @@ if (caseId !== undefined) {
   }
 }
 
-const ledger = path.join(import.meta.dirname, 'runs/scorecard.jsonl')
+// A side ledger lets a metric change be re-scored across every past run without
+// rewriting the real one. History stays append-only; the comparison gets a
+// consistent metric on both arms, which is the only way a before/after means
+// anything after the metric itself has been fixed.
+const ledger = process.env.DSH_SCORECARD_LEDGER
+  ?? path.join(import.meta.dirname, 'runs/scorecard.jsonl')
 await fs.appendFile(ledger, `${JSON.stringify(record)}\n`)
 console.log(JSON.stringify(record, undefined, 1))

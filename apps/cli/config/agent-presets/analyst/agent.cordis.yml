@@ -35,6 +35,18 @@
         caseDir: !!js process.env.DSH_CASE_DIR ?? process.env.DSH_CWD ?? process.cwd()
         evidenceReadOnly: true
         autoHunt: true
+        # Refuse a close that asserts an indicator no tool result carried.
+        # Off unless asked for: the gate changes what a close may say, and it
+        # is still being measured against the graded corpus. The `investigation`
+        # entry sits inside this preset rather than the profile tree, so a
+        # `--patch` overlay cannot reach it — an env var is how `caseDir`
+        # already crosses the same boundary.
+        requireGroundedReport: !!js process.env.DSH_REQUIRE_GROUNDED_REPORT === '1'
+        # Refuse shell programs that reach the network. Off unless asked for:
+        # resolving a destination is legitimate tradecraft for a customer on
+        # their own traffic, and wrong only when grading against a corpus whose
+        # answers are published.
+        denyNetworkReachback: !!js process.env.DSH_DENY_NETWORK_REACHBACK === '1'
 
     - id: analyst-tools
       name: '@deepseek-ai/dsh-analyst-tools'

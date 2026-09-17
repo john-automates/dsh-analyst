@@ -851,6 +851,21 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'readonly requireGroundedReport: boolean',
+        description: 'Whether a close must evidence every indicator it asserts.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly claimGate: number',
+        description: 'Gate above which a flagged atom counts as a real indicator claim.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly denyNetworkReachback: boolean',
+        description: 'Whether `bash` may run a program that reaches the network.',
+        parameters: [],
+      },
+      {
         signature: 'readonly dropGate: number',
         description: 'Probability below which a destination needs no write-up.',
         parameters: [],

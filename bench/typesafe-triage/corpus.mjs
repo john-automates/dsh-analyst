@@ -5,15 +5,15 @@
 // Each entry publishes the infection's destinations in its notes file, which is
 // the ground truth nothing else in this repo has.
 export const CASES = [
-  { date: '2026-09-10', page: '2026/09/10/index.html', label: 'Atomic macOS (AMOS) Stealer' },
-  { date: '2026-09-08', page: '2026/09/08/index.html', label: 'XWorm' },
-  { date: '2026-08-10', page: '2026/08/10/index.html', label: 'Lumma Stealer or variant' },
-  { date: '2026-08-06', page: '2026/08/06/index.html', label: 'Remcos RAT 7.2.5 Pro' },
-  { date: '2026-01-29', page: '2026/01/29/index.html', label: 'njRAT with MassLogger' },
+  { slug: 'amos', date: '2026-09-10', page: '2026/09/10/index.html', label: 'Atomic macOS (AMOS) Stealer' },
+  { slug: 'xworm', date: '2026-09-08', page: '2026/09/08/index.html', label: 'XWorm' },
+  { slug: 'lumma', date: '2026-08-10', page: '2026/08/10/index.html', label: 'Lumma Stealer or variant' },
+  { slug: 'remcos', date: '2026-08-06', page: '2026/08/06/index.html', label: 'Remcos RAT 7.2.5 Pro' },
+  { slug: 'njrat', date: '2026-01-29', page: '2026/01/29/index.html', label: 'njRAT with MassLogger' },
   // Windows infections that also carry ordinary browsing, so precision is
   // measured against real background traffic and not an all-IOC capture.
-  { date: '2026-08-21', page: '2026/08/21/index.html', label: 'SmartApeSG ClickFix -> two RATs' },
-  { date: '2026-05-27', page: '2026/05/27/index.html', label: 'SmartApeSG ClickFix -> NetSupport RAT' },
+  { slug: 'smartape2', date: '2026-08-21', page: '2026/08/21/index.html', label: 'SmartApeSG ClickFix -> two RATs' },
+  { slug: 'smartape1', date: '2026-05-27', page: '2026/05/27/index.html', label: 'SmartApeSG ClickFix -> NetSupport RAT' },
 ]
 
 export const SITE = 'https://www.malware-traffic-analysis.net'
