@@ -846,6 +846,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
+        signature: 'readonly enumerateDestinations: boolean',
+        description: 'Whether close requires a disposition for every evidenced destination.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly dropGate: number',
+        description: 'Probability below which a destination needs no write-up.',
+        parameters: [],
+      },
+      {
         signature: 'identities(session: Session): Identity[]',
         description: 'Identities already on a session log.',
         parameters: [{ name: 'session', description: 'session whose log is folded.' }],

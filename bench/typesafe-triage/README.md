@@ -169,5 +169,50 @@ At 0.35 almost nothing benign gets through, at the price of flagging 23 real C2s
 is the best standalone gate. The cookbook's own 0.7 is for a different task and
 should not be borrowed; the docs say as much.
 
+## Scoring a finished investigation
+
+The bench above grades per-destination classification. `scorecard.mjs` grades
+what the harness actually produces — a bound relationship and a 5W1H report —
+and appends one record per run to `runs/scorecard.jsonl`.
+
+```sh
+node bench/typesafe-triage/scorecard.mjs <run-dir> --case=2026-09-10 --build=<label>
+node bench/typesafe-triage/trend.mjs
+```
+
+Metrics split in two, and the split is the point. **Production** metrics need no
+answer key, so they run on a customer's own captures: groundedness (every
+address and name the report asserts exists in the packets), citation rate, time
+to first bind against time to report, cost, and the fields the harness lost
+between what the model submitted and what it persisted. **Bench** metrics need
+the published notes and cannot ship: bound-C2 correctness and IOC coverage.
+
+Groundedness is the one that matters commercially. It catches a confidently
+fabricated indicator — the failure that ends analyst trust — with no ground
+truth at all. It also caught benchmark contamination: one run searched a
+destination name, reached this corpus's own source site, and cited it, which
+showed up as two asserted hosts the capture never carried.
+
+`--build` is operator-supplied because the session log carries no plugin
+config. Without it the trend silently compares different harnesses and reports
+the difference as variance.
+
+Cost is a rate card times an empirically measured scale, printed beside the raw
+token counts so a wrong card cannot hide the measurement underneath it.
+
+## Grading without the answer key on the network
+
+`web_search` is not in the analyst preset; it arrives from the headless profile
+underneath. On a corpus whose answers are published on the open web, that makes
+every number one lucky search away from meaningless.
+
+```sh
+--patch bench/typesafe-triage/no-web.cordis.yml
+```
+
+This is a change to how the harness is **graded**, not to the product.
+Searching threat intel for an unknown destination is legitimate tradecraft, and
+a customer investigating their own traffic has no answer key to stumble into.
+
 [cascade]: https://docs.typesafe.ai/cookbooks/sde_cascade.md
 [mta]: https://www.malware-traffic-analysis.net/

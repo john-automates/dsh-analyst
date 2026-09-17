@@ -40,6 +40,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
 import {
   boundVictimSlot, caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind,
+  undisposedDenyReason, undisposedDestinations,
   ENDPOINT_ROLES, extraWanHuntForBind, foldBind, foldBinds, foldPublishedVictimRows,
   formatRolesCard, mergePublishedVictimRows, otherEndHuntForDeniedBind, publishedVictimRows,
   resolveBind, victimOf, boundC2Ipv4, withPublishedVictimRows, candidateC2Addrs,
@@ -61,9 +62,11 @@ import {
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
 import { isCdnOrUpdateName } from './harvest.ts'
-import { DEFAULT_VERIFY_GATE, judgeCdnOrUpdate } from './verify.ts'
+import {
+  DEFAULT_DROP_GATE, DEFAULT_VERIFY_GATE, droppableDestinations, judgeCdnOrUpdate,
+} from './verify.ts'
 import type {
-  CaseReport, CaseReportExtras, Hunt, Identity, InvestigationAction, InvestigationMission,
+  CaseIdentitySlot, CaseReport, CaseReportExtras, Hunt, Identity, InvestigationAction, InvestigationMission,
   InvestigationPlanEntry, RelationshipBind,
 } from './types.ts'
 
@@ -78,6 +81,7 @@ export {
   c2DomainDisplayFilter, c2DomainHunt, c2TalkingLanIps, displayFilterFor, evidenceTextForHunts,
   extraWanDisplayFilter, extraWanHunt, foldToolResultText, huntFilterSpec, huntKey, huntNotice,
   huntsForNewIdentities, huntsToAutoRun, isLanIpv4, isNonLanUnicastIpv4, otherEndDisplayFilter,
+  wanPeersOfVictim,
   otherEndHunt, shouldAutoRunHunt,
 } from './hunts.ts'
 export { formatLedger } from './ledger.ts'
@@ -97,6 +101,7 @@ export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
   BOTH_LAN_CONVERSATION_REASON, candidateC2Addrs, caseReportDenyReason, coerceBindRequest,
+  undisposedDenyReason, undisposedDestinations,
   completeAcceptedSlot,
   cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON,
   entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
@@ -121,6 +126,43 @@ export {
 } from './paths.ts'
 
 /** Methodology rendered as the `investigation:policy` prompt section. */
+/**
+ * The `c2` role rule as stated to the model with no bind verifier available:
+ * a CDN or update destination is refused outright, matching `ipIsCdnOrUpdate`.
+ */
+export const C2_ROLE_RULE =
+  'Role c2 cannot be a LAN address or a well-known CDN or update destination.'
+
+/**
+ * The same rule with a verifier mounted. The unconditional form is itself a
+ * gate: the model reads it, declines to propose a bind on any anycast address,
+ * and `judgeCdnOrUpdate` — which runs only inside `bind_relationship` — never
+ * sees the candidate. Naming the evidence the verifier weighs is what makes
+ * the seam reachable at runtime.
+ */
+export const C2_ROLE_RULE_VERIFIED = [
+  'Role c2 cannot be a LAN address.',
+  'A destination whose address sits in a CDN anycast prefix is not automatically excluded:',
+  'propose the bind and cite the hostname the capture evidenced for it.',
+  'The bind is refused only when that evidence also shows a benign service.',
+].join(' ')
+
+/**
+ * Methodology text for one assembly.
+ * @param verified - whether a judgment provider backs the bind verifier.
+ * @returns the joined methodology section.
+ */
+export function methodologySection(verified: boolean): string {
+  return verified
+    ? METHODOLOGY_SECTION.replace(C2_ROLE_RULE, C2_ROLE_RULE_VERIFIED)
+    : METHODOLOGY_SECTION
+}
+
+/**
+ * The investigation methodology stated to the model, as one prompt section.
+ * The unverified form; {@link methodologySection} selects between this and the
+ * verifier-aware wording at assembly time.
+ */
 export const METHODOLOGY_SECTION = [
   'You are a network-security investigation analyst, not a coding agent.',
   'Define the Investigation Question (DINQ) before collecting more evidence.',
@@ -128,7 +170,7 @@ export const METHODOLOGY_SECTION = [
   'Do not skip Observation or Question or Hypothesis. The chassis stamps Mission as a victim-identity + C2 investigation. Mission scopes the case. Auto-hunts run after Plan is ready, including a named cue that is valid or explicitly open. Bind needs a named C2 hypothesis and CDN/DC alternatives on the Plan.',
   'Plan names each hypothesis as I believe X because Y plus a disconfirm test, including a C2 hypothesis and a CDN, DC, or update alternative. After a named live cue, omitted inventory defaults to the case capture when one exists. Empty inventory is not a finished Plan. After a named live cue, omitted CDN/DC/update alternative defaults to an open CDN-or-update hypothesis.',
   'Before Who/Where, bind the conversation. The detector’s IP is a hypothesis about the other end until the bind says otherwise.',
-  'Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination. Cue and observation addresses default to c2 and cannot be victim.',
+  `Use bind_relationship to assign victim vs c2 on the cited conversation. Exactly one victim. The cited conversation must include a cue/observation address. ${C2_ROLE_RULE} Cue and observation addresses default to c2 and cannot be victim.`,
   'State what, when, why, and how as claims you can support with packets or logs. who and where are projections of the bound victim.',
   'Work evidence-first and question-driven: every tool call answers a named question.',
   'Label unverified ideas as hunches and verify them in this case.',
@@ -141,6 +183,25 @@ export const METHODOLOGY_SECTION = [
   'SAMR full_name is UTF-16 (for example Becka Rolf), not an LDAP displayName.',
   'Close with case_report only after bind_relationship has assigned the victim.',
 ].join(' ')
+
+/**
+ * Merge a freshly projected victim slot onto the published one, per field.
+ *
+ * A hostname or user the model submitted is kept on the report but is not a
+ * donated ledger identity, so re-projecting from the ledger yields a slot
+ * without it. Replacing the slot wholesale therefore drops a correct,
+ * already-accepted value the next time any bind is recorded. Fields the
+ * projection does supply still win.
+ * @param published - the slot already on the report.
+ * @param projected - the slot re-projected from the bind and ledger.
+ * @returns the merged slot, or `published` when they name different entities.
+ */
+export function keepPublishedSlotFields(
+  published: CaseIdentitySlot, projected: CaseIdentitySlot,
+): CaseIdentitySlot {
+  if (published.entity_id !== projected.entity_id) return published
+  return { ...published, ...projected }
+}
 
 /** Plugin config: one case directory and the two enforcement switches. */
 export interface Config {
@@ -178,6 +239,20 @@ export interface Config {
    * both error types at once. Defaults to 0.6.
    */
   verifyGate?: number
+  /**
+   * Whether `case_report` must account for every destination the victim was
+   * evidenced contacting. Coverage of the published IOC list varied 29%-100%
+   * across identical runs without this; both runs found the same destinations
+   * and only one wrote them up. Defaults to true.
+   */
+  enumerateDestinations?: boolean
+  /**
+   * Probability below which a verifier clears a destination as ordinary
+   * background needing no write-up. No published IOC in the seven-capture
+   * corpus scored below 0.06. Ignored with no judgment provider mounted, which
+   * leaves every destination requiring a disposition. Defaults to 0.06.
+   */
+  dropGate?: number
 }
 
 /** Complete config after schemastery applies every field default. */
@@ -189,6 +264,8 @@ export const Config: z<Config> = z.object({
   evidenceReadOnly: z.boolean().default(true),
   autoHunt: z.boolean().default(true),
   verifyGate: z.number().default(DEFAULT_VERIFY_GATE),
+  enumerateDestinations: z.boolean().default(true),
+  dropGate: z.number().default(DEFAULT_DROP_GATE),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -356,6 +433,10 @@ export class Investigation extends Service {
   readonly autoHunt: boolean
   /** Probability at or above which the bind verifier refuses a candidate C2. */
   readonly verifyGate: number
+  /** Whether close requires a disposition for every evidenced destination. */
+  readonly enumerateDestinations: boolean
+  /** Probability below which a destination needs no write-up. */
+  readonly dropGate: number
   /** Hunt keys already auto-run (or attempted) on one session. */
   private readonly executedHuntKeys = new WeakMap<Session, Set<string>>()
 
@@ -399,6 +480,8 @@ export class Investigation extends Service {
     this.evidenceReadOnly = resolved.evidenceReadOnly
     this.autoHunt = resolved.autoHunt
     this.verifyGate = resolved.verifyGate
+    this.enumerateDestinations = resolved.enumerateDestinations
+    this.dropGate = resolved.dropGate
 
     ctx.on('session/created', (session) => {
       this.ensureChassisMission(session)
@@ -427,25 +510,32 @@ export class Investigation extends Service {
       }))
     }, { global: true })
 
-    ctx.on('tools/pre-execute', (exec, next): Promise<PreToolDecision> => {
+    ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
       const reason = denyReason(exec, this.caseDir, this.evidenceReadOnly)
-      if (reason !== undefined) return Promise.resolve({ kind: 'deny', reason })
+      if (reason !== undefined) return { kind: 'deny', reason }
       if (exec.name === 'case_report' || setsWhoWhere(exec.arguments)) {
         const session = exec.agent?.session
-        const close = caseReportDenyReason(
-          exec.arguments,
-          session === undefined ? undefined : foldBind(session.events),
-          session === undefined ? [] : foldIdentities(session.events),
-          session === undefined ? '' : foldToolResultText(session.events),
+        const bind = session === undefined ? undefined : foldBind(session.events)
+        const identities = session === undefined ? [] : foldIdentities(session.events)
+        const evidenceText = session === undefined ? '' : foldToolResultText(session.events)
+        const close = caseReportDenyReason(exec.arguments, bind, identities, evidenceText)
+        if (close !== undefined) return { kind: 'deny', reason: close }
+        const undisposed = await this.undisposedAtClose(
+          exec.arguments, bind, identities, evidenceText,
         )
-        if (close !== undefined) return Promise.resolve({ kind: 'deny', reason: close })
+        if (undisposed.length > 0) {
+          return {
+            kind: 'deny',
+            reason: undisposedDenyReason(undisposed, identities, evidenceText),
+          }
+        }
       }
       return next()
     })
 
     ctx.tools.register(defineTool({
       name: 'bind_relationship',
-      description: BIND_RELATIONSHIP_DESCRIPTION,
+      description: bindRelationshipDescription(ctx.get('judgment') !== undefined),
       parameters: {
         src: { type: 'string', required: true, description: 'Conversation source address.' },
         dst: { type: 'string', required: true, description: 'Conversation destination address.' },
@@ -763,10 +853,13 @@ export class Investigation extends Service {
       return withNotice(downstream, notices)
     })
 
+    // Evaluated per assembly, not at registration: `judgment` is an optional
+    // seam that may mount after this plugin, and the rule the model reads has
+    // to match whether a verifier can actually second-guess it.
     ctx.systemPrompt.section({
       name: 'investigation:policy',
       order: 40,
-      text: METHODOLOGY_SECTION,
+      text: () => methodologySection(this.ctx.get('judgment') !== undefined),
     })
 
     ctx.systemPrompt.context({
@@ -1111,14 +1204,43 @@ export class Investigation extends Service {
     )
     if (slot === undefined) return
     const rows = mergePublishedVictimRows(publishedVictimRows(existing), slot)
-    const who = existing.who.entity_id === slot.entity_id ? slot : existing.who
-    const where = existing.where.entity_id === slot.entity_id ? slot : existing.where
+    const who = keepPublishedSlotFields(existing.who, slot)
+    const where = keepPublishedSlotFields(existing.where, slot)
     const merged = applyHuntExtras(
       withPublishedVictimRows({ ...existing, who, where }, rows),
       foldExtras(session.events),
     )
     if (JSON.stringify(merged) === JSON.stringify(existing)) return
     session.append('investigation/report', merged)
+  }
+
+  /**
+   * Destinations the close leaves unaccounted for, after the verifier clears
+   * the background tail.
+   *
+   * Enumeration is the part that makes coverage deterministic; the verifier
+   * only decides which destinations are cheap enough to skip. With no provider
+   * mounted nothing is cleared, so every evidenced destination must be named —
+   * strict, not silently permissive.
+   * @param args - submitted `case_report` arguments.
+   * @param bind - live bind, when one exists.
+   * @param identities - folded ledger identities.
+   * @param evidenceText - tool-result text.
+   * @returns unaccounted destinations, empty when the close may proceed.
+   */
+  private async undisposedAtClose(
+    args: unknown,
+    bind: RelationshipBind | undefined,
+    identities: readonly Identity[],
+    evidenceText: string,
+  ): Promise<string[]> {
+    if (!this.enumerateDestinations) return []
+    const pending = undisposedDestinations(args, bind, evidenceText, identities)
+    if (pending.length === 0) return []
+    const droppable = await droppableDestinations(
+      this.ctx, pending, identities, evidenceText, this.dropGate,
+    )
+    return pending.filter((addr: string) => !droppable.has(addr))
   }
 
   /**
@@ -1339,10 +1461,26 @@ async function firstCaptureIn(abs: string, relDir: string): Promise<string | und
 export default Investigation
 
 /** Model-facing bind_relationship description. */
+/**
+ * Bind tool description for one mount.
+ *
+ * A tool `description` is a plain string fixed at registration, so unlike the
+ * methodology section this cannot re-evaluate per assembly. It is read once,
+ * when this plugin applies. With no verifier the hard rule stands, which is
+ * exactly today's behavior.
+ * @param verified - whether a judgment provider backs the bind verifier.
+ * @returns the joined description.
+ */
+export function bindRelationshipDescription(verified: boolean): string {
+  return verified
+    ? BIND_RELATIONSHIP_DESCRIPTION.replace(C2_ROLE_RULE, C2_ROLE_RULE_VERIFIED)
+    : BIND_RELATIONSHIP_DESCRIPTION
+}
+
 const BIND_RELATIONSHIP_DESCRIPTION = [
   'Bind the cited conversation before Who/Where.',
   'Assign victim vs c2 (or infra, distractor, unknown) on each endpoint.',
-  'The cited conversation must include a cue/observation address. Role c2 cannot be a LAN address or a well-known CDN or update destination.',
+  `The cited conversation must include a cue/observation address. ${C2_ROLE_RULE}`,
   'Cue and observation addresses default to c2 and cannot be victim.',
   'Exactly one victim.',
   'Name a C2 hypothesis and check CDN/DC/update alternatives on the Plan before this bind.',

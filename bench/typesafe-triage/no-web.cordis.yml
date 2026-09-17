@@ -1,0 +1,19 @@
+# Graded-run overlay: no network reachback.
+#
+# `web_search` is not in the analyst preset — it comes from the headless profile
+# underneath. On a corpus whose answers are published on the open web that makes
+# every number one lucky search away from meaningless: one AMOS run searched a
+# destination name, hit malware-traffic-analysis.net, and cited the source page
+# in its report (groundedness caught it at 90%).
+#
+# This is a change to how the harness is GRADED, not to the product. Searching
+# threat intel for an unknown destination is legitimate analyst tradecraft, and
+# a customer investigating their own traffic has no answer key to find.
+- id: tool-web
+  disabled: true
+
+- id: web-search-deepseek
+  disabled: true
+
+- id: web
+  disabled: true

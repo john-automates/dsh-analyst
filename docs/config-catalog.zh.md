@@ -955,10 +955,24 @@ export interface Config {
    * both error types at once. Defaults to 0.6.
    */
   verifyGate?: number
+  /**
+   * Whether `case_report` must account for every destination the victim was
+   * evidenced contacting. Coverage of the published IOC list varied 29%-100%
+   * across identical runs without this; both runs found the same destinations
+   * and only one wrote them up. Defaults to true.
+   */
+  enumerateDestinations?: boolean
+  /**
+   * Probability below which a verifier clears a destination as ordinary
+   * background needing no write-up. No published IOC in the seven-capture
+   * corpus scored below 0.06. Ignored with no judgment provider mounted, which
+   * leaves every destination requiring a disposition. Defaults to 0.06.
+   */
+  dropGate?: number
 }
 ```
 
-来源：[`packages/analyst/investigation/src/index.ts:101`](../packages/analyst/investigation/src/index.ts)
+来源：[`packages/analyst/investigation/src/index.ts:207`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 
@@ -1790,7 +1804,7 @@ export interface JsonRpcConfig {
 
 依赖：`Readable`（`node:stream`）· `Writable`（`node:stream`）
 
-来源：[`packages/sdk/server/src/index.ts:29`](../packages/sdk/server/src/index.ts)
+来源：[`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
 
 <a id="deepseek-aidsh-session-persistence-jsonl"></a>
 

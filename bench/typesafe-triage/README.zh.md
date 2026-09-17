@@ -153,5 +153,45 @@ Cloudflare/Fastly 前缀规则丢掉的——横跨 7 份捕获中的 6 份、�
 作为**慢层的队列**却恰到好处。在 0.60，它是最好的独立闸门。cookbook 自己那个 0.7 是给
 另一项任务用的，不该照搬；文档自己也是这么说的。
 
+## 给一次完成的调查打分
+
+上面的基准台评的是逐目的地的分类。`scorecard.mjs` 评的是 harness 真正产出的东西
+——一次绑定关系加一份 5W1H 报告——并把每次运行的一条记录追加到
+`runs/scorecard.jsonl`。
+
+```sh
+node bench/typesafe-triage/scorecard.mjs <run-dir> --case=2026-09-10 --build=<label>
+node bench/typesafe-triage/trend.mjs
+```
+
+指标分成两半，而这个划分正是要点所在。**production** 指标不需要标准答案，因此可以
+在客户自己的捕获上运行：groundedness（报告断言的每一个地址与名字都在数据包里存在）、
+引用率、首次绑定用时与出报告用时之别、成本，以及模型提交的内容与最终持久化的内容之间
+被 harness 丢掉的字段。**bench** 指标需要帖子发布的 notes，因而无法随产品交付：绑定
+C2 的正确性与 IOC 覆盖率。
+
+在商业上最重要的是 groundedness。它能在完全没有基准真相的情况下，抓住一个被笃定地
+编造出来的指标——正是这种失败会终结分析师的信任。它还抓出了基准污染：某次运行搜索了
+一个目的地名字，够到了本语料自己的来源站点并加以引用，这表现为两个捕获从未承载过的
+被断言主机。
+
+`--build` 由操作者提供，因为会话日志并不携带插件配置。没有它，趋势视图会悄悄地把不同
+的 harness 拿来比较，并把其间的差异报告为 variance。
+
+成本是一份费率表乘以一个实测的比例系数，并与原始 token 计数并排打印，这样一份错误的
+费率表就无法掩盖它下面的测量值。
+
+## 在网络够不到标准答案的前提下打分
+
+`web_search` 并不在 analyst 预设里；它来自底下的 headless profile。对于一份答案就公开
+在互联网上的语料而言，这会让每一个数字都只差一次幸运的搜索就变得毫无意义。
+
+```sh
+--patch bench/typesafe-triage/no-web.cordis.yml
+```
+
+这是对 harness **打分方式**的改动，而不是对产品的改动。为一个未知目的地检索威胁情报
+是正当的分析师手艺，而一个在调查自己流量的客户根本不会有标准答案可以撞上。
+
 [cascade]: https://docs.typesafe.ai/cookbooks/sde_cascade.md
 [mta]: https://www.malware-traffic-analysis.net/
