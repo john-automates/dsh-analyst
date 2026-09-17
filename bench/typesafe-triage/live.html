@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Investigation · live</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f9; --surface: #fff; --sunk: #eef1f6;
+    --ink: #131821; --muted: #5c6777; --faint: #8d97a6;
+    --line: #dde2ea; --rule: #c8d0dc;
+    --fast: #4a4fa8; --victim: #0d6f79; --c2: #b8471a; --ok: #2c7248; --warn: #8a6d1f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1219; --surface: #161b24; --sunk: #1c2230;
+      --ink: #e6ebf3; --muted: #8f9bab; --faint: #6b7789;
+      --line: #252c3a; --rule: #333c4d;
+      --fast: #9498ec; --victim: #43bcc4; --c2: #f3855a; --ok: #5cbb80; --warn: #d4ad51;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1219; --surface: #161b24; --sunk: #1c2230;
+    --ink: #e6ebf3; --muted: #8f9bab; --faint: #6b7789;
+    --line: #252c3a; --rule: #333c4d;
+    --fast: #9498ec; --victim: #43bcc4; --c2: #f3855a; --ok: #5cbb80; --warn: #d4ad51;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ground); color: var(--ink);
+    font: 14px/1.5 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  .mono, code { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 18px; padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    border-bottom: 2px solid var(--rule); background: var(--surface);
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  .case { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--faint); letter-spacing: .06em; }
+  .stat { display: flex; gap: 6px; align-items: baseline; font-size: 12px; margin-left: auto; }
+  .stat div { display: flex; gap: 5px; align-items: baseline; padding: 3px 9px; background: var(--sunk); border-radius: 3px; }
+  .stat b { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .stat span { color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 1.4s ease-in-out infinite; }
+  .dot.idle { background: var(--faint); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .2 } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none } }
+
+  main { flex: 1; display: grid; grid-template-columns: 1.6fr 1fr; gap: 0; min-height: 0; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; overflow-y: auto; } main > * { min-height: 50vh; } }
+
+  .pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  @media (max-width: 900px) { .pane + .pane { border-left: 0; border-top: 1px solid var(--line); } }
+  .pane h2 {
+    margin: 0; padding: 9px 18px; font-size: 10px; font-weight: 600;
+    font-family: "IBM Plex Mono", monospace; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); border-bottom: 1px solid var(--line); background: var(--surface);
+    position: sticky; top: 0; z-index: 1;
+  }
+  .scroll { flex: 1; overflow-y: auto; padding: 14px 18px calc(28px + env(safe-area-inset-bottom, 0px)); }
+
+  /* the model thinking */
+  #think { white-space: pre-wrap; word-break: break-word; font-family: "IBM Plex Mono", monospace; font-size: 13px; line-height: 1.65; color: var(--muted); }
+  #think .now { color: var(--ink); }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--fast); vertical-align: -2px; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0 } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none } }
+  .stepbreak {
+    display: flex; align-items: center; gap: 10px; margin: 18px 0 12px;
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .stepbreak::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .ev { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ev:last-child { border-bottom: 0; }
+  .ev .top { display: flex; gap: 8px; align-items: baseline; }
+  .t { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; min-width: 42px; }
+  .nm { font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+  .args { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 2px; padding-left: 50px; }
+  .bad .nm { color: var(--c2); }
+  .pill {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 1px 6px; border-radius: 2px; background: var(--sunk); color: var(--muted);
+  }
+  .pill.c2 { background: color-mix(in srgb, var(--c2) 15%, transparent); color: var(--c2); }
+  .pill.victim { background: color-mix(in srgb, var(--victim) 16%, transparent); color: var(--victim); }
+  .pill.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .pill.gap { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+
+  .ledger { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 0 0 14px; }
+  .ledger dt { font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); padding-top: 3px; }
+  .ledger dd { margin: 0; font-family: "IBM Plex Mono", monospace; word-break: break-all; }
+  .ledger dd em { font-family: "IBM Plex Sans", sans-serif; font-style: normal; font-size: 11px; color: var(--faint); }
+  .empty { color: var(--faint); font-style: italic; }
+  .sub { font-size: 10px; font-family: "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 16px 0 7px; }
+  .sub:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot idle" id="dot"></span>
+  <h1>Investigation</h1>
+  <span class="case" id="case">waiting for the session log…</span>
+  <div class="stat">
+    <div><b id="s-step">–</b><span>step</span></div>
+    <div><b id="s-calls">0</b><span>calls</span></div>
+    <div><b id="s-think">0</b><span>thought tokens</span></div>
+    <div><b id="s-el">0s</b><span>elapsed</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="pane">
+    <h2>What the model is thinking — live</h2>
+    <div class="scroll" id="think-scroll"><div id="think"></div></div>
+  </div>
+  <div class="pane">
+    <h2>Actions &amp; ledger</h2>
+    <div class="scroll">
+      <div class="sub">Evidence ledger</div>
+      <dl class="ledger" id="ledger"><dd class="empty">nothing harvested yet</dd></dl>
+      <div class="sub">Chassis</div>
+      <div id="chassis"><span class="empty">waiting…</span></div>
+      <div class="sub">Tool calls</div>
+      <div id="calls"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+let t0 = 0, step = 0, thought = 0, callCount = 0, lastBeat = 0, finished = false;
+const seenCall = new Map();
+
+const thinkEl = $('think'), scrollEl = $('think-scroll');
+function atBottom() { return scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 60; }
+function keepDown(was) { if (was) scrollEl.scrollTop = scrollEl.scrollHeight; }
+
+let caret = null;
+function appendThought(text) {
+  const was = atBottom();
+  if (caret) caret.remove();
+  thinkEl.append(document.createTextNode(text));
+  caret = document.createElement('span');
+  caret.className = 'caret';
+  thinkEl.append(caret);
+  keepDown(was);
+}
+function stepBreak(n) {
+  const was = atBottom();
+  if (caret) caret.remove();
+  const d = document.createElement('div');
+  d.className = 'stepbreak';
+  d.textContent = 'step ' + n;
+  thinkEl.append(d);
+  if (caret) thinkEl.append(caret);
+  keepDown(was);
+}
+
+const rel = (ms) => t0 ? ((ms - t0) / 1000).toFixed(1) + 's' : '–';
+
+function addCall(e) {
+  const d = e.data;
+  const row = document.createElement('div');
+  row.className = 'ev';
+  row.id = 'call-' + d.callId;
+  row.innerHTML = `<div class="top"><span class="t">${rel(e.time)}</span><span class="nm">${esc(d.name)}</span></div>`;
+  let args = '';
+  try { args = JSON.stringify(JSON.parse(d.arguments)); } catch { args = d.arguments ?? ''; }
+  if (args) row.innerHTML += `<div class="args">${esc(args.slice(0, 220))}</div>`;
+  $('calls').prepend(row);
+  seenCall.set(d.callId, row);
+  callCount++;
+}
+
+function markResult(e) {
+  const c = e.data.message?.content?.[0];
+  const row = seenCall.get(c?.toolCallId);
+  if (!row) return;
+  const text = (c?.content ?? []).map((p) => p.text ?? '').join('');
+  if (text.startsWith('Error:')) row.classList.add('bad');
+}
+
+const ledgerEl = $('ledger');
+const idents = [];
+function addIdentity(d) {
+  idents.push(d);
+  ledgerEl.innerHTML = idents.map((i) =>
+    `<dt>${esc(i.label)}</dt><dd>${esc(i.value)}${i.evidence_id ? ` <em>on ${esc(i.evidence_id)}</em>` : ''}</dd>`
+  ).join('');
+}
+
+const chassis = { mission: null, plan: null, actions: [], bind: null, report: null };
+function drawChassis() {
+  const p = [];
+  if (chassis.mission) {
+    p.push(`<div class="ev"><div class="top"><span class="pill">mission</span><span>cue <code>${esc(chassis.mission.cue.addr)}</code> · slot 0a ${esc(chassis.mission.cueValidation)}</span></div></div>`);
+  }
+  if (chassis.plan) {
+    const h = (chassis.plan.hypotheses ?? []).map((x) =>
+      `<div class="ev"><div class="top"><span class="pill ${esc(x.label)}">${esc(x.id)}</span></div><div class="args" style="padding-left:0">${esc((x.claim ?? '').slice(0, 260))}</div></div>`).join('');
+    p.push(`<div class="ev"><div class="top"><span class="pill">plan</span><span>${(chassis.plan.hypotheses ?? []).length} hypotheses · ${(chassis.plan.gaps ?? []).length} gaps</span></div></div>${h}`);
+  }
+  for (const a of chassis.actions) {
+    p.push(`<div class="ev"><div class="top"><span class="pill ${esc(a.thesis?.result ?? '')}">${esc(a.thesis?.result ?? 'action')}</span><span><code>${esc(a.huntKind)}</code> → ${esc(a.hypothesis_id)}</span></div></div>`);
+  }
+  if (chassis.bind) {
+    p.push(`<div class="ev"><div class="top"><span class="pill ok">bind</span><span>${(chassis.bind.endpoints ?? []).map((e) => `${esc(e.role)} <code>${esc(e.addr)}</code>`).join(' · ')}</span></div></div>`);
+  }
+  if (chassis.report) p.push(`<div class="ev"><div class="top"><span class="pill ok">report</span><span>case closed</span></div></div>`);
+  $('chassis').innerHTML = p.join('') || '<span class="empty">waiting…</span>';
+}
+
+function handle(e) {
+  if (e.type === 'session') { t0 = e.createdAt; $('case').textContent = e.id; return; }
+  if (typeof e.time === 'number') lastBeat = Date.now();
+  switch (e.type) {
+    case 'step/start': step = e.data.step; stepBreak(step); $('s-step').textContent = step; break;
+    case 'reasoning-chunks': {
+      const txt = (e.data.texts ?? []).join('');
+      thought += (e.data.texts ?? []).length;
+      appendThought(txt);
+      $('s-think').textContent = thought;
+      break;
+    }
+    case 'text-chunks': appendThought((e.data.texts ?? []).join('')); break;
+    case 'tool/call': addCall(e); $('s-calls').textContent = callCount; break;
+    case 'tool/result': markResult(e); break;
+    case 'investigation/identity': addIdentity(e.data); break;
+    case 'investigation/mission': chassis.mission = e.data; drawChassis(); break;
+    case 'investigation/plan': chassis.plan = e.data; drawChassis(); break;
+    case 'investigation/action': chassis.actions.push(e.data); drawChassis(); break;
+    case 'investigation/bind': chassis.bind = e.data; drawChassis(); break;
+    case 'investigation/report': chassis.report = e.data; drawChassis(); break;
+    case 'turn/end': finished = true; break;
+  }
+  if (typeof e.time === 'number' && t0) $('s-el').textContent = Math.round((e.time - t0) / 1000) + 's';
+}
+
+const src = new EventSource('/events');
+src.onmessage = (m) => { for (const e of JSON.parse(m.data)) handle(e); };
+
+setInterval(() => {
+  const live = !finished && Date.now() - lastBeat < 4000;
+  $('dot').className = 'dot' + (live ? '' : ' idle');
+}, 500);
+</script>
+</body>
+</html>

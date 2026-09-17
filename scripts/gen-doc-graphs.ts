@@ -505,6 +505,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Producers (background bash, PTY sends, and subagent delegations) register running work; tool-jobs is the model-facing controller that reads, lists, and kills it; jobs-local is the process-local registry.',
   },
   {
+    key: 'judgment',
+    pkg: 'judgment',
+    title: 'System One judgment provider registry',
+    mode: 'seam',
+    implementations: ['judgment-typesafe'],
+    consumers: ['investigation'],
+    note: 'Providers register backends that answer typed questions with calibrated probabilities; consumers ask through the provider-neutral seam and keep their deterministic rule as the answer when none is mounted.',
+  },
+  {
     key: 'web',
     pkg: 'web',
     title: 'Web access provider registry',

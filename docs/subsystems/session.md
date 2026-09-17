@@ -622,7 +622,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.investigation` — `Investigation`
 
-`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.
+`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending, Plan is not ready, or a live bind left a harvested LAN workstation unbound.
 
 ```ts cordis-catalog
 /**
@@ -769,7 +769,7 @@ isWritable(target: string): boolean
 contains(target: string): boolean
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:330`](../../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:347`](../../packages/analyst/investigation/src/index.ts)
 
 <a id="ctxsessions--sessionstore"></a>
 

@@ -931,15 +931,30 @@ export interface Config {
    * user issues SAMR QueryUserInfo. After a LAN IP talks to a non-LAN peer,
    * those identity hunts issue only for that C2-talking IP. A cue-as-victim
    * bind issues `other-end` for that cue. A successful bind with a unique LAN
-   * victim and unique non-LAN C2 issues `extra-wan` for that victim and
-   * `c2-domain` for each C2 IPv4 (bound plus harvested extras). Outstanding
-   * issued hunts then run through `pcap_filter` with the scoped
-   * display_filter and fields; results harvest into the ledger. Non-LAN /
-   * C2 IP subjects do not auto-run, except `other-end` and `c2-domain`.
-   * `extra-wan` auto-runs for the LAN victim even when a C2-talking focus
-   * IP exists. Defaults to true.
+   * victim and a bound non-LAN C2 that is not a well-known CDN or update
+   * destination issues `extra-wan` for that victim and
+   * `c2-domain` for each remaining C2 IPv4 (bound plus harvested extras)
+   * after a live bind whose Plan named a C2 hypothesis and a CDN/DC/update
+   * alternative and inventoried what can attest. Outstanding issued hunts
+   * then run through `pcap_filter` only when Plan is ready (named cue
+   * valid or explicitly open, C2 hypothesis, CDN/DC/update alternative,
+   * inventory), with the scoped display_filter and fields; results harvest
+   * into the ledger. Non-LAN / C2 IP subjects do not auto-run, except
+   * `other-end` and `c2-domain`. `extra-wan` auto-runs for the LAN victim
+   * even when a C2-talking focus IP exists. The chassis stamps Mission at
+   * start to scope the case. Mission alone does not auto-run hunts. Bind
+   * still needs a named C2 hypothesis. Defaults to true.
    */
   autoHunt?: boolean
+  /**
+   * Probability at or above which the bind verifier refuses a candidate C2 as a
+   * benign service. Consulted only when a `judgment` provider is mounted; with
+   * none, the shipped anycast-prefix and CDN-suffix rule decides alone.
+   * Swept on the seven-capture corpus in `bench/typesafe-triage/`, 0.6 decided
+   * 76% of bind proposals correctly against that rule's 53%, and was better on
+   * both error types at once. Defaults to 0.6.
+   */
+  verifyGate?: number
 }
 ```
 
@@ -961,6 +976,49 @@ export interface Config {
 ```
 
 来源：[`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+
+<a id="deepseek-aidsh-judgment"></a>
+
+## `@deepseek-ai/dsh-judgment`
+
+```ts config-catalog
+/**
+ * Config for the judgment seam. `provider` pins which provider wins; omitted, a
+ * single registered usable provider auto-selects.
+ */
+export interface JudgmentRuntimeConfig {
+  /** Explicit provider id. Omitted = auto-select when exactly one is usable. */
+  readonly provider?: string
+}
+```
+
+来源：[`packages/judgment/judgment/src/index.ts:67`](../packages/judgment/judgment/src/index.ts)
+
+<a id="deepseek-aidsh-judgment-typesafe"></a>
+
+## `@deepseek-ai/dsh-judgment-typesafe`
+
+依赖：`judgment`
+
+```ts config-catalog
+/**
+ * Plugin config. The credential is a reference to an environment-variable name
+ * resolved per request, never an inline secret: a missing key makes the
+ * provider unavailable rather than failing at plugin load.
+ */
+export interface Config {
+  /** Environment variable holding the API key; defaults to `TYPESAFE_API_KEY`. */
+  readonly apiKeyEnv?: string
+  /** Endpoint base; defaults to the public System One endpoint. */
+  readonly baseURL?: string
+  /** Model requested when a call names none; defaults to the pinned version. */
+  readonly model?: string
+  /** Attempts after a retryable status before giving up. Defaults to 3. */
+  readonly maxRetries?: number
+}
+```
+
+来源：[`packages/judgment/judgment-typesafe/src/index.ts:46`](../packages/judgment/judgment-typesafe/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 

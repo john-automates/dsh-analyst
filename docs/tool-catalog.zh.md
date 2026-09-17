@@ -2320,7 +2320,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
 
 ### `case_report`
 
-在 bind_relationship 之后用 5W1H 数据包结案。who 和 where 从被绑定受害端实体行投影，不要作为自由文本填写。只发送有证据支撑的 what、when、why 和 how。这会替换会话日志上此前的 case_report。
+在 bind_relationship 之后用 5W1H 数据包结案。who 和 where 从被绑定受害端实体行投影，不要作为自由文本填写。只发送有证据支撑的 what、when、why 和 how。之后若对另一个受害端结案，已发布的受害端行会被保留；若对同一个受害端再次结案，则更新该行。
 
 ```json
 {
@@ -2378,7 +2378,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. Omitted user also persists the unique harvested human user when machine SAMs blocked uniqueness donate. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. An AD SRV / DC locator hostname is not persisted as who/where hostname. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     },
     "where": {
       "oneOf": [
@@ -2416,7 +2416,7 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. Omitted user also persists the unique harvested human user when machine SAMs blocked uniqueness donate. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. An AD SRV / DC locator hostname is not persisted as who/where hostname. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     }
   },
   "required": [

@@ -1381,6 +1381,61 @@
       "source": "packages/web/web/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "JudgmentState",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "NoulQuestion",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "ChoiceQuestion",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "ScoreQuestion",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "NoulAnswer",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "ChoiceAnswer",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "ScoreAnswer",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "JudgmentRequest",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "JudgmentResult",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "JudgmentUsage",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/judgment.md",
+      "symbol": "JudgmentProvider",
+      "source": "packages/judgment/judgment/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/spill.md",
       "symbol": "SaveTextSpill",
       "source": "packages/spill/spill/src/types.ts"

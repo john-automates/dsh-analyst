@@ -17,7 +17,18 @@
   group: true
   isolate:
     investigation: true
+    judgment: true
   config:
+    # System One judgment, in the same realm as `investigation` so its
+    # `ctx.get('judgment')` resolves this instance. The seam is optional by
+    # construction: with no usable provider the shipped predicates stand, so a
+    # missing TYPESAFE_API_KEY degrades the bind gate rather than failing mount.
+    - id: judgment
+      name: '@deepseek-ai/dsh-judgment'
+
+    - id: judgment-typesafe
+      name: '@deepseek-ai/dsh-judgment-typesafe'
+
     - id: investigation
       name: '@deepseek-ai/dsh-investigation'
       config:
