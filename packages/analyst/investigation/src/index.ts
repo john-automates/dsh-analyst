@@ -42,8 +42,9 @@ import {
   boundVictimSlot, caseReportDenyReason, c2DomainHuntForBind, c2DomainHuntsForBind,
   ENDPOINT_ROLES, extraWanHuntForBind, foldBind, foldBinds, foldPublishedVictimRows,
   formatRolesCard, mergePublishedVictimRows, otherEndHuntForDeniedBind, publishedVictimRows,
-  resolveBind, victimOf, boundC2Ipv4, withPublishedVictimRows,
+  resolveBind, victimOf, boundC2Ipv4, withPublishedVictimRows, candidateC2Addrs,
 } from './bind.ts'
+import type { BindRequest as BindRequestType, CdnVerdicts } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
 import {
   c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice,
@@ -60,6 +61,7 @@ import {
 import { denyReason, stringArg } from './policy.ts'
 import { isEvidencePath, isInsideCase, isWritablePath, resolveInsideCase } from './paths.ts'
 import { isCdnOrUpdateName } from './harvest.ts'
+import { DEFAULT_VERIFY_GATE, judgeCdnOrUpdate } from './verify.ts'
 import type {
   CaseReport, CaseReportExtras, Hunt, Identity, InvestigationAction, InvestigationMission,
   InvestigationPlanEntry, RelationshipBind,
@@ -94,7 +96,8 @@ export {
 export { c2TalkingLanVictim } from './report.ts'
 export type { C2TalkingLanVictim } from './report.ts'
 export {
-  BOTH_LAN_CONVERSATION_REASON, caseReportDenyReason, coerceBindRequest, completeAcceptedSlot,
+  BOTH_LAN_CONVERSATION_REASON, candidateC2Addrs, caseReportDenyReason, coerceBindRequest,
+  completeAcceptedSlot,
   cueVictimUnboundReason, defaultRoleForAddr, ENDPOINT_ROLES, ENDPOINTS_ARRAY_REASON,
   entityIdForIdentity, foldBind, formatRolesCard, identityDonatesToVictim, isCueObservationAddr,
   CDN_C2_REASON, LAN_C2_REASON, normalizeEndpointAddr, otherEndHuntForDeniedBind,
@@ -106,7 +109,7 @@ export {
 } from './bind.ts'
 export type {
   BindEndpointInput, BindRelationshipInput, BindRequest, BindResolution, CaseReportClaims,
-  CoercedBindRequest, HarvestedLanWorkstation, SubmittedIdentitySlots,
+  CdnVerdicts, CoercedBindRequest, HarvestedLanWorkstation, SubmittedIdentitySlots,
 } from './bind.ts'
 export type { CompleteDenyLedger } from './mindset.ts'
 export {
@@ -166,6 +169,15 @@ export interface Config {
    * still needs a named C2 hypothesis. Defaults to true.
    */
   autoHunt?: boolean
+  /**
+   * Probability at or above which the bind verifier refuses a candidate C2 as a
+   * benign service. Consulted only when a `judgment` provider is mounted; with
+   * none, the shipped anycast-prefix and CDN-suffix rule decides alone.
+   * Swept on the seven-capture corpus in `bench/typesafe-triage/`, 0.6 decided
+   * 76% of bind proposals correctly against that rule's 53%, and was better on
+   * both error types at once. Defaults to 0.6.
+   */
+  verifyGate?: number
 }
 
 /** Complete config after schemastery applies every field default. */
@@ -176,6 +188,7 @@ export const Config: z<Config> = z.object({
   caseDir: z.string().required(),
   evidenceReadOnly: z.boolean().default(true),
   autoHunt: z.boolean().default(true),
+  verifyGate: z.number().default(DEFAULT_VERIFY_GATE),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -341,6 +354,8 @@ export class Investigation extends Service {
   readonly evidenceReadOnly: boolean
   /** Whether new IP/hostname/user identities auto-issue and auto-run hunts. */
   readonly autoHunt: boolean
+  /** Probability at or above which the bind verifier refuses a candidate C2. */
+  readonly verifyGate: number
   /** Hunt keys already auto-run (or attempted) on one session. */
   private readonly executedHuntKeys = new WeakMap<Session, Set<string>>()
 
@@ -348,12 +363,42 @@ export class Investigation extends Service {
    * @param ctx - Cordis context carrying tools and systemPrompt.
    * @param config - validated case directory and enforcement switches.
    */
+  /**
+   * Verifier verdicts for the C2 this bind proposes, gathered before the
+   * synchronous decision runs.
+   *
+   * Only the non-LAN endpoints the request actually names are judged, so a
+   * bind costs at most one judgment call. An empty map is returned when no
+   * `judgment` provider is mounted, which leaves the shipped rule in force.
+   *
+   * @param request - the submitted relationship and endpoints.
+   * @param identities - folded ledger identities.
+   * @param evidenceText - tool-result text for cited-conversation names.
+   * @returns verdicts keyed by IPv4, or undefined when none were reached.
+   */
+  private async judgeBindC2(
+    request: BindRequestType,
+    identities: readonly Identity[],
+    evidenceText: string,
+  ): Promise<CdnVerdicts | undefined> {
+    if (this.ctx.get('judgment') === undefined) return undefined
+    const verdicts = new Map<string, boolean>()
+    for (const addr of candidateC2Addrs(request)) {
+      const verdict = await judgeCdnOrUpdate(
+        this.ctx, addr, identities, evidenceText, this.verifyGate,
+      )
+      if (verdict !== undefined) verdicts.set(addr, verdict)
+    }
+    return verdicts.size === 0 ? undefined : verdicts
+  }
+
   constructor(ctx: Context, config: Config) {
     super(ctx, 'investigation')
     const resolved = config as ResolvedConfig
     this.caseDir = resolveCaseDir(resolved.caseDir)
     this.evidenceReadOnly = resolved.evidenceReadOnly
     this.autoHunt = resolved.autoHunt
+    this.verifyGate = resolved.verifyGate
 
     ctx.on('session/created', (session) => {
       this.ensureChassisMission(session)
@@ -492,7 +537,11 @@ export class Investigation extends Service {
         }
         const identities = foldIdentities(exec.agent.session.events)
         const evidenceText = foldToolResultText(exec.agent.session.events)
-        const resolved = resolveBind(request, identities, evidenceText)
+        // Ask the verifier about the candidate C2 before the sync decision runs:
+        // with no judgment provider mounted this yields nothing and the shipped
+        // anycast/suffix rule decides exactly as it does today.
+        const verdicts = await this.judgeBindC2(request, identities, evidenceText)
+        const resolved = resolveBind(request, identities, evidenceText, verdicts)
         if (!resolved.ok) {
           const hunt = otherEndHuntForDeniedBind(request)
           if (hunt !== undefined) {

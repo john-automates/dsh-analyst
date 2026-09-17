@@ -235,6 +235,8 @@
     { "path": "./packages/compaction/compaction-basic" },
     { "path": "./packages/compaction/command-compact" },
     { "path": "./packages/compaction/compaction-tool-result-pruner" },
+    { "path": "./packages/judgment/judgment" },
+    { "path": "./packages/judgment/judgment-typesafe" },
     { "path": "./packages/web/web" },
     { "path": "./packages/web/web-search-exa" },
     { "path": "./packages/web/web-search-perplexity" },

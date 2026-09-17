@@ -2316,7 +2316,7 @@ Source: [`packages/analyst/analyst-tools/src/index.ts`](../packages/analyst/anal
 
 ### `case_report`
 
-Close the investigation with a 5W1H packet after bind_relationship. who and where are projections of the bound victim entity row; do not fill them as free text. Send evidenced what, when, why, and how. This replaces any previous case_report on the session log.
+Close the investigation with a 5W1H packet after bind_relationship. who and where are projections of the bound victim entity row; do not fill them as free text. Send evidenced what, when, why, and how. A later close of a different victim keeps already-published victim rows; a later close of the same victim updates that row.
 
 ```json
 {
@@ -2374,7 +2374,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. Omitted user also persists the unique harvested human user when machine SAMs blocked uniqueness donate. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. An AD SRV / DC locator hostname is not persisted as who/where hostname. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     },
     "where": {
       "oneOf": [
@@ -2412,7 +2412,7 @@ Close the investigation with a 5W1H packet after bind_relationship. who and wher
           "type": "string"
         }
       ],
-      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
+      "description": "Optional victim-row handle. The bound victim address, or a user, hostname, MAC, or full_name on that row. A victim-row handle string is the same handle after a live bind. A JSON object string with entity_id is the same handle. Omitted keys are filled from the projected victim row after a live bind. Omitted who or where also fold sibling top-level identity keys (ip, mac, hostname, user, full_name) from the same call into that submitted slot. Omitted mac and user also persist from victim-IP evidence when a sticky DC donate or uniqueness left the row empty. Omitted user also persists the unique harvested human user when machine SAMs blocked uniqueness donate. A submitted user, hostname, or full_name is kept when the row has no donated value and that identity does not donate to a different entity. A submitted human user is kept without a conversation-client stamp. A machine SAM ending in $ is not persisted as user. An AD SRV / DC locator hostname is not persisted as who/where hostname. A submitted mac is kept unless that MAC only appears on DC/gateway frames. Unmatched free-text who or where is denied."
     }
   },
   "required": [

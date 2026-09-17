@@ -822,8 +822,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'investigation',
-    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.',
-    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending or Plan is not ready.',
+    summary: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending, Plan is not ready, or a live bind left a harvested LAN workstation unbound.',
+    description: '`ctx.investigation`: case-scoped identity ledger, hunt issuance, evidence policy, BindRelationship, methodology prompt, 5W1H report persistence, and a text-only turn/end complete denial while cue-pending, Plan is not ready, or a live bind left a harvested LAN workstation unbound.',
     methods: [
       {
         signature: 'readonly caseDir: string',
@@ -838,6 +838,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'readonly autoHunt: boolean',
         description: 'Whether new IP/hostname/user identities auto-issue and auto-run hunts.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly verifyGate: number',
+        description: 'Probability at or above which the bind verifier refuses a candidate C2.',
         parameters: [],
       },
       {
@@ -1003,6 +1008,51 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Attach an effect-scoped controller that can read and stop jobs. It serves the owners its registering context\'s scope covers, and start refuses an owner no attached controller serves.',
         parameters: [{ name: 'name', description: 'diagnostic label; duplicate names remain independent.' }],
         returns: 'disposer that detaches this controller.',
+      },
+    ],
+  },
+  {
+    key: 'judgment',
+    summary: 'The judgment service, registered as `ctx.judgment`.',
+    description: 'The judgment service, registered as `ctx.judgment`.\n\nConsumers reach for `ask` when they have several independent questions about one state: those run in parallel inside one request and cannot see one another\'s answers, which is both cheaper and the only way to keep a speculative question from biasing the one that matters. `noul`, `choice` and `score` are conveniences over `ask` for the single-question case.',
+    methods: [
+      {
+        signature: 'register(provider: JudgmentProvider): () => void',
+        description: 'Register a backend. The returned disposer removes it again, so a provider plugin\'s own lifetime owns its registration.',
+        parameters: [{ name: 'provider', description: 'the backend to register.' }],
+        returns: 'a disposer that unregisters it.',
+        throws: ['JudgmentError when the id is already registered.'],
+      },
+      {
+        signature: 'list(): readonly string[]',
+        description: 'Registered provider ids, in registration order.',
+        parameters: [],
+        returns: 'the ids, whether or not each provider is currently usable.',
+      },
+      {
+        signature: 'async ask(request: JudgmentRequest, signal?: AbortSignal): Promise<JudgmentResult>',
+        description: 'Ask every question in one request. Independent questions belong here together rather than in separate calls.',
+        parameters: [{ name: 'request', description: 'the state and its questions.' }, { name: 'signal', description: 'cancels the in-flight request.' }],
+        returns: 'answers keyed by the request\'s question ids.',
+        throws: ['JudgmentError when no question was asked or selection failed.'],
+      },
+      {
+        signature: 'async noul( state: JudgmentState, instructions: NoulQuestion[\'instructions\'], signal?: AbortSignal, ): Promise<NoulAnswer>',
+        description: 'Probability that one stated condition holds.',
+        parameters: [{ name: 'state', description: 'what the question is about.' }, { name: 'instructions', description: 'the condition, stated so that "yes" is unambiguous.' }, { name: 'signal', description: 'cancels the in-flight request.' }],
+        returns: 'the noul answer.',
+      },
+      {
+        signature: 'async choice( state: JudgmentState, instructions: ChoiceQuestion[\'instructions\'], criteria: ChoiceQuestion[\'criteria\'], signal?: AbortSignal, ): Promise<ChoiceAnswer>',
+        description: 'One option from a defined set, with the distribution across all of them.',
+        parameters: [{ name: 'state', description: 'what the question is about.' }, { name: 'instructions', description: 'the judgment to make.' }, { name: 'criteria', description: 'each option keyed by id, described so it stands alone.' }, { name: 'signal', description: 'cancels the in-flight request.' }],
+        returns: 'the choice answer.',
+      },
+      {
+        signature: 'async score( state: JudgmentState, instructions: ScoreQuestion[\'instructions\'], criteria: ScoreQuestion[\'criteria\'], signal?: AbortSignal, ): Promise<ScoreAnswer>',
+        description: 'A position along an ordered, described dimension.',
+        parameters: [{ name: 'state', description: 'what the question is about.' }, { name: 'instructions', description: 'the dimension being judged.' }, { name: 'criteria', description: 'ordered levels, each describing a concrete situation.' }, { name: 'signal', description: 'cancels the in-flight request.' }],
+        returns: 'the score answer.',
       },
     ],
   },
@@ -2994,6 +3044,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CaseReportExtras {\n    c2_ips?: string[];\n    c2_domain?: string;\n    killed?: string[];\n}',
   },
   {
+    name: 'ChoiceAnswer',
+    declaration: 'export interface ChoiceAnswer {\n    readonly type: \'choice\';\n    readonly choice: string;\n    readonly probabilities: Readonly<Record<string, number>>;\n    readonly confidence: number;\n}',
+  },
+  {
+    name: 'ChoiceQuestion',
+    declaration: 'export interface ChoiceQuestion {\n    readonly type: \'choice\';\n    readonly instructions: string | Readonly<Record<string, unknown>>;\n    readonly criteria: Readonly<Record<string, string | Readonly<Record<string, unknown>>>>;\n}',
+  },
+  {
     name: 'ClientResponse',
     declaration: 'export interface ClientResponse {\n    type: \'client-response\';\n    rpcId: RpcId;\n    result: RpcResult<unknown>;\n}',
   },
@@ -3554,6 +3612,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
   },
   {
+    name: 'JudgmentAnswer',
+    declaration: 'export type JudgmentAnswer = ChoiceAnswer | NoulAnswer | ScoreAnswer;',
+  },
+  {
+    name: 'JudgmentProvider',
+    declaration: 'export interface JudgmentProvider {\n    readonly id: string;\n    available: () => boolean | Promise<boolean>;\n    ask: (request: JudgmentRequest, signal?: AbortSignal) => Promise<JudgmentResult>;\n}',
+  },
+  {
+    name: 'JudgmentQuestion',
+    declaration: 'export type JudgmentQuestion = ChoiceQuestion | NoulQuestion | ScoreQuestion;',
+  },
+  {
+    name: 'JudgmentRequest',
+    declaration: 'export interface JudgmentRequest {\n    readonly state: JudgmentState;\n    readonly questions: Readonly<Record<string, JudgmentQuestion>>;\n    readonly model?: string;\n}',
+  },
+  {
+    name: 'JudgmentResult',
+    declaration: 'export interface JudgmentResult {\n    readonly answers: Readonly<Record<string, JudgmentAnswer>>;\n    readonly model: string;\n    readonly usage?: JudgmentUsage;\n}',
+  },
+  {
+    name: 'JudgmentState',
+    declaration: 'export type JudgmentState = string | readonly unknown[] | {\n    readonly [key: string]: unknown;\n};',
+  },
+  {
+    name: 'JudgmentUsage',
+    declaration: 'export interface JudgmentUsage {\n    readonly inputTokens?: number;\n    readonly outputTokens?: number;\n}',
+  },
+  {
     name: 'KnobState',
     declaration: 'export interface KnobState {\n    preset: string | null;\n    sandbox: SandboxMode | null;\n    approval: ApprovalPolicy | null;\n}',
   },
@@ -3776,6 +3862,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ModelModalityMap',
     declaration: 'export interface ModelModalityMap {\n    text: \'text\';\n    image: \'image\';\n}',
+  },
+  {
+    name: 'NoulAnswer',
+    declaration: 'export interface NoulAnswer {\n    readonly type: \'noul\';\n    readonly noul: number;\n}',
+  },
+  {
+    name: 'NoulQuestion',
+    declaration: 'export interface NoulQuestion {\n    readonly type: \'noul\';\n    readonly instructions: string | Readonly<Record<string, unknown>>;\n}',
   },
   {
     name: 'ObjectJsonSchema',
@@ -4020,6 +4114,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ScopeKey',
     declaration: 'export type ScopeKey = object;',
+  },
+  {
+    name: 'ScoreAnswer',
+    declaration: 'export interface ScoreAnswer {\n    readonly type: \'score\';\n    readonly score: number;\n    readonly legend: Readonly<Record<string, unknown>>;\n    readonly probabilities: Readonly<Record<string, number>>;\n    readonly confidence: number;\n}',
+  },
+  {
+    name: 'ScoreQuestion',
+    declaration: 'export interface ScoreQuestion {\n    readonly type: \'score\';\n    readonly instructions: string | Readonly<Record<string, unknown>>;\n    readonly criteria: Readonly<Record<string, string | Readonly<Record<string, unknown>>>>;\n}',
   },
   {
     name: 'SearchFileMatches',

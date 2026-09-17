@@ -45,6 +45,8 @@
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
     "@deepseek-ai/dsh-analyst-tools": "workspace:^",
     "@deepseek-ai/dsh-investigation": "workspace:^",
+    "@deepseek-ai/dsh-judgment": "workspace:^",
+    "@deepseek-ai/dsh-judgment-typesafe": "workspace:^",
     "@deepseek-ai/dsh-persona": "workspace:^",
     "@deepseek-ai/dsh-plan-mode": "workspace:^",
     "@deepseek-ai/dsh-terminal": "workspace:^",

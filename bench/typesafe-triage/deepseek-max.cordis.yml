@@ -1,0 +1,15 @@
+# Run the analyst preset on DeepSeek-V4.1-Flash at maximum reasoning effort.
+#
+# The shipped default is `deepseek-v4-flash`, a retired id the API still serves
+# with V4.1-Flash; this names the canonical one. `reasoningEffort` defaults to
+# `high`, which on a 1200-token budget spent the whole budget thinking and
+# returned nothing -- the 256k default output cap here leaves room for both.
+- id: agent-default-model
+  config:
+    provider: deepseek-official
+    model: deepseek-flash
+
+- id: llm-deepseek
+  config:
+    thinking: enabled
+    reasoningEffort: max

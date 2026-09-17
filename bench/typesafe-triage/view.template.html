@@ -1,0 +1,364 @@
+<title>XWorm Case 2026-09-08</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f9;
+    --surface: #ffffff;
+    --sunk: #eef1f6;
+    --ink: #131821;
+    --muted: #5c6777;
+    --faint: #8d97a6;
+    --line: #dde2ea;
+    --rule: #c8d0dc;
+    --fast: #4a4fa8;
+    --victim: #0d6f79;
+    --c2: #b8471a;
+    --ok: #2c7248;
+    --warn: #8a6d1f;
+    --shadow: 0 1px 2px rgba(19, 24, 33, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1219;
+      --surface: #161b24;
+      --sunk: #1c2230;
+      --ink: #e6ebf3;
+      --muted: #8f9bab;
+      --faint: #6b7789;
+      --line: #252c3a;
+      --rule: #333c4d;
+      --fast: #9498ec;
+      --victim: #43bcc4;
+      --c2: #f3855a;
+      --ok: #5cbb80;
+      --warn: #d4ad51;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1219;
+    --surface: #161b24;
+    --sunk: #1c2230;
+    --ink: #e6ebf3;
+    --muted: #8f9bab;
+    --faint: #6b7789;
+    --line: #252c3a;
+    --rule: #333c4d;
+    --fast: #9498ec;
+    --victim: #43bcc4;
+    --c2: #f3855a;
+    --ok: #5cbb80;
+    --warn: #d4ad51;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; padding-block: 28px 56px; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  header { border-bottom: 2px solid var(--rule); padding-bottom: 18px; margin-bottom: 22px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px;
+  }
+  h1 { font-size: 27px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.015em; text-wrap: balance; }
+  .sub { color: var(--muted); max-width: 66ch; margin: 0; }
+
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 3px;
+    padding: 6px 11px; font-size: 12px;
+  }
+  .chip b { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip span { color: var(--muted); }
+  .live { border-color: var(--ok); }
+  .live b { color: var(--ok); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); align-self: center; }
+  .dot.run { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .dot.run { animation: none } }
+
+  .cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 880px) { .cols { grid-template-columns: 1fr; } }
+
+  h2 {
+    font-size: 11px; font-family: "IBM Plex Mono", monospace; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--faint);
+    margin: 0 0 12px; padding-bottom: 7px; border-bottom: 1px solid var(--line);
+  }
+  section + section { margin-top: 30px; }
+
+  /* The chassis is a real ordered sequence, so it is numbered. */
+  .stage { display: grid; grid-template-columns: 26px 1fr; gap: 14px; }
+  .stage + .stage { margin-top: 18px; }
+  .marker {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+    color: var(--faint); padding-top: 2px; text-align: right;
+  }
+  .stage-body { min-width: 0; }
+  .stage h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .stage p { margin: 0 0 8px; color: var(--muted); }
+
+  .hyp { border-left: 2px solid var(--rule); padding: 2px 0 2px 13px; margin-bottom: 14px; }
+  .hyp.c2 { border-left-color: var(--c2); }
+  .hyp.victim { border-left-color: var(--victim); }
+  .hyp-id {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: .05em; margin-bottom: 3px;
+  }
+  .hyp.c2 .hyp-id { color: var(--c2); }
+  .hyp.victim .hyp-id { color: var(--victim); }
+  .hyp.cdn .hyp-id, .hyp.dc .hyp-id { color: var(--warn); }
+  .claim { margin: 0 0 6px; }
+  .disconfirm { margin: 0; font-size: 13px; color: var(--muted); }
+  .disconfirm b { color: var(--faint); font-weight: 600; font-size: 11px;
+    font-family: "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 5px 0; border-bottom: 1px dotted var(--line); font-size: 13px; }
+  ul.plain li:last-child { border-bottom: 0; }
+
+  .ledger { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
+  .ledger dt {
+    font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--faint); padding-top: 3px;
+  }
+  .ledger dd { margin: 0; font-family: "IBM Plex Mono", monospace; word-break: break-all; }
+  .ledger dd em { font-family: "IBM Plex Sans", sans-serif; font-style: normal; color: var(--faint); font-size: 11px; }
+
+  .rank { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .rank:last-child { border-bottom: 0; }
+  .rank .addr { font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+  .rank .meta { color: var(--faint); font-size: 12px; }
+  .score {
+    margin-left: auto; font-family: "IBM Plex Mono", monospace; font-weight: 600;
+    font-variant-numeric: tabular-nums; color: var(--fast);
+  }
+  .bar { height: 3px; background: var(--sunk); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+  .bar i { display: block; height: 100%; background: var(--fast); }
+
+  .log { max-height: 460px; overflow-y: auto; }
+  .call { display: grid; grid-template-columns: 44px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .call:last-child { border-bottom: 0; }
+  .t { font-family: "IBM Plex Mono", monospace; color: var(--faint); font-variant-numeric: tabular-nums; font-size: 11px; padding-top: 1px; }
+  .call .name { font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+  .call .arg { color: var(--muted); word-break: break-all; }
+  .bad { color: var(--c2); }
+  .tag {
+    display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 10px;
+    letter-spacing: .07em; text-transform: uppercase; padding: 1px 5px; border-radius: 2px;
+    background: var(--sunk); color: var(--muted);
+  }
+
+  .tier { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 14px; box-shadow: var(--shadow); }
+  .tier + .tier { margin-top: 12px; }
+  .tier h3 { margin: 0 0 3px; font-size: 13px; font-weight: 600; }
+  .tier .who { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--faint); margin-bottom: 9px; }
+  .tier.fast { border-top: 2px solid var(--fast); }
+  .tier.slow { border-top: 2px solid var(--c2); }
+
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .final { background: var(--sunk); border-radius: 4px; padding: 14px 16px; white-space: pre-wrap; font-size: 13px; }
+  footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">malware-traffic-analysis.net &middot; 2026-09-08 &middot; XWorm</div>
+  <h1>XWorm Case 2026-09-08</h1>
+  <p class="sub">A System One model ranks every destination in the capture, then a reasoning model
+  works the case from packets alone. The notes file that names the answer was kept out of the case
+  directory.</p>
+  <div class="strip" id="strip"></div>
+</header>
+
+<div class="cols">
+  <main>
+    <section>
+      <h2>Investigation chassis</h2>
+      <div id="chassis"></div>
+    </section>
+    <section id="final-wrap" hidden>
+      <h2>Close</h2>
+      <div class="final mono" id="final"></div>
+    </section>
+  </main>
+
+  <aside>
+    <section>
+      <h2>Two tiers</h2>
+      <div id="tiers"></div>
+    </section>
+    <section>
+      <h2>Evidence ledger</h2>
+      <dl class="ledger" id="ledger"></dl>
+      <p class="note" id="hunt-note"></p>
+    </section>
+    <section>
+      <h2>Tool calls</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </aside>
+</div>
+
+<footer id="foot"></footer>
+</div>
+
+<script>
+const D = "__DATA__";
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+
+// Fast tier: the shortlist Jev handed over, and what it cost.
+const TRIAGE = [{ addr: '43.228.157.141', port: 7007, p: 0.30 }];
+
+function strip() {
+  const running = !D.finished;
+  const rows = [
+    ['status', running ? 'running' : 'closed', running],
+    ['elapsed', D.elapsed + 's'],
+    ['steps', D.steps],
+    ['tool calls', D.calls.length],
+    ['reasoning chunks', D.reasoningChunks],
+  ];
+  document.getElementById('strip').append(...rows.map(([k, v, live]) => el(
+    `<div class="chip${live ? ' live' : ''}">${live ? '<i class="dot run"></i>' : ''}<b>${esc(v)}</b><span>${esc(k)}</span></div>`
+  )));
+}
+
+function chassis() {
+  const box = document.getElementById('chassis');
+  const stages = [];
+
+  if (D.mission) {
+    stages.push(['01', 'Mission', `
+      <p>${esc(D.mission.purpose)}</p>
+      <dl class="ledger">
+        <dt>cue</dt><dd>${esc(D.mission.cue.addr)} <em>from ${esc(D.mission.cue.evidence_id)}</em></dd>
+        <dt>slot 0a</dt><dd>${esc(D.mission.cueValidation)}</dd>
+      </dl>
+      <ul class="plain">${(D.mission.closedMeans || []).map((m) => `<li>${esc(m)}</li>`).join('')}</ul>`]);
+  }
+
+  if (D.plan) {
+    const hyps = (D.plan.hypotheses || []).map((h) => `
+      <div class="hyp ${esc(h.label)}">
+        <div class="hyp-id">${esc(h.id)} &middot; ${esc(h.label)}</div>
+        <p class="claim">${esc(h.claim)}</p>
+        <p class="disconfirm"><b>killed if</b> ${esc(h.disconfirm)}</p>
+      </div>`).join('');
+    const gaps = (D.plan.gaps || []).map((g) => `<li>${esc(g)}</li>`).join('');
+    stages.push(['02', 'Plan', `
+      ${hyps}
+      ${gaps ? `<p class="disconfirm" style="margin-top:14px"><b>open gaps</b></p><ul class="plain">${gaps}</ul>` : ''}`]);
+  }
+
+  if (D.actions.length) {
+    stages.push(['03', 'Action', `
+      <p>${D.actions.length} hunt${D.actions.length === 1 ? '' : 's'} resolved against a Plan hypothesis.</p>
+      <ul class="plain">${D.actions.map((a) => `
+        <li><span class="tag">${esc(a.thesis?.result ?? '?')}</span>
+        <code>${esc(a.huntKind)}</code> on <code>${esc(a.subject)}</code>
+        &rarr; ${esc(a.hypothesis_id)}<br><span style="color:var(--muted)">${esc(a.thesis?.claim ?? '')}</span></li>`).join('')}</ul>`]);
+  }
+
+  const bindHtml = D.bind
+    ? `<ul class="plain">${(D.bind.endpoints || []).map((e) => `<li><span class="tag">${esc(e.role)}</span> <code>${esc(e.addr)}</code> <span style="color:var(--muted)">${esc(e.because || '')}</span></li>`).join('')}</ul>`
+    : `<p>Not yet reached. <code>case_report</code> stays denied until <code>bind_relationship</code> assigns exactly one victim on the cited conversation.</p>`;
+  stages.push(['04', 'Bind', bindHtml]);
+
+  const reportHtml = D.report
+    ? `<dl class="ledger">${Object.entries(D.report).filter(([, v]) => typeof v === 'string' || typeof v === 'number').map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`
+    : `<p>Not yet reached.</p>`;
+  stages.push(['05', 'Report', reportHtml]);
+
+  box.append(...stages.map(([n, title, body]) => el(
+    `<div class="stage"><div class="marker">${n}</div><div class="stage-body"><h3>${title}</h3>${body}</div></div>`
+  )));
+}
+
+function tiers() {
+  const box = document.getElementById('tiers');
+  const ranked = TRIAGE.map((t) => `
+    <div class="rank">
+      <div>
+        <div class="addr">${esc(t.addr)}<span class="meta"> :${t.port}</span></div>
+        <div class="bar"><i style="width:${Math.round(t.p * 100)}%"></i></div>
+      </div>
+      <div class="score">${t.p.toFixed(2)}</div>
+    </div>`).join('');
+  box.append(el(`<div class="tier fast">
+    <h3>Fast &mdash; ranks every destination</h3>
+    <div class="who">jev-1.13.0 &middot; 520 tokens &middot; $0.00002</div>
+    ${ranked}
+    <p class="note">P(attacker infrastructure), composed in code from three Nouls. Handed over as the
+    Plan's starting hypothesis, never as an answer.</p>
+  </div>`));
+  box.append(el(`<div class="tier slow">
+    <h3>Slow &mdash; works the case</h3>
+    <div class="who">deepseek-flash (V4.1) &middot; reasoning_effort max</div>
+    <dl class="ledger">
+      <dt>steps</dt><dd>${D.steps}</dd>
+      <dt>thinking</dt><dd>${D.reasoningChunks} <em>reasoning chunks</em></dd>
+      <dt>output</dt><dd>${D.textChunks} <em>text chunks</em></dd>
+    </dl>
+    <p class="note">Sees the pcap and the ranked shortlist. It does not see the notes file.</p>
+  </div>`));
+}
+
+function ledger() {
+  const dl = document.getElementById('ledger');
+  if (!D.identities.length) {
+    dl.append(el('<dt>&mdash;</dt>'), el('<dd><em>nothing harvested yet</em></dd>'));
+  }
+  for (const i of D.identities) {
+    dl.append(el(`<dt>${esc(i.label)}</dt>`));
+    dl.append(el(`<dd>${esc(i.value)}${i.evidence_id ? ` <em>on ${esc(i.evidence_id)}</em>` : ''}</dd>`));
+  }
+  const kinds = [...new Set(D.hunts.map((h) => h.kind))];
+  document.getElementById('hunt-note').textContent = D.hunts.length
+    ? `${D.hunts.length} hunts auto-issued by the plugin: ${kinds.join(', ')}.`
+    : 'No hunts issued yet.';
+}
+
+function log() {
+  const box = document.getElementById('log');
+  const summarise = (c) => {
+    const a = c.args || {};
+    if (a.display_filter || a.fields) return `${a.display_filter ?? ''} ${a.fields ? `-e ${a.fields}` : ''}`.trim();
+    return a.command ?? a.path ?? a.file ?? Object.values(a)[0] ?? '';
+  };
+  for (const c of [...D.calls].reverse()) {
+    const failed = c.result && !c.result.ok;
+    box.append(el(`<div class="call">
+      <div class="t">${c.at.toFixed(1)}s</div>
+      <div><span class="name${failed ? ' bad' : ''}">${esc(c.name)}</span>
+      <span class="arg">${esc(String(summarise(c)).slice(0, 150))}</span></div>
+    </div>`));
+  }
+}
+
+strip();
+chassis();
+tiers();
+ledger();
+log();
+
+if (D.finalText) {
+  document.getElementById('final-wrap').hidden = false;
+  document.getElementById('final').textContent = D.finalText;
+}
+document.getElementById('foot').textContent =
+  `Session ${D.session?.id ?? '?'} · folded from ${D.calls.length} tool calls · ` +
+  `snapshot ${new Date(D.generated).toISOString().replace('T', ' ').slice(0, 19)} UTC` +
+  (D.finished ? '' : ' · the run is still going; this page updates when it is republished');
+</script>

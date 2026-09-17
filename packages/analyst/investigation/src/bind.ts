@@ -214,6 +214,42 @@ export const LAN_C2_REASON = 'unbound: role c2 cannot be a LAN address.'
  * Deny text when the bound C2 is a well-known CDN or update destination.
  * Does not invent a replacement C2. Tokens are not swapped.
  */
+/**
+ * Verifier verdicts keyed by candidate C2 IPv4: true refuses the bind, false
+ * allows it. An address with no entry falls back to the shipped rule, so a
+ * judgment outage cannot silently change an outcome.
+ */
+export type CdnVerdicts = ReadonlyMap<string, boolean>
+
+/**
+ * Non-LAN addresses a submitted bind names, before any coercion or role
+ * assignment. These are the only addresses a verifier needs to judge: a LAN
+ * address can never be the C2, so asking about one would spend a call on an
+ * answer the exact rule already has.
+ *
+ * @param request - the submitted relationship and endpoints.
+ * @returns each distinct non-LAN unicast IPv4, in first-seen order.
+ */
+export function candidateC2Addrs(request: BindRequest): readonly string[] {
+  const out: string[] = []
+  const consider = (value: unknown): void => {
+    if (typeof value !== 'string') return
+    const addr = normalizeEndpointAddr(value)
+    if (addr === undefined || !isNonLanUnicastIpv4(addr) || out.includes(addr)) return
+    out.push(addr)
+  }
+  const relationship = request.relationship as { src?: unknown; dst?: unknown } | undefined
+  consider(relationship?.src)
+  consider(relationship?.dst)
+  if (Array.isArray(request.endpoints)) {
+    for (const endpoint of request.endpoints) {
+      consider((endpoint as { addr?: unknown } | undefined)?.addr)
+    }
+  }
+  return out
+}
+
+/** Deny reason when the proposed `c2` endpoint resolves to a CDN or update host. */
 export const CDN_C2_REASON =
   'unbound: role c2 cannot be a well-known CDN or update destination.'
 
@@ -622,12 +658,16 @@ export function coerceBindRequest(request: BindRequest): CoercedBindRequest | st
  * @param request - relationship plus submitted endpoints.
  * @param identities - folded ledger identities used for the CDN/update check.
  * @param evidenceText - tool-result text for cited-conversation SNI / host / DNS.
+ * @param verdicts - verifier verdicts per candidate C2 IPv4, when the judgment
+ *   seam reached one. An entry outranks the anycast-prefix rule; an absent
+ *   entry leaves that rule in force.
  * @returns the bind, or a deny reason.
  */
 export function resolveBind(
   request: BindRequest,
   identities: readonly Identity[] = [],
   evidenceText = '',
+  verdicts?: CdnVerdicts,
 ): BindResolution {
   const coerced = coerceBindRequest(request)
   if (typeof coerced === 'string') return { ok: false, reason: coerced }
@@ -656,7 +696,7 @@ export function resolveBind(
   const victims = endpoints.filter(endpoint => endpoint.role === 'victim')
   if (victims.length !== 1) return { ok: false, reason: VICTIM_COUNT_REASON }
   const bind = { relationship, endpoints }
-  if (uniqueC2IsCdnOrUpdate(bind, identities, evidenceText)) {
+  if (uniqueC2IsCdnOrUpdate(bind, identities, evidenceText, verdicts)) {
     return { ok: false, reason: CDN_C2_REASON }
   }
   return { ok: true, bind }
@@ -1300,10 +1340,11 @@ function uniqueC2IsCdnOrUpdate(
   bind: RelationshipBind,
   identities: readonly Identity[],
   evidenceText: string,
+  verdicts?: CdnVerdicts,
 ): boolean {
   const c2 = boundC2Ipv4(bind)
   if (c2 === undefined) return false
-  return ipIsCdnOrUpdate(c2, identities, evidenceText)
+  return ipIsCdnOrUpdate(c2, identities, evidenceText, verdicts)
 }
 
 /**
@@ -1319,7 +1360,13 @@ function ipIsCdnOrUpdate(
   ip: string,
   identities: readonly Identity[],
   evidenceText: string,
+  verdicts?: CdnVerdicts,
 ): boolean {
+  // A verifier verdict, when one was reached, outranks the anycast prefix: an
+  // attacker domain behind Cloudflare is still the attacker's. With no verdict
+  // (no judgment provider mounted, or the call failed) the shipped rule stands.
+  const judged = verdicts?.get(ip)
+  if (judged !== undefined) return judged
   if (isCloudflareIpv4(ip) || isFastlyIpv4(ip)) return true
   return hostnamesEvidencedOnIp(ip, identities, evidenceText).some(isCdnOrUpdateName)
 }
