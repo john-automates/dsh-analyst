@@ -28,6 +28,22 @@ const SHELL_TOOLS = new Set(['bash', 'pwsh'])
 /** Executables that run captured binaries or emulators. */
 const MALWARE_RUNNERS = /^(?:wine|wine64|qemu|qemu-system-\S+|vboxmanage)$/i
 
+/**
+ * Programs that reach the network, denied when a run forbids reachback.
+ *
+ * `openssl` is absent on purpose: `openssl x509 -in cert.der` reads a file the
+ * capture carried and is ordinary tradecraft, so it is matched on its
+ * `s_client` subcommand instead. `getent` is present because `getent hosts
+ * <ip>` is a reverse-DNS query through the system resolver, which is exactly
+ * how the enrichment this flag exists to stop entered a graded report.
+ */
+/** Programs that run another program, keeping the next word in command position. */
+const COMMAND_WRAPPERS =
+  /^(?:timeout|env|sudo|nohup|command|exec|time|xargs|stdbuf|nice|ionice|doas)$/i
+
+const NETWORK_COMMANDS =
+  /^(?:curl|wget|dig|drill|nslookup|host|getent|whois|ping|ping6|traceroute|nc|ncat|netcat|telnet|ssh|scp|sftp|ftp|socat|rsync)$/i
+
 /** Evidence suffixes that must not be executed. */
 const EXECUTABLE_EVIDENCE = /\.(?:exe|dll|bin|scr|msi|bat|cmd|ps1|vbs)$/i
 
@@ -75,6 +91,7 @@ export function denyReason(
   exec: { name: string; arguments: unknown },
   caseDir: string,
   evidenceReadOnly: boolean,
+  denyNetworkReachback = false,
 ): string | undefined {
   const pathValue = stringArg(exec.arguments, ['file_path', 'path', 'file'])
   if (pathValue !== undefined && PATH_TOOLS.has(exec.name)) {
@@ -98,7 +115,7 @@ export function denyReason(
   if (workdir !== undefined && !isInsideCase(caseDir, workdir)) {
     return `refusing ${exec.name}: working directory ${workdir} is outside the case directory ${caseDir}`
   }
-  return denyCommand(command, caseDir, evidenceReadOnly)
+  return denyCommand(command, caseDir, evidenceReadOnly, denyNetworkReachback)
 }
 
 /**
@@ -112,11 +129,20 @@ export function denyCommand(
   command: string,
   caseDir: string,
   evidenceReadOnly: boolean,
+  denyNetworkReachback = false,
 ): string | undefined {
   const tokens = tokenizeCommand(command)
   const head = tokens[0]
   if (head === undefined) return undefined
   const program = basenameToken(head)
+  if (denyNetworkReachback) {
+    const reach = networkProgram(tokens)
+    if (reach !== undefined) {
+      return `refusing shell: ${reach} reaches the network, and this run forbids reachback.`
+        + ' Every claim must come from the capture. If the destination needs enrichment,'
+        + ' say so in the report rather than resolving it here.'
+    }
+  }
   if (MALWARE_RUNNERS.test(program)) {
     return `refusing shell: ${program} would execute or emulate a binary; evidence stays read-only`
   }
@@ -137,6 +163,48 @@ export function denyCommand(
     if (!isInsideCase(caseDir, token)) {
       return `refusing shell: ${token} is outside the case directory ${caseDir}`
     }
+  }
+  return undefined
+}
+
+/**
+ * The first network-reaching program named anywhere in a command.
+ *
+ * Every token is checked, not just the first: the reachback actually observed
+ * in a graded run was `cd <case> && (timeout 6 getent hosts <ip>)`, whose head
+ * token is `cd`. A head-only test would have passed it.
+ *
+ * This is an advisory control, not a sandbox. A denylist of program names does
+ * not stop `python3 -c "import socket"`, and it is not meant to — the real
+ * control is running the investigation with no route to the network. This makes
+ * the common case fail loudly and name the reason, so a graded run that reaches out
+ * is visible rather than silent.
+ * @param tokens - tokenized command.
+ * @returns the offending program name, or undefined.
+ */
+function networkProgram(tokens: readonly string[]): string | undefined {
+  const bare = (token: string): string =>
+    basenameToken(token.replace(/^[;&|(){}]+/, '').replace(/[;&|(){}]+$/, ''))
+  let atCommand = true
+  for (const [index, token] of tokens.entries()) {
+    const program = bare(token)
+    if (program === '') { atCommand = true; continue }
+    if (atCommand) {
+      // `timeout 6 getent …`, `env X=1 curl …`: a wrapper keeps the next word
+      // in command position, and so does its numeric or flag argument.
+      if (COMMAND_WRAPPERS.test(program) || /^\d+[smhd]?$/.test(program) || program.startsWith('-')) {
+        continue
+      }
+      if (NETWORK_COMMANDS.test(program)) return program
+      if (program.toLowerCase() === 'openssl' && bare(tokens[index + 1] ?? '') === 's_client') {
+        return 'openssl s_client'
+      }
+      atCommand = false
+      continue
+    }
+    // Only a separator returns us to command position. Without this, `grep -i
+    // host file` reads its own search pattern as the `host` program.
+    if (/[;&|]/.test(token)) atCommand = true
   }
   return undefined
 }

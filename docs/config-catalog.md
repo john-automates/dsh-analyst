@@ -967,10 +967,47 @@ export interface Config {
    * leaves every destination requiring a disposition. Defaults to 0.06.
    */
   dropGate?: number
+  /**
+   * Whether `case_report` must evidence every indicator it asserts.
+   *
+   * Across thirteen graded investigations three published an atom no tool
+   * result carried — two public IPv4s and one victim hostname on the who row.
+   * Confabulation is the failure that ends analyst trust, because unlike a
+   * wrong verdict it cannot be argued with. With this on, such a close is
+   * refused and the offending atom named.
+   *
+   * Defaults to **false**: the gate changes what a close may say, so it ships
+   * dark until the before/after on the corpus is in. Turn it on with
+   * `bench/typesafe-triage/grounded.cordis.yml`.
+   */
+  requireGroundedReport?: boolean
+  /**
+   * Probability at or above which a flagged atom counts as a real indicator
+   * claim rather than a filename, bundle id, or dotted account name. Consulted
+   * only when a `judgment` provider is mounted, and only about atoms the exact
+   * check already flagged, so judgment can release a refusal and never create
+   * one. Defaults to 0.5.
+   */
+  claimGate?: number
+  /**
+   * Whether `bash` may run a program that reaches the network.
+   *
+   * `no-web.cordis.yml` disables the web plugins; it does not stop the shell.
+   * Audited across 25 graded runs, 23 reached the network anyway — `getent
+   * hosts <ip>` reverse lookups succeeded, and one report published four
+   * hosting-provider rDNS names the capture never carried. On a corpus whose
+   * answers are on the open web that is a grading hole, and `externalSearches`
+   * counted zero throughout because it only sees `web_search`.
+   *
+   * Advisory, not a sandbox: a program denylist does not stop a socket opened
+   * from an interpreter. The real control is no route. Defaults to false;
+   * graded runs set `DSH_DENY_NETWORK_REACHBACK=1`.
+   */
+  denyNetworkReachback?: boolean
 }
 ```
 
-Source: [`packages/analyst/investigation/src/index.ts:207`](../packages/analyst/investigation/src/index.ts)
+Source: [`packages/analyst/investigation/src/index.ts:209`](../packages/analyst/investigation/src/index.ts)
 
 <a id="deepseek-aidsh-jobs-local"></a>
 

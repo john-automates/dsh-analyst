@@ -47,6 +47,8 @@ import {
 } from './bind.ts'
 import type { BindRequest as BindRequestType, CdnVerdicts } from './bind.ts'
 import { harvestIdentities, identityKey } from './harvest.ts'
+import { ungroundedAtoms, ungroundedDenyReason } from './grounded.ts'
+import { DEFAULT_CLAIM_GATE, narrowToIndicatorClaims } from './grounded-judge.ts'
 import {
   c2TalkingLanIps, evidenceTextForHunts, foldToolResultText, huntFilterSpec, huntNotice,
   huntsForNewIdentities, huntsToAutoRun, huntKey, isNonLanUnicastIpv4,
@@ -253,6 +255,43 @@ export interface Config {
    * leaves every destination requiring a disposition. Defaults to 0.06.
    */
   dropGate?: number
+  /**
+   * Whether `case_report` must evidence every indicator it asserts.
+   *
+   * Across thirteen graded investigations three published an atom no tool
+   * result carried — two public IPv4s and one victim hostname on the who row.
+   * Confabulation is the failure that ends analyst trust, because unlike a
+   * wrong verdict it cannot be argued with. With this on, such a close is
+   * refused and the offending atom named.
+   *
+   * Defaults to **false**: the gate changes what a close may say, so it ships
+   * dark until the before/after on the corpus is in. Turn it on with
+   * `bench/typesafe-triage/grounded.cordis.yml`.
+   */
+  requireGroundedReport?: boolean
+  /**
+   * Probability at or above which a flagged atom counts as a real indicator
+   * claim rather than a filename, bundle id, or dotted account name. Consulted
+   * only when a `judgment` provider is mounted, and only about atoms the exact
+   * check already flagged, so judgment can release a refusal and never create
+   * one. Defaults to 0.5.
+   */
+  claimGate?: number
+  /**
+   * Whether `bash` may run a program that reaches the network.
+   *
+   * `no-web.cordis.yml` disables the web plugins; it does not stop the shell.
+   * Audited across 25 graded runs, 23 reached the network anyway — `getent
+   * hosts <ip>` reverse lookups succeeded, and one report published four
+   * hosting-provider rDNS names the capture never carried. On a corpus whose
+   * answers are on the open web that is a grading hole, and `externalSearches`
+   * counted zero throughout because it only sees `web_search`.
+   *
+   * Advisory, not a sandbox: a program denylist does not stop a socket opened
+   * from an interpreter. The real control is no route. Defaults to false;
+   * graded runs set `DSH_DENY_NETWORK_REACHBACK=1`.
+   */
+  denyNetworkReachback?: boolean
 }
 
 /** Complete config after schemastery applies every field default. */
@@ -266,6 +305,9 @@ export const Config: z<Config> = z.object({
   verifyGate: z.number().default(DEFAULT_VERIFY_GATE),
   enumerateDestinations: z.boolean().default(true),
   dropGate: z.number().default(DEFAULT_DROP_GATE),
+  requireGroundedReport: z.boolean().default(false),
+  claimGate: z.number().default(DEFAULT_CLAIM_GATE),
+  denyNetworkReachback: z.boolean().default(false),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -435,6 +477,12 @@ export class Investigation extends Service {
   readonly verifyGate: number
   /** Whether close requires a disposition for every evidenced destination. */
   readonly enumerateDestinations: boolean
+  /** Whether a close must evidence every indicator it asserts. */
+  readonly requireGroundedReport: boolean
+  /** Gate above which a flagged atom counts as a real indicator claim. */
+  readonly claimGate: number
+  /** Whether `bash` may run a program that reaches the network. */
+  readonly denyNetworkReachback: boolean
   /** Probability below which a destination needs no write-up. */
   readonly dropGate: number
   /** Hunt keys already auto-run (or attempted) on one session. */
@@ -481,6 +529,9 @@ export class Investigation extends Service {
     this.autoHunt = resolved.autoHunt
     this.verifyGate = resolved.verifyGate
     this.enumerateDestinations = resolved.enumerateDestinations
+    this.requireGroundedReport = resolved.requireGroundedReport
+    this.claimGate = resolved.claimGate
+    this.denyNetworkReachback = resolved.denyNetworkReachback
     this.dropGate = resolved.dropGate
 
     ctx.on('session/created', (session) => {
@@ -511,7 +562,9 @@ export class Investigation extends Service {
     }, { global: true })
 
     ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
-      const reason = denyReason(exec, this.caseDir, this.evidenceReadOnly)
+      const reason = denyReason(
+        exec, this.caseDir, this.evidenceReadOnly, this.denyNetworkReachback,
+      )
       if (reason !== undefined) return { kind: 'deny', reason }
       if (exec.name === 'case_report' || setsWhoWhere(exec.arguments)) {
         const session = exec.agent?.session
@@ -520,6 +573,16 @@ export class Investigation extends Service {
         const evidenceText = session === undefined ? '' : foldToolResultText(session.events)
         const close = caseReportDenyReason(exec.arguments, bind, identities, evidenceText)
         if (close !== undefined) return { kind: 'deny', reason: close }
+        // Groundedness before coverage: an unevidenced atom is a worse defect
+        // than an undisposed destination, and naming it first keeps the deny
+        // text about one problem at a time.
+        const unevidenced = await this.ungroundedAtClose(exec.arguments, identities, evidenceText)
+        if (unevidenced.length > 0) {
+          return {
+            kind: 'deny',
+            reason: ungroundedDenyReason(unevidenced, identities, evidenceText),
+          }
+        }
         const undisposed = await this.undisposedAtClose(
           exec.arguments, bind, identities, evidenceText,
         )
@@ -1228,6 +1291,28 @@ export class Investigation extends Service {
    * @param evidenceText - tool-result text.
    * @returns unaccounted destinations, empty when the close may proceed.
    */
+  /**
+   * Atoms this close asserts that the evidence does not carry.
+   *
+   * Exact rung first, then judgment on what it flagged: a clean close costs no
+   * judgment call at all, and a flagged one asks only about its own atoms.
+   * Off by default — see {@link Config.requireGroundedReport}.
+   * @param args - submitted `case_report` arguments.
+   * @param identities - folded ledger identities.
+   * @param evidenceText - tool-result text the investigation gathered.
+   * @returns atoms to refuse, or an empty list.
+   */
+  private async ungroundedAtClose(
+    args: unknown,
+    identities: readonly Identity[],
+    evidenceText: string,
+  ): Promise<string[]> {
+    if (!this.requireGroundedReport) return []
+    const flagged = ungroundedAtoms(args, evidenceText, identities)
+    if (flagged.length === 0) return []
+    return await narrowToIndicatorClaims(this.ctx, flagged, args, this.claimGate)
+  }
+
   private async undisposedAtClose(
     args: unknown,
     bind: RelationshipBind | undefined,
