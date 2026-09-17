@@ -24,15 +24,23 @@ import { observe } from './observe.mjs'
 import { iocMatch, readTruth } from './truth.mjs'
 
 /**
- * Token rates in USD per million. OPERATOR-SUPPLIED: these are list prices and
- * are not verified against any contract. Override with DSH_RATE_CACHE_READ /
- * _INPUT / _OUTPUT. Cost is reported alongside raw token counts so a wrong rate
- * card never hides the measurement underneath it.
+ * Token rates in USD per million, times an empirical scale.
+ *
+ * The per-component rates are DeepSeek's published list prices. The scale is
+ * MEASURED, not published: four investigations modelling to $0.5055 at list
+ * moved the account balance $0.13, so the effective rate is ~26% of list —
+ * whether that is Flash-specific pricing or an off-peak discount is unverified.
+ *
+ * Override any of them with DSH_RATE_CACHE_READ / _INPUT / _OUTPUT / _SCALE.
+ * Cost is always reported alongside raw token counts, so a wrong card cannot
+ * hide the measurement underneath it. Re-derive the scale against your own
+ * contract before quoting a figure.
  */
+const RATE_SCALE = Number(process.env.DSH_RATE_SCALE ?? 0.257)
 const RATES = {
-  cacheRead: Number(process.env.DSH_RATE_CACHE_READ ?? 0.028),
-  input: Number(process.env.DSH_RATE_INPUT ?? 0.28),
-  output: Number(process.env.DSH_RATE_OUTPUT ?? 0.42),
+  cacheRead: Number(process.env.DSH_RATE_CACHE_READ ?? 0.028) * RATE_SCALE,
+  input: Number(process.env.DSH_RATE_INPUT ?? 0.28) * RATE_SCALE,
+  output: Number(process.env.DSH_RATE_OUTPUT ?? 0.42) * RATE_SCALE,
 }
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g
@@ -213,6 +221,10 @@ const round = (n, p = 2) => Math.round(n * 10 ** p) / 10 ** p
 
 const runDir = process.argv[2]
 if (runDir === undefined) throw new Error('usage: scorecard.mjs <run-dir> [--case=YYYY-MM-DD]')
+// Operator-supplied build label. The session log carries no plugin config, so a
+// run cannot report which gates were compiled into it; without this the trend
+// silently compares different harnesses and calls the difference variance.
+const build = process.argv.find((a) => a.startsWith('--build='))?.slice(8) ?? 'unlabelled'
 const caseId = process.argv.find((a) => a.startsWith('--case='))?.slice(7)
   ?? path.basename(runDir).match(/\d{4}-\d{2}-\d{2}/)?.[0]
 
@@ -250,7 +262,7 @@ const cost = round(
 const record = {
   run: path.basename(runDir), case: caseId, at: new Date().toISOString(),
   config: {
-    models: [...s.models], ruleSoftened: s.softenedRule && !s.hardRule,
+    build, models: [...s.models], ruleSoftened: s.softenedRule && !s.hardRule,
     ruleContradiction: s.softenedRule && s.hardRule,
     // The capture filenames are part of the input, not decoration: MTA names
     // captures after the malware family, so a run given the original name is

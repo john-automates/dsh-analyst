@@ -17,7 +17,7 @@ const shown = only === undefined ? rows : rows.filter((r) => r.case === only)
 const cell = (v, w) => String(v ?? '-').padEnd(w)
 const head = `${cell('run', 20)}${cell('C2', 4)}${cell('IOC%', 6)}${cell('grnd%', 7)}`
   + `${cell('cite%', 7)}${cell('lost', 16)}${cell('$', 9)}${cell('bind_s', 8)}`
-  + `${cell('wall_s', 8)}${cell('refu', 6)}${cell('rule', 6)}`
+  + `${cell('wall_s', 8)}${cell('refu', 6)}${cell('build', 14)}`
 console.log(`\n${head}\n${'-'.repeat(head.length)}`)
 for (const r of shown) {
   const p = r.production
@@ -27,7 +27,8 @@ for (const r of shown) {
     cell(r.run, 20) + cell(b.c2Correct === true ? 'Y' : 'n', 4)
     + cell(b.iocCoveragePct, 6) + cell(p.groundedPct, 7) + cell(p.citedEndpointsPct, 7)
     + cell(p.harnessLostFields.join(',') || '-', 16) + cell(p.costUsd, 9)
-    + cell(p.timeToFirstBindSec, 8) + cell(p.wallSec, 8) + cell(p.refusals, 6) + cell(rule, 6),
+    + cell(p.timeToFirstBindSec, 8) + cell(p.wallSec, 8) + cell(p.refusals, 6)
+    + cell(r.config.build ?? '?', 14),
   )
 }
 
@@ -36,7 +37,7 @@ const groups = new Map()
 for (const r of shown) {
   const rule = r.config.ruleContradiction ? 'mixed' : r.config.ruleSoftened ? 'soft' : 'hard'
   // Capture naming is an input difference, so it cannot share a variance group.
-  const key = `${r.case}|${rule}|${r.config.captureNamesNeutral === false ? 'named' : 'neutral'}`
+  const key = `${r.case}|${r.config.build ?? '?'}|${r.config.captureNamesNeutral === false ? 'named' : 'neutral'}`
   groups.set(key, [...groups.get(key) ?? [], r])
 }
 const repeated = [...groups.entries()].filter(([, g]) => g.length > 1)
